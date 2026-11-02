@@ -4,6 +4,7 @@
 import { effects, categories as catalogCategories } from "../src/fx/index.js";
 import { createFrame, clearFrame, createFx, createAct, actBounds, composite, backdrop, drawActor, painterFor, stockActor, actorAlphaOf, PAL, BACKDROPS } from "../src/core/index.js";
 import { effectsKo, tagsKo } from "../src/i18n/ko/index.js";
+import { encodeAnimatedWebP } from "./animated-webp.js";
 
 const categoryKo: Record<string, [string, string]> = {
   moves: ["공격 동작", "준비부터 회복까지 이어지는 공격"], fire: ["불", "횃불, 화염 숨결과 불기둥"], explosions: ["폭발", "폭발, 연기와 불꽃놀이"],
@@ -315,34 +316,48 @@ function sheet() {
   const status = el("p");
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
-  const webp = el("button", { className: "btn", type: "button", textContent: "WebP 다운로드" });
-  webp.addEventListener("click", () => {
+  const webp = el("button", { className: "btn", type: "button", textContent: "움직이는 WebP 다운로드" });
+  // Snapshot the detail options: export the same actor, stage, palette, flip and background
+  // that the visitor sees without disturbing the live player's playback position.
+  webp.addEventListener("click", async () => {
     if (webp.disabled) return;
+    const current = detail;
+    if (!current || current.fx !== fx) return;
+    const exportOptions = { ...current.opts }, exportFlip = current.flip, exportActor = current.actor;
+    const exportBg = current.bg, exportSpeed = current.speed, exportAspect = current.aspect, exportPad = current.pad;
     webp.disabled = true;
-    status.textContent = "WebP 파일을 만드는 중…";
+    status.textContent = "애니메이션 WebP를 준비하는 중…";
     try {
-      // Canvas encodes at the actual sheet resolution; quality 1 reduces color loss.
-      cv.toBlob((blob) => {
-        webp.disabled = false;
-        if (!blob || blob.type !== "image/webp") {
-          status.textContent = "이 브라우저는 WebP 내보내기를 지원하지 않습니다. PNG를 이용해 주세요.";
-          return;
-        }
-        const url = URL.createObjectURL(blob);
-        const link = el("a", { href: url, download: `${name}.webp` });
-        document.body.append(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
-        status.textContent = "WebP 다운로드가 시작되었습니다.";
-      }, "image/webp", 1);
-    } catch {
-      webp.disabled = false;
-      status.textContent = "WebP 파일을 만들지 못했습니다. PNG를 이용해 주세요.";
-    }
+      const stage = el("canvas"), player = new Player(stage, fx, exportAspect, exportPad);
+      player.opts = { ...exportOptions }; player.flip = exportFlip; player.actor = exportActor;
+      player.bg = exportBg; player.layout(exportAspect, exportPad);
+      const step = 1 / m.fps;
+      // Count the full acted performance, including lead-in, recovery and hit-stop.
+      let frameCount = Math.max(2, Math.round(m.duration * m.fps) + (m.loop ? 0 : 1));
+      if (player.acted) {
+        const probe = createAct(fx.mod, { x: player.x, y: player.y, flip: exportFlip, ...exportOptions });
+        frameCount = 1;
+        const limit = Math.ceil(m.fps * 120);
+        while ((m.loop ? probe.t < m.duration : !probe.done()) && frameCount < limit) { probe.update(step); frameCount++; }
+        if (frameCount >= limit) throw new Error("효과의 재생 시간이 너무 깁니다.");
+      }
+      const blob = await encodeAnimatedWebP({
+        width: player.W, height: player.H, frameCount, fps: m.fps * exportSpeed, loop: m.loop,
+        drawFrame: (i, _canvas, context) => {
+          if (i) player.inst.update(step);
+          player.render(); context.drawImage(stage, 0, 0);
+        },
+        onProgress: (done, total) => { status.textContent = `애니메이션 WebP 생성 중… ${done}/${total}`; },
+      });
+      const url = URL.createObjectURL(blob), link = el("a", { href: url, download: `${name}.webp` });
+      document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+      status.textContent = "움직이는 WebP 다운로드가 시작되었습니다.";
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : "WebP 파일을 만들지 못했습니다. PNG를 이용해 주세요.";
+    } finally { webp.disabled = false; }
   });
   const downloads = el("div", { className: "row" }, [png, webp]);
-  $("#d-sheet").replaceChildren(pic, downloads, status, el("p", { textContent: `${w} × ${h}px 프레임 ${n}개, 가로 ${cols}개, ${m.fps}fps, ${m.loop ? "반복 재생" : "한 번 재생"}. WebP는 압축 과정에서 색상이 조금 달라질 수 있습니다. 정확한 색상은 PNG를 사용하세요.` }));
+  $("#d-sheet").replaceChildren(pic, downloads, status, el("p", { textContent: `${w} × ${h}px 프레임 ${n}개, 가로 ${cols}개, ${m.fps}fps, ${m.loop ? "반복 재생" : "한 번 재생"}. WebP는 현재 미리보기의 배경과 캐릭터, 재생 속도를 반영한 애니메이션입니다. 압축으로 색상이 조금 달라질 수 있습니다.` }));
 }
 function wireDetail() {
   const d = $("#detail");
