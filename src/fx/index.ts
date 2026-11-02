@@ -255,10 +255,12 @@ import * as newfx_6 from "./holy/seraphic-verdict.js";
 import * as newfx_7 from "./shadow/abyssal-fracture.js";
 import * as newfx_8 from "./water/abyssal-maelstrom.js";
 import * as newfx_9 from "./nature/prismatic-blossom.js";
+import * as blackDragonSlash from "./shadow/black-dragon-slash.js";
 
 export { categories } from "./categories.js";
 
 export const effects = {
+  "shadow/black-dragon-slash": blackDragonSlash,
   "arcane/celestial-supernova": newfx_0,
   "arcane/dimensional-convergence": newfx_1,
   "arcane/magic-castle": newfx_2,

@@ -16,7 +16,7 @@ Node.js 18 이상과 로컬 개발 의존성을 준비한 뒤 `npm run build`를
 GIF·MP4 미리보기에는 로컬 ffmpeg가 필요합니다. 갤러리의 한글은 시스템 글꼴 대체를 사용하며 Poku Pixel 글꼴은 영문·숫자·기본 기호를 제공합니다. 이펙트 식별자와 코드 API, 내보낸 원본 메타데이터는 호환성을 위해 그대로 유지합니다.
 
 
-**<!-- count -->254<!-- /count --> pixel art effects and animations, every one a small piece of code.** Fire,
+**<!-- count -->255<!-- /count --> pixel art effects and animations, every one a small piece of code.** Fire,
 explosions, magic, weather, UI, pickups, critters and more. Play them live, recolor and mirror them, drop them into
 a browser game, or export sprite sheets for any engine. Plus a Claude Code skill that makes new ones the way a
 picky pixel artist would: draft, render, look, refine.
@@ -218,7 +218,7 @@ Use Node 18 or newer and run `npm run build` first. Run `node build-tools/tools/
 
 The migration targets TypeScript effect sources in `src/fx/<category>/<name>.ts`, TypeScript core sources in `src/core/`, and `.mts` CLI sources in `tools/`. Run `npm run build` before using the package or CLI; emitted runtime modules and declarations are in `build/`, and compiled CLI entry points are under `build-tools/tools/`. Relative source imports retain `.js` specifiers to resolve to the compiled JavaScript modules. Rebuild after editing or creating an effect before rendering it.
 
-The core, all 254 effects, the gallery and CLI tools are TypeScript sources. The earlier 244-effect baseline was sampled for reference equivalence; the ten newer effects have separate sampled render checks. Strict builds and a packaged-library import passed. Reference rendering compared every effect at 3 fps and representative acted effects across 14 categories; it does not prove every frame or engine integration. The native engine runtime remains a separate future task; see `docs/NATIVE_MIGRATION.md`.
+The core, all 255 effects, the gallery and CLI tools are TypeScript sources. The earlier 244-effect baseline was sampled for reference equivalence; the ten newer effects have separate sampled render checks; black dragon slash has its own render and automated check (including a performance warning). Strict builds and a packaged-library import passed. Reference rendering compared every effect at 3 fps and representative acted effects across 14 categories; it does not prove every frame or engine integration. The native engine runtime remains a separate future task; see `docs/NATIVE_MIGRATION.md`.
 
 Sprite-sheet metadata uses `meta.pokuFx`; consumers of older sheets need to migrate their metadata reader.
 

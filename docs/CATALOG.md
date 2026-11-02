@@ -1,6 +1,6 @@
 # Catalog
 
-254 effects in 21 categories. Every one is a file in
+255 effects in 21 categories. Every one is a file in
 `src/fx/<category>/<name>.ts`; render any of them with `node build-tools/tools/render.mjs <id> --gif`.
 
 ## moves
@@ -249,6 +249,7 @@ curses, voids, tendrils, souls.
 
 | effect | id | | size | what it does |
 |---|---|---|---|---|
+| Black dragon slash | `shadow/black-dragon-slash` | one-shot 1.65s | 256×192 | A black dragon flashes through a silver-edged spatial cut, leaving a dark fissure and brief afterglow. |
 | Black hole | `shadow/black-hole` | loop 4s | 184×132 | A tilted disk of banded rings turns round a black hole, its far side bent up over the top and under the bottom; debris spirals in, stretches and is swallowed. |
 | Curse | `shadow/curse` | one-shot 3.4s | 112×124 | Wisps gather over the head, a skull stamps down with a flash, its eyes burn as the curse floods the body violet, then it cracks and crumbles. |
 | Dark explosion | `shadow/dark-explosion` | one-shot 3.8s | 280×248 | Motes swirl into a pulsing core, a black star cuts across a violet-white flash, and a black sphere burns at the rim, throws lit shards and smoke, then collapses. |
