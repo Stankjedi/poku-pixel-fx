@@ -2,9 +2,10 @@
 /** Export deterministic 3D VFX contact sheets for inspection and engine-independent use. */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { createFrame3D, compositeFrame3D, Painter3D, createFx3D } from "../../build/3d/index.js";
-import * as frost from "../../build/3d/effects/frost-nova.js";
-import * as slash from "../../build/3d/effects/arc-slash.js";
+// Runtime path is relative to build-tools/tools/render-3d.mjs after tsc emission.
+const { createFrame3D, compositeFrame3D, Painter3D, createFx3D } = await import(new URL("../../build/3d/index.js", import.meta.url).href);
+const frost = await import(new URL("../../build/3d/effects/frost-nova.js", import.meta.url).href);
+const slash = await import(new URL("../../build/3d/effects/arc-slash.js", import.meta.url).href);
 import { encodePNG } from "./lib/png.mjs";
 
 const args = process.argv.slice(2), name = args[0] ?? "frost";
