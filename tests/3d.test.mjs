@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createFrame3D, compositeFrame3D, color3D, Painter3D, createFx3D, Rng3D,
-  frostNova3D, arcSlash3D,
+  frostNova3D, arcSlash3D, blackHole3D,
 } from "../build/3d/index.js";
 
 function render(effect, seconds = 0.8, seed = 42, size = [112, 80]) {
@@ -84,4 +84,37 @@ test("orbit changes geometry projection without changing simulation", () => {
     p.begin(); fx.draw(p); pixelViews.push([...frame.color]);
   }
   assert.notDeepEqual(pixelViews[0], pixelViews[1]);
+});
+
+// Cinematic black-hole regression checks: real geometry, seed and timeline stability.
+test("cinematic black hole remains deterministic and seeded", () => {
+  const a=render(blackHole3D,2.4,4318,[144,104]);
+  assert.deepEqual(a,render(blackHole3D,2.4,4318,[144,104]));
+  assert.notDeepEqual(a,render(blackHole3D,2.4,4319,[144,104]));
+});
+test("cinematic black hole evolves over time, then leaves no pixels after its duration", () => {
+  assert.notDeepEqual(render(blackHole3D,1.7,3,[120,80]),render(blackHole3D,3.9,3,[120,80]));
+  const fx=createFx3D(blackHole3D); fx.seek(7);
+  const frame=createFrame3D(120,80),p=new Painter3D(frame);
+  p.begin("#05030e"); const c=frame.color.slice();fx.draw(p);
+  assert.deepEqual(frame.color,c);
+  assert.equal(fx.done(),true);
+});
+test("cinematic black hole has a black core, photon emission and finite depth", () => {
+  const frame=createFrame3D(200,144);
+  const p=new Painter3D(frame,{yaw:.68,elevation:.49,zoom:1.3,target:[0,1.12,0]});
+  const fx=createFx3D(blackHole3D);fx.seek(2.3);p.begin("#05030e");fx.draw(p);
+  const c=p.project([0,2.1,0]),idx=Math.floor(c.y)*frame.w+Math.floor(c.x);
+  const center=frame.color[idx];
+  assert.ok((center&255)<30 && ((center>>>8)&255)<30, "core remains dark");
+  assert.ok(frame.light.some(v => (v&255)>75), "bright emission ring exists");
+  assert.ok(frame.depth.some(Number.isFinite), "solid 3D occlusion exists");
+});
+test("cinematic black hole changes shape from real 3D camera orbit", () => {
+  const fx=createFx3D(blackHole3D); fx.seek(2.5);
+  const frames=[0.12,1.32].map(yaw=>{
+    const f=createFrame3D(120,90),p=new Painter3D(f,{yaw,elevation:.49,zoom:1.2,target:[0,1.12,0]});
+    p.begin("#05030e");fx.draw(p);return [...f.color];
+  });
+  assert.notDeepEqual(frames[0],frames[1]);
 });
