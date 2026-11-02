@@ -2,6 +2,8 @@ import { createFrame3D, compositeFrame3D, Painter3D, createFx3D, type Camera3D, 
 import * as frost from "../src/3d/effects/frost-nova.js";
 import * as slash from "../src/3d/effects/arc-slash.js";
 import * as blackhole from "../src/3d/effects/black-hole.js";
+import * as wind from "../src/3d/effects/wind-rasenshuriken.js";
+import * as windOriginal from "../src/3d/effects/wind-rasenshuriken-legacy.js";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#view")!;
 const screen = document.querySelector<HTMLElement>("#screen")!;
@@ -14,14 +16,14 @@ const seedText = document.querySelector<HTMLElement>("#seedText")!;
 const ctx = canvas.getContext("2d", { alpha: false })!;
 const offscreen = document.createElement("canvas");
 const offCtx = offscreen.getContext("2d", { alpha: false })!;
-const effects = { frost, slash, blackhole };
-let selected: keyof typeof effects = "blackhole";
-let instance: FxInstance3D<frost.FrostNova3DOptions> | FxInstance3D<slash.ArcSlash3DOptions> | FxInstance3D<blackhole.BlackHole3DOptions> = createFx3D(blackhole, {});
+const effects = { frost, slash, blackhole, wind, windOriginal };
+let selected: keyof typeof effects = "wind";
+let instance: FxInstance3D<frost.FrostNova3DOptions> | FxInstance3D<slash.ArcSlash3DOptions> | FxInstance3D<blackhole.BlackHole3DOptions> | FxInstance3D<wind.WindRasenshurikenOptions> | FxInstance3D<windOriginal.WindShurikenLegacyOptions> = createFx3D(wind, {});
 let width = 0, height = 0, last = performance.now(), paused = false;
 let frame = createFrame3D(16, 16), painter = new Painter3D(frame), image = offCtx.createImageData(16, 16);
 let pixel = 3, yaw = 0.68, elevation = 33 * Math.PI / 180, zoom = 1, glow = true;
 let dragging = false, prevX = 0, prevY = 0;
-let seed = blackhole.meta.options.seed;
+let seed = wind.meta.options.seed;
 
 function syncLabels() {
   document.querySelector<HTMLElement>("#pxText")!.textContent = `${pixel}×`;
@@ -34,6 +36,10 @@ function chooseEffect(name: keyof typeof effects) {
     instance = createFx3D(frost, { seed });
   } else if (name === "slash") {
     instance = createFx3D(slash, { seed });
+  } else if (name === "wind") {
+    instance = createFx3D(wind, { seed });
+  } else if (name === "windOriginal") {
+    instance = createFx3D(windOriginal, { seed });
   } else {
     instance = createFx3D(blackhole, { seed });
   }
@@ -56,9 +62,13 @@ function resize() {
 function render() {
   resize();
   const isBlackHole = selected === "blackhole";
-  const camera: Camera3D = { yaw, elevation, zoom: zoom * (isBlackHole ? 1.3 : 1), target: [0, selected === "slash" ? 1.4 : isBlackHole ? 2.1 : 0.75, 0] };
-  painter.setCamera(camera).begin(isBlackHole ? "#05030d" : "#0a1525");
-  if (!isBlackHole) painter.grid(8, 1);
+  const isWind = selected === "wind" || selected === "windOriginal";
+  const camera: Camera3D = {
+    yaw, elevation, zoom: zoom * (isBlackHole ? 1.3 : isWind ? 1.18 : 1),
+    target: [0, selected === "slash" ? 1.4 : isBlackHole ? 2.1 : isWind ? 2.35 : 0.75, 0],
+  };
+  painter.setCamera(camera).begin(isBlackHole ? "#05030d" : isWind ? "#061222" : "#0a1525");
+  if (!isBlackHole && !isWind) painter.grid(8, 1);
   instance.draw(painter);
   compositeFrame3D(frame, image.data, glow ? 1 : 0);
   offCtx.putImageData(image, 0, 0);
@@ -95,7 +105,7 @@ button("#save", () => {
 });
 document.querySelector<HTMLSelectElement>("#effect")!.addEventListener("change", e => {
   const value = (e.target as HTMLSelectElement).value;
-  if (value === "frost" || value === "slash" || value === "blackhole") {
+  if (value === "frost" || value === "slash" || value === "blackhole" || value === "wind" || value === "windOriginal") {
     seed = effects[value].meta.options.seed;
     chooseEffect(value); syncLabels();
   }
