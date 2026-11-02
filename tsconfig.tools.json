@@ -27,6 +27,7 @@
     "tools/lib/fxlib.mts",
     "tools/make-poku-font.mts",
     "tools/share.mts",
-    "tools/export-catalog.mts"
+    "tools/export-catalog.mts",
+    "tools/render-3d.mts"
   ]
 }

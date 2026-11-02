@@ -14,6 +14,8 @@ mkdirSync(OUT, { recursive: true });
 mkdirSync(PAGE, { recursive: true });
 
 await build({ entryPoints: [join(G, "app.ts")], bundle: true, format: "esm", minify: true, outfile: join(OUT, "app.js"), legalComments: "none" });
+await build({ entryPoints: [join(G, "3d.ts")], bundle: true, format: "esm", minify: true, outfile: join(OUT, "3d.js"), legalComments: "none" });
+cpSync(join(G, "3d.html"), join(OUT, "3d.html"));
 cpSync(join(G, "fonts"), join(OUT, "fonts"), { recursive: true });
 writeFileSync(join(OUT, "style.css"), readFileSync(join(G, "style.css")));
 writeFileSync(join(OUT, "index.html"), readFileSync(join(G, "index.html")));
@@ -41,5 +43,7 @@ writeFileSync(
   ].join("\n"),
 );
 cpSync(join(OUT, "app.js"), join(PAGE, "app.js"));
+cpSync(join(OUT, "3d.html"), join(PAGE, "3d.html"));
+cpSync(join(OUT, "3d.js"), join(PAGE, "3d.js"));
 console.log(`dist/gallery 및 dist/page 빌드 완료 (스크립트 ${(readFileSync(join(OUT, "app.js")).length / 1024).toFixed(0)} KB)`);
 

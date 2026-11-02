@@ -65,6 +65,17 @@ the idea at library scale, with a skill to keep going.
 
 Every effect is a file in `src/fx/<category>/<name>.ts`. The [catalog](docs/CATALOG.md) lists them all.
 
+## 3D Pixel FX Engine
+
+The optional **3D VFX engine** lives in `src/3d/` without changing the existing 2D catalog. It uses real XYZ camera projection, z-buffered pixel triangles, solid procedural crystals, 3D particles, a fixed 120 Hz timeline, seeded randomness, Bayer dither and a separate additive-light buffer. Two examples ship: **Frost Nova 3D** and **Arc Slash 3D**.
+
+- Run `npm run build && npm run gallery` and open [the 3D preview](gallery/3d.html) (live URL: `http://127.0.0.1:8080/gallery/3d.html`). Orbit the camera, adjust pixel size/glow and download a PNG snapshot.
+- Export contact sheets with `npm run render:3d -- frost --frames 24` or `npm run render:3d -- slash --frames 24`.
+- Use `import { createFx3D, Painter3D, createFrame3D, compositeFrame3D } from "poku-pixel-fx/3d"`, and read [3D authoring and API docs](docs/3D_VFX.md).
+- Validate with `npm run test:3d` after building.
+
+The first implementation is a **dependency-free CPU software rasterizer** suitable for artistic iteration and modest effects, not a hardware-accelerated WebGL/WebGPU engine. Pre-bake dense effects or implement a GPU renderer when large simultaneous counts are required.
+
 ## use one.
 
 **In a browser game** (canvas, Phaser, PixiJS, Kaplay, three.js), use the code. No dependencies.

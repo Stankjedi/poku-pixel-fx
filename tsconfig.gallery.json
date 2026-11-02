@@ -8,6 +8,7 @@
     "skipLibCheck": true
   },
   "include": [
-    "gallery/app.ts"
+    "gallery/app.ts",
+    "gallery/3d.ts"
   ]
 }

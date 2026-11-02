@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>POKU Pixel FX · 3D VFX Engine</title>
+  <meta name="description" content="코드 기반 3D 픽셀아트 이펙트 엔진: Frost Nova와 Arc Slash 실시간 체험.">
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#090e19;color:#d7eaff;font:14px system-ui,sans-serif}
+    main{display:flex;flex-direction:column;min-height:100vh}.top{padding:16px 22px;display:flex;justify-content:space-between;align-items:center;gap:15px}
+    .title{font-weight:800;letter-spacing:.13em;font-size:13px}.sub{color:#7798bd;font-size:11px;margin-top:5px}
+    .back{font-size:12px;color:#9fc4e6;text-decoration:none}.back:hover{color:#fff}
+    .screen{position:relative;flex:1;min-height:450px;overflow:hidden;background:radial-gradient(ellipse at 50% 50%,#122b42,#0c1529 55%,#060b15)}
+    canvas{width:100%;height:100%;display:block;image-rendering:pixelated;cursor:grab;touch-action:none}canvas:active{cursor:grabbing}
+    .legend{position:absolute;left:20px;bottom:17px;color:#8aafd0;font-size:11px;pointer-events:none}
+    .stage{position:absolute;right:20px;top:18px;color:#b6edff;font-size:12px;letter-spacing:.12em}
+    .controls{padding:14px 20px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;background:#0c1423;border-top:1px solid #1a3047}
+    button,select{border:1px solid #34607c;background:#173149;border-radius:6px;color:#e2f7ff;padding:9px 12px;font-weight:650;cursor:pointer}
+    button:hover,select:hover{background:#215070}label{display:flex;align-items:center;gap:7px;color:#a9cce0;font-size:12px}
+    input[type=range]{accent-color:#79dffe;width:94px}input[type=checkbox]{accent-color:#79dffe}
+    .readout{margin-left:auto;font-variant-numeric:tabular-nums;color:#87a8c4;font-size:12px}
+    .notes{padding:11px 20px;color:#6986a2;border-top:1px solid #15263b;display:flex;justify-content:space-between;gap:15px;font-size:11px}
+    .notes span{max-width:75ch}.seed{color:#a6c4de;font-size:11px;min-width:90px}
+    @media(max-width:700px){.screen{min-height:56vh}.top{padding:13px}.controls{padding:12px;gap:8px}.readout{margin-left:0}.notes{flex-direction:column}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div><div class="title">POKU / PIXEL FX / 3D</div><div class="sub">DETERMINISTIC · WORLD SPACE · ORDERED DITHER · TWO-BUFFER LIGHT</div></div>
+    <a class="back" href="index.html">← 2D GALLERY</a>
+  </div>
+  <div class="screen" id="screen">
+    <canvas id="view" aria-label="Interactive 3D pixel art VFX preview"></canvas>
+    <div class="stage" id="stage">CHARGE</div>
+    <div class="legend">DRAG · ORBIT　 SCROLL · ZOOM　 SPACE · RESTART</div>
+  </div>
+  <div class="controls">
+    <label>VFX <select id="effect" aria-label="이펙트 선택"><option value="frost">FROST NOVA</option><option value="slash">ARC SLASH</option></select></label>
+    <button id="replay" type="button">↻ REPLAY</button>
+    <button id="pause" type="button">Ⅱ PAUSE</button>
+    <button id="seed" type="button">NEW SEED</button>
+    <label>PIXEL <input type="range" id="pixel" min="2" max="7" value="3"><span id="pxText">3×</span></label>
+    <label>CAMERA <input type="range" id="elevation" min="10" max="75" value="33"><span id="elText">33°</span></label>
+    <label>GLOW <input type="checkbox" id="glow" checked></label>
+    <button id="save" type="button">PNG ↓</button>
+    <span class="seed" id="seedText">SEED 7439</span><span class="readout" id="readout">0.00 / 4.40 s</span>
+  </div>
+  <div class="notes"><span id="status">3D Frost Nova</span><span>Zero runtime dependencies · Pure TypeScript · CPU pixel renderer</span></div>
+</main>
+<script type="module" src="3d.js"></script>
+</body>
+</html>
