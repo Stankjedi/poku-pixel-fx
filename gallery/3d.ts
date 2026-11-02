@@ -19,7 +19,7 @@ let selected: keyof typeof effects = "blackhole";
 let instance: FxInstance3D<frost.FrostNova3DOptions> | FxInstance3D<slash.ArcSlash3DOptions> | FxInstance3D<blackhole.BlackHole3DOptions> = createFx3D(blackhole, {});
 let width = 0, height = 0, last = performance.now(), paused = false;
 let frame = createFrame3D(16, 16), painter = new Painter3D(frame), image = offCtx.createImageData(16, 16);
-let pixel = 3, yaw = 0.68, elevation = 33 * Math.PI / 180, zoom = 1, glow = true;
+let pixel = 3, yaw = 0.68, elevation = 28 * Math.PI / 180, zoom = 1, glow = true;
 let dragging = false, prevX = 0, prevY = 0;
 let seed = blackhole.meta.options.seed;
 
@@ -41,7 +41,8 @@ function chooseEffect(name: keyof typeof effects) {
 }
 function resize() {
   const box = screen.getBoundingClientRect();
-  const w = Math.max(96, Math.ceil(box.width / pixel)), h = Math.max(72, Math.ceil(box.height / pixel));
+  const sample = Math.max(pixel, box.width / 400, box.height / 300);
+  const w = Math.max(96, Math.ceil(box.width / sample)), h = Math.max(72, Math.ceil(box.height / sample));
   const dpr = Math.min(3, window.devicePixelRatio || 1);
   const cw = Math.max(1, Math.round(box.width * dpr)), ch = Math.max(1, Math.round(box.height * dpr));
   if (width === w && height === h && canvas.width === cw && canvas.height === ch) return;
@@ -56,7 +57,7 @@ function resize() {
 function render() {
   resize();
   const isBlackHole = selected === "blackhole";
-  const camera: Camera3D = { yaw, elevation, zoom: zoom * (isBlackHole ? 1.3 : 1), target: [0, selected === "slash" ? 1.4 : isBlackHole ? 2.1 : 0.75, 0] };
+  const camera: Camera3D = { yaw, elevation, zoom: zoom * (isBlackHole ? 1.36 : 1), target: [0, selected === "slash" ? 1.4 : isBlackHole ? 1.12 : 0.75, 0] };
   painter.setCamera(camera).begin(isBlackHole ? "#05030d" : "#0a1525");
   if (!isBlackHole) painter.grid(8, 1);
   instance.draw(painter);
