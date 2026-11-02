@@ -25,6 +25,7 @@
     "tools/build-gallery.mts",
     "tools/lib/png.mts",
     "tools/lib/fxlib.mts",
-    "tools/make-poku-font.mts"
+    "tools/make-poku-font.mts",
+    "tools/share.mts"
   ]
 }

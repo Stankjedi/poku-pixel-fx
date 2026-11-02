@@ -234,3 +234,8 @@ Codex에서 저장소의 `skills/poku-pixel-fx`를 설치하고, 이 저장소�
 ## 공개 갤러리에서 공유
 
 [POKU Pixel FX 사이트](https://poku-pixel-fx.stankjedi.chatgpt.site/)에서 이펙트를 확인하고, [공유 갤러리](https://poku-pixel-fx.stankjedi.chatgpt.site/shared)에 ChatGPT로 로그인해 직접 만든 PNG 또는 게시 권한이 있는 스프라이트 시트를 올릴 수 있습니다. 게시 전 권리와 책임에 동의해야 합니다. PNG는 최대 5 MiB, 가로·세로 각각 2048픽셀입니다. 서버는 형식과 크기를 검사하며 픽셀 아트 여부나 게시 권한을 자동으로 보증하지 않습니다. 문제가 있는 게시물은 공유 화면의 신고 링크를 이용해 주세요.
+
+
+## 에이전트에서 공유 준비
+
+저장소를 복제하고 `npm ci`, `npm run build`를 실행한 다음 `npm run share -- fire/torch`처럼 이펙트 ID를 지정하세요. 명령이 새로운 `records/share/` 폴더에 재생 가능한 PNG와 JSON을 만들고 파일 경로를 출력합니다. [공유 페이지](https://poku-pixel-fx.stankjedi.chatgpt.site/shared)에서 로그인하고 같은 이름의 PNG와 JSON을 함께 선택해 권리 확인 후 게시하세요. 스킬의 공유 절차를 따르는 에이전트도 동일하게 사용할 수 있습니다. 명령은 자동으로 게시하거나 로그인하지 않습니다.
