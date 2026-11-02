@@ -3,6 +3,7 @@ import { fit, rand, sparkle, TAU, WHITE, clamp } from '../../core/index.js';
 
 /** An original celestial impact with a rising star, rings and refracted stardust. */
 export const meta = {
+  addedAt: '2026-11-02T13:49:39Z',
   name: 'Celestial Supernova',
   desc: 'A star ascends, compresses into white light, then erupts into concentric celestial rings and streaking shards.',
   tags: ['arcane', 'celestial', 'star', 'nova', 'burst', 'magic', 'cosmic', 'explosion', 'one-shot'],

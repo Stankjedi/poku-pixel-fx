@@ -2,6 +2,7 @@ import type { Painter } from '../../core/painter.js';
 import { fit, clamp, rand, sparkle, TAU, WHITE } from '../../core/index.js';
 
 export const meta = {
+  addedAt: '2026-11-02T13:49:39Z',
   name: 'Abyssal maelstrom',
   desc: 'A deep blue surge erupts as a curling liquid column, breaks into foamy waves and droplets, then recedes into spreading ripples.',
   tags: ['water', 'tidal', 'vortex', 'maelstrom', 'whirlpool', 'magic', 'burst', 'ocean', 'splash', 'one-shot'],

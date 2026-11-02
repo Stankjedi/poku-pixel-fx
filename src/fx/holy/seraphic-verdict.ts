@@ -2,6 +2,7 @@ import type { Painter } from '../../core/painter.js';
 import { fit, sparkle, clamp, TAU, WHITE } from '../../core/index.js';
 
 export const meta = {
+  addedAt: '2026-11-02T13:49:39Z',
   name: 'Seraphic verdict',
   desc: 'A golden seal unfolds into a cascading pillar of light; radiant wings and concentric halos burst outward before falling into motes.',
   tags: ['holy', 'seraph', 'divine', 'verdict', 'beam', 'wings', 'light', 'burst', 'one-shot'],

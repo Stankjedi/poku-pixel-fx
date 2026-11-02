@@ -3,6 +3,7 @@ import { clamp, fit, rand, sparkle, WHITE } from '../../core/index.js';
 
 // A black dragon is the shadow cast by an instantaneous cut through space.
 export const meta = {
+  addedAt: '2026-11-02T14:07:19Z',
   name: 'Black dragon slash',
   desc: 'A black dragon trembles and roars as a massive silver-edged cut rips open space in front of it.',
   tags: ['dragon', 'black dragon', 'slash', 'sword', 'shadow', 'dark', 'void', 'rift', 'combat', 'ultimate', 'one-shot', '흑룡참', '흑룡', '용', '검격', '공간'],

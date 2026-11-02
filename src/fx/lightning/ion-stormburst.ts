@@ -3,6 +3,7 @@ import { fit, rand, sparkle, clamp, TAU, WHITE } from '../../core/index.js';
 
 /** A concentrated storm descends into a widening ion ring before scattering into sparks. */
 export const meta = {
+  addedAt: '2026-11-02T13:49:39Z',
   name: 'Ion stormburst',
   desc: 'A violet storm condenses into a falling ion core; branching lightning erupts, then a spinning electrical shock ring shatters into drifting sparks.',
   tags: ['lightning', 'electric', 'storm', 'ion', 'thunder', 'burst', 'shockwave', 'magic', 'one-shot'],

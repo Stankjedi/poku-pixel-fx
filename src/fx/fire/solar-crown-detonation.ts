@@ -3,6 +3,7 @@ import { fit, sparkle, rand, TAU, WHITE, clamp } from '../../core/index.js';
 
 /** A brief, rising miniature sun that breaks into hot spokes and orbiting embers. */
 export const meta = {
+  addedAt: '2026-11-02T13:49:39Z',
   name: 'Solar crown detonation',
   desc: 'A compressed sun ignites into a many-pointed crown, releases twin expanding shock rings and sheds curved golden cinders.',
   tags: ['fire', 'sun', 'solar', 'crown', 'explosion', 'burst', 'magic', 'radiant', 'one-shot'],

@@ -3,6 +3,7 @@ import { fit, rand, sparkle, TAU, WHITE } from '../../core/index.js';
 
 /** A complete summoning sequence: the floor opens, rings converge, a dimensional core appears and dissolves. */
 export const meta = {
+  addedAt: '2026-11-02T13:49:39Z',
   name: 'Dimensional convergence',
   desc: 'A luminous floor sigil unfolds into rotating orbit rings, a prismatic core and rising arcane fragments before the rift collapses.',
   tags: ['arcane', 'summon', 'dimensional', 'portal', 'convergence', 'magic', 'ritual', 'ground', 'one-shot'],

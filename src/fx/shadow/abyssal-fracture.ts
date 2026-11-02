@@ -2,6 +2,7 @@ import type { Painter } from '../../core/painter.js';
 import { fit, sparkle, clamp, TAU, WHITE } from '../../core/index.js';
 
 export const meta = {
+  addedAt: '2026-11-02T13:49:39Z',
   name: 'Abyssal fracture',
   desc: 'A serrated violet rift tears through space, draws in orbiting shards and snaps shut in a final flash.',
   tags: ['shadow', 'abyss', 'rift', 'fracture', 'void', 'portal', 'dark', 'burst', 'one-shot'],

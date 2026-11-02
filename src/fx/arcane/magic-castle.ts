@@ -3,6 +3,7 @@ import { fit, cycle, sparkle, smooth, TAU, WHITE } from '../../core/index.js';
 
 // An original floating citadel above a rotating astral seal.
 export const meta = {
+  addedAt: '2026-11-02T13:49:39Z',
   name: 'Astral castle',
   desc: 'An intricate floating citadel with crystalline spires, fluttering banners and windows glowing above a rotating astral seal.',
   tags: ['arcane', 'castle', 'summon', 'magic', 'astral', 'palace', 'portal', 'loop'],

@@ -211,3 +211,7 @@ your eyes, feed your references.
 5. **Fix the worst thing, render again.** Three rounds minimum; showpieces take more.
 6. **Act it out** if there's a character: `node build-tools/tools/act.mjs <id>`. Consecutive frames, not samples.
 7. **Check**: `node build-tools/tools/check.mjs <id>` until it passes clean.
+
+### Registration time
+
+`meta.addedAt` is an optional ISO 8601 UTC timestamp recording when an effect was first registered in this library. The new-effect tool initially records the local scaffold creation time, which may precede publication; verify and update it to the first actual registration time when registering the finished effect. Keep it unchanged during later edits. Existing effects with an unknown registration time leave it absent rather than guessing. The catalog exporter includes it when present.

@@ -12,10 +12,11 @@ if (args.length !== 2 || args[0] !== '--output' || !args[1]) {
 }
 const path = resolve(args[1]);
 const list = (Object.entries(effects) as [string, { meta: unknown }][]).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([id, mod]) => {
-  const meta = mod.meta as { name: string; desc: string; tags: string[]; duration: number; fps: number; loop: boolean; size: number[]; origin: number[] };
+  const meta = mod.meta as { name: string; desc: string; tags: string[]; duration: number; fps: number; loop: boolean; size: number[]; origin: number[]; addedAt?: string };
   const ko = effectsKo[id];
   return {
     id, category: id.split('/')[0],
+    ...(meta.addedAt ? { addedAt: meta.addedAt } : {}),
     name: { ko: ko?.name ?? meta.name, en: meta.name },
     description: { ko: ko?.desc ?? meta.desc, en: meta.desc },
     tags: meta.tags.map(tag => ({ id: tag, ko: tagsKo[tag] ?? tag })),

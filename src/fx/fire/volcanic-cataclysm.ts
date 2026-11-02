@@ -4,6 +4,7 @@ import { fit, clamp, smooth, rand, sparkle, WHITE } from '../../core/index.js';
 // A ground fissure splits open into a vertical lava fountain; molten fragments arc
 // outward, cool into dark rock and fade as the fissure closes.
 export const meta = {
+  addedAt: '2026-11-02T13:49:39Z',
   name: 'Volcanic cataclysm',
   desc: 'The ground tears open in a red-hot fissure, a giant eruption rises, and molten shards shower out through an expanding shockwave.',
   tags: ['fire', 'lava', 'volcano', 'eruption', 'explosion', 'fissure', 'ground', 'debris', 'one-shot'],

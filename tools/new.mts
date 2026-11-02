@@ -58,6 +58,7 @@ const body = loop
 const src = `import { PAL, ramp, at, ${loop ? "cycle" : "burst, fly, seg, WHITE"}, TAU } from "../../core/index.js";
 
 export const meta = {
+  addedAt: "${new Date().toISOString()}",
   name: "${name}",
   desc: "One line: what it is, how it moves.",
   tags: ["${id.split("/")[0]}"],
