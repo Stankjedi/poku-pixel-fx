@@ -43,7 +43,7 @@
     "share": "node build-tools/tools/share.mjs",
     "catalog": "node build-tools/tools/export-catalog.mjs",
     "render:3d": "node build-tools/tools/render-3d.mjs",
-    "test:3d": "node --test tests/3d.test.mjs"
+    "test:3d": "node --test tests/3d.test.mjs tests/black-hole-3d.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
