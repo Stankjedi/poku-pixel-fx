@@ -11,9 +11,10 @@ npm run gallery
 # http://127.0.0.1:8080/gallery/3d.html
 node build-tools/tools/render-3d.mjs frost --frames 24 --out records/3d/frost.png
 node build-tools/tools/render-3d.mjs slash --frames 24 --out records/3d/slash.png
+node build-tools/tools/render-3d.mjs blackhole --frames 32 --out records/3d/blackhole.png
 ```
 
-The orbitable preview contains **Frost Nova 3D** (solid five-sided ice crystals, expanding ground wave, snowflake windup, physics shards, melt) and **Arc Slash 3D** (3D ribbon, secondary echo, collision sparks). Drag to orbit; wheel to zoom; adjust pixel size, elevation and additive emission. Screenshot PNG download works directly in the browser. The contact-sheet CLI exports PNG and a JSON file containing sample times, camera and options.
+The orbitable preview contains **Frost Nova 3D** (solid five-sided ice crystals, expanding ground wave, snowflake windup, physics shards, melt), **Arc Slash 3D** (3D ribbon, secondary echo, collision sparks), and **Black Hole 3D** (lensed dark event horizon, rotating accretion disk, 3D gas plumes, inspiralling meteor fragments). Drag to orbit; wheel to zoom; adjust pixel size, elevation and additive emission. Screenshot PNG download works directly in the browser. The contact-sheet CLI exports PNG and a JSON file containing sample times, camera and options.
 
 ## Use in a Canvas application
 
@@ -74,3 +75,18 @@ Effects are deterministic for a given seed and fixed-step timeline. `update(dt)`
 ## Third-party attribution
 
 This 3D engine implementation is new code based on the general POKU Pixel FX authoring principles. It remains distributed under this repository's license; `LICENSE`/`NOTICE.md` and original 2D adapted-file attributions remain unchanged.
+
+## Black Hole 3D — procedural singularity
+
+Select **BLACK HOLE** in `/gallery/3d.html` or render `npm run render:3d -- blackhole --frames 32`. The effect lives in `src/3d/effects/black-hole.ts`, imported as `blackHole3D` from `poku-pixel-fx/3d`. Its seven-second sequence has six named stages: condense, singularity, accretion, inspiral, collapse and evaporate. It supplies `flash`, `shake`, `sound` cues that game clients may consume via `drainCues()`.
+
+```ts
+import { createFx3D, blackHole3D } from "poku-pixel-fx/3d";
+const fx = createFx3D(blackHole3D, { seed: 42, radius: 1.24, reach: 6.9, intensity: 1 });
+fx.update(1 / 60);
+// painter.setCamera(...).begin("#05030d"); fx.draw(painter);
+```
+
+The optical treatment uses two new **optional** `Painter3D` primitives: `sphere(center, radius, fill, edge)` for depth-tested true 3D occlusion of background light, and `lensWarp(center, horizon, reach, strength)` for discrete screen-space resampling of the drawn image, additive light and depth. `lensWarp` is designed to be called **before** `sphere`, so the horizon can cover the warped material. It is an artistic gravitational lens approximation, not a physical general-relativity solver. The photon ring faces the camera while the disk, rocks and gas remain in actual 3D world space.
+
+The default palette has **11 steps**; supply 11 colors if overriding it. The CPU renderer is suitable for individual hero spells and sprite-sheet baking; benchmark hardware before using many simultaneous black holes.

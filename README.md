@@ -67,10 +67,10 @@ Every effect is a file in `src/fx/<category>/<name>.ts`. The [catalog](docs/CATA
 
 ## 3D Pixel FX Engine
 
-The optional **3D VFX engine** lives in `src/3d/` without changing the existing 2D catalog. It uses real XYZ camera projection, z-buffered pixel triangles, solid procedural crystals, 3D particles, a fixed 120 Hz timeline, seeded randomness, Bayer dither and a separate additive-light buffer. Two examples ship: **Frost Nova 3D** and **Arc Slash 3D**.
+The optional **3D VFX engine** lives in `src/3d/` without changing the existing 2D catalog. It uses real XYZ camera projection, z-buffered pixel triangles, solid procedural crystals, 3D particles, a fixed 120 Hz timeline, seeded randomness, Bayer dither and a separate additive-light buffer. Three examples ship: **Frost Nova 3D**, **Arc Slash 3D**, and **Black Hole 3D** (3D accretion disk, gravity lens and orbiting debris).
 
 - Run `npm run build && npm run gallery` and open [the 3D preview](gallery/3d.html) (live URL: `http://127.0.0.1:8080/gallery/3d.html`). Orbit the camera, adjust pixel size/glow and download a PNG snapshot.
-- Export contact sheets with `npm run render:3d -- frost --frames 24` or `npm run render:3d -- slash --frames 24`.
+- Export contact sheets with `npm run render:3d -- frost --frames 24` or `npm run render:3d -- slash --frames 24`, or `npm run render:3d -- blackhole --frames 32`.
 - Use `import { createFx3D, Painter3D, createFrame3D, compositeFrame3D } from "poku-pixel-fx/3d"`, and read [3D authoring and API docs](docs/3D_VFX.md).
 - Validate with `npm run test:3d` after building.
 
