@@ -1,0 +1,1 @@
+Poku Pixel Regular is an original pixel font created for this fork. It is distributed under the repository MIT license. Source: tools/make-poku-font.mts (fonteditor-core is a development dependency used only to rebuild the font).

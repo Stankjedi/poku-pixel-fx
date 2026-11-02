@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "types": [
+      "node"
+    ],
+    "skipLibCheck": true,
+    "rootDir": ".",
+    "outDir": "build-tools"
+  },
+  "include": [
+    "tools/list.mts",
+    "tools/new.mts",
+    "tools/serve.mts",
+    "tools/compare.mts",
+    "tools/check.mts",
+    "tools/montage.mts",
+    "tools/index.mts",
+    "tools/act.mts",
+    "tools/render.mts",
+    "tools/sheets.mts",
+    "tools/build-gallery.mts",
+    "tools/lib/png.mts",
+    "tools/lib/fxlib.mts",
+    "tools/make-poku-font.mts"
+  ]
+}

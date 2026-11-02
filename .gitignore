@@ -1,0 +1,8 @@
+node_modules/
+dist/
+records/
+sheets/
+.DS_Store
+build/
+build-tools/
+build-gallery/
