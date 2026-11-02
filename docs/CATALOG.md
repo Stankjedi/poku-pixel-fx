@@ -1,6 +1,6 @@
 # Catalog
 
-244 effects in 21 categories. Every one is a file in
+254 effects in 21 categories. Every one is a file in
 `src/fx/<category>/<name>.ts`; render any of them with `node build-tools/tools/render.mjs <id> --gif`.
 
 ## moves
@@ -393,3 +393,16 @@ slimes, bats, ghosts, frogs.
 | Slime | `critters/slime` | loop 1.8s | 112×88 | A glossy slime hops in place: it squashes to wind up, stretches into the jump, rounds out in the air, splats down flinging droplets that creep back, then wobbles and blinks. |
 | Snake | `critters/snake` | loop 2.4s | 136×56 | A snake slithers along the floor, head raised: humps rise and roll back down its patterned body to the tail, dust puffs where it touches down, its forked tongue flicks. |
 | Wisp | `critters/wisp` | loop 3.2s | 128×104 | A will-o'-the-wisp loops a figure-eight over the floor: a little soul-flame with a face, its flame tail licking up and streaming behind, shedding puffs and sparks. |
+
+## New effects
+
+- `arcane/celestial-supernova` — 천체 초신성: 별이 떠올라 다중 궤도와 성운 파편으로 폭발합니다.
+- `arcane/dimensional-convergence` — 차원 융합 소환: 마법진과 회전 궤도가 차원의 핵을 열어냅니다.
+- `arcane/magic-castle` — 별빛 마법성: 빛나는 마법진 위로 환영의 성과 별이 나타납니다.
+- `fire/solar-crown-detonation` — 태양 왕관 폭발: 압축된 태양이 왕관 광선과 이중 충격파로 터집니다.
+- `fire/volcanic-cataclysm` — 화산 대격변: 지면의 균열에서 용암 분수와 불타는 암편이 솟습니다.
+- `lightning/ion-stormburst` — 이온 폭풍 폭발: 이온핵과 번개가 충격파를 일으키며 흩어집니다.
+- `holy/seraphic-verdict` — 천사의 심판: 황금 날개와 마법진이 광휘의 기둥을 내립니다.
+- `shadow/abyssal-fracture` — 심연의 균열: 보랏빛 균열이 열리고 파편이 회전하며 퍼집니다.
+- `water/abyssal-maelstrom` — 심해의 대소용돌이: 나선 물기둥과 물결이 깊은 소용돌이를 만듭니다.
+- `nature/prismatic-blossom` — 프리즘 꽃개화: 수정 꽃잎과 덩굴 사이로 빛나는 꽃가루가 흩어집니다.

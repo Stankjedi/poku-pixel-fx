@@ -16,7 +16,7 @@ Node.js 18 이상과 로컬 개발 의존성을 준비한 뒤 `npm run build`를
 GIF·MP4 미리보기에는 로컬 ffmpeg가 필요합니다. 갤러리의 한글은 시스템 글꼴 대체를 사용하며 Poku Pixel 글꼴은 영문·숫자·기본 기호를 제공합니다. 이펙트 식별자와 코드 API, 내보낸 원본 메타데이터는 호환성을 위해 그대로 유지합니다.
 
 
-**<!-- count -->244<!-- /count --> pixel art effects and animations, every one a small piece of code.** Fire,
+**<!-- count -->254<!-- /count --> pixel art effects and animations, every one a small piece of code.** Fire,
 explosions, magic, weather, UI, pickups, critters and more. Play them live, recolor and mirror them, drop them into
 a browser game, or export sprite sheets for any engine. Plus a Claude Code skill that makes new ones the way a
 picky pixel artist would: draft, render, look, refine.
@@ -39,21 +39,21 @@ the idea at library scale, with a skill to keep going.
 | category | effects | some of them |
 |---|---|---|
 | **moves** | 12 | arrow shot, dash strike, earth stomp, fireball throw, ground pound, holy smite… |
-| **fire** | 12 | brazier, campfire, candle, fire breath, fire ring, fire tornado… |
+| **fire** | 14 | brazier, campfire, candle, fire breath, fire ring, fire tornado… |
 | **explosions** | 12 | barrel explosion, big explosion, cartoon pow, dirt explosion, firework burst, firework rocket… |
-| **water** | 12 | bubbles, drip, fountain, geyser, rain splash, ripples… |
+| **water** | 13 | bubbles, drip, fountain, geyser, rain splash, ripples… |
 | **ice** | 10 | blizzard vortex, freeze, frost breath, frost nova, ice crystal, ice lance… |
-| **lightning** | 11 | ball lightning, chain lightning, charge up, electrified, lightning strike, plasma ball… |
+| **lightning** | 12 | ball lightning, chain lightning, charge up, electrified, lightning strike, plasma ball… |
 | **sci-fi** | 12 | emp blast, energy core, force field, glitch, hologram, jetpack… |
 | **melee** | 12 | claw swipe, dagger flurry, double slash, hammer smash, heavy cleave, scythe reap… |
 | **impacts** | 11 | blunt hit, bullet impact, critical hit, ground slam, heavy landing, hit flash… |
 | **projectiles** | 13 | arrow, bullet tracer, cannon shot, energy disc, signal flare, homing missile… |
 | **spawn & death** | 10 | coin drop, disintegrate, dissolve burn, egg hatch, poof, respawn beam… |
-| **arcane** | 12 | arcane beam, arcane missiles, arcane orb, blink in, blink out, magic circle cast… |
-| **holy** | 10 | blessing, divine shield, feather burst, halo, heal, healing ring… |
-| **shadow** | 12 | black hole, curse, dark explosion, eclipse, grasping hands, hex sigil… |
+| **arcane** | 15 | arcane beam, arcane missiles, arcane orb, blink in, blink out, magic circle cast… |
+| **holy** | 11 | blessing, divine shield, feather burst, halo, heal, healing ring… |
+| **shadow** | 13 | black hole, curse, dark explosion, eclipse, grasping hands, hex sigil… |
 | **status** | 13 | bleeding, burning, charmed, confused, cursed, frozen… |
-| **nature** | 13 | acid splash, boulder, earth spike, healing bloom, leaf storm, poison cloud… |
+| **nature** | 14 | acid splash, boulder, earth spike, healing bloom, leaf storm, poison cloud… |
 | **weather** | 12 | aurora, blizzard, cherry blossoms, clouds, falling leaves, fireflies… |
 | **ui** | 12 | achievement, coin collect, combo counter, confetti, countdown, crit number… |
 | **pickups** | 11 | chest open, coin spin, collect burst, crystal shard, gem spin, heart pickup… |
@@ -218,7 +218,7 @@ Use Node 18 or newer and run `npm run build` first. Run `node build-tools/tools/
 
 The migration targets TypeScript effect sources in `src/fx/<category>/<name>.ts`, TypeScript core sources in `src/core/`, and `.mts` CLI sources in `tools/`. Run `npm run build` before using the package or CLI; emitted runtime modules and declarations are in `build/`, and compiled CLI entry points are under `build-tools/tools/`. Relative source imports retain `.js` specifiers to resolve to the compiled JavaScript modules. Rebuild after editing or creating an effect before rendering it.
 
-The core, all 244 effects, the gallery and CLI tools are TypeScript sources. Strict builds and a packaged-library import passed. Reference rendering compared every effect at 3 fps and representative acted effects across 14 categories; it does not prove every frame or engine integration. The native engine runtime remains a separate future task; see `docs/NATIVE_MIGRATION.md`.
+The core, all 254 effects, the gallery and CLI tools are TypeScript sources. The earlier 244-effect baseline was sampled for reference equivalence; the ten newer effects have separate sampled render checks. Strict builds and a packaged-library import passed. Reference rendering compared every effect at 3 fps and representative acted effects across 14 categories; it does not prove every frame or engine integration. The native engine runtime remains a separate future task; see `docs/NATIVE_MIGRATION.md`.
 
 Sprite-sheet metadata uses `meta.pokuFx`; consumers of older sheets need to migrate their metadata reader.
 
@@ -243,3 +243,7 @@ Codex에서 저장소의 `skills/poku-pixel-fx`를 설치하고, 이 저장소�
 ## 에이전트에서 공유 준비
 
 저장소를 복제하고 `npm ci`, `npm run build`를 실행한 다음 `npm run share -- fire/torch`처럼 이펙트 ID를 지정하세요. 명령이 새로운 `records/share/` 폴더에 재생 가능한 PNG와 JSON을 만들고 파일 경로를 출력합니다. [공유 페이지](https://poku-pixel-fx.stankjedi.chatgpt.site/shared)에서 로그인하고 같은 이름의 PNG와 JSON을 함께 선택해 권리 확인 후 게시하세요. 스킬의 공유 절차를 따르는 에이전트도 동일하게 사용할 수 있습니다. 명령은 자동으로 게시하거나 로그인하지 않습니다.
+
+## 이펙트 카탈로그
+
+에이전트나 도구는 빌드 후 `npm run catalog -- --output catalog.json`을 실행해 등록된 기본 이펙트의 식별자, 한글·영어 이름과 설명, 태그, 재생 및 프레임 정보를 JSON으로 얻을 수 있습니다. 이 정적 카탈로그에는 공유 갤러리 게시물이 포함되지 않습니다.

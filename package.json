@@ -28,7 +28,8 @@
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.tools.json && tsc -p tsconfig.gallery.json && esbuild gallery/app.ts --bundle --format=esm --outfile=build-gallery/app.js",
     "prepack": "npm run build",
     "font": "node build-tools/tools/make-poku-font.mjs",
-    "share": "node build-tools/tools/share.mjs"
+    "share": "node build-tools/tools/share.mjs",
+    "catalog": "node build-tools/tools/export-catalog.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

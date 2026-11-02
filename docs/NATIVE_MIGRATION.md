@@ -1,6 +1,6 @@
 # Engine integration and migration
 
-Current state: TypeScript sources cover the core, all 244 effects and gallery; CLI sources use `.mts`, and `npm run build` emits JavaScript for execution. Sampled reference rendering and representative CLI, package and gallery flows have passed; full-frame equivalence and target-engine integration are not established. Node is needed for the current tools; the browser runtime uses compiled JavaScript. There is no native library or engine binding yet.
+Current state: TypeScript sources cover the core, all 254 effects and gallery; CLI sources use `.mts`, and `npm run build` emits JavaScript for execution. Sampled reference rendering and representative CLI, package and gallery flows have passed; full-frame equivalence and target-engine integration are not established. Node is needed for the current tools; the browser runtime uses compiled JavaScript. There is no native library or engine binding yet.
 
 ## Existing exchange format
 

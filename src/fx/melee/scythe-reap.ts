@@ -7,7 +7,7 @@ import { swing, onSwing, travel, smear, glowAlong } from "./_lib.js";
 export const meta = {
   name: "Scythe reap",
   desc: "A slow, huge dark crescent reaps round the front with a pale ghostly edge; it hangs, then tears away from the tail into curling wisps and cold vapour.",
-  tags: ["melee", "scythe", "reap", "dark", "ghost", "death", "slash", "combat", "one-shot"],
+  tags: ["melee", "scythe", "reap", "sweep", "dark", "ghost", "death", "slash", "combat", "one-shot"],
   size: [184, 116],
   origin: [84, 98],
   duration: 2.1,

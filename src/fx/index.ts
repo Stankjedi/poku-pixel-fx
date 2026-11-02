@@ -245,9 +245,30 @@ import * as critters_slime from "./critters/slime.js";
 import * as critters_snake from "./critters/snake.js";
 import * as critters_wisp from "./critters/wisp.js";
 
+import * as newfx_0 from "./arcane/celestial-supernova.js";
+import * as newfx_1 from "./arcane/dimensional-convergence.js";
+import * as newfx_2 from "./arcane/magic-castle.js";
+import * as newfx_3 from "./fire/solar-crown-detonation.js";
+import * as newfx_4 from "./fire/volcanic-cataclysm.js";
+import * as newfx_5 from "./lightning/ion-stormburst.js";
+import * as newfx_6 from "./holy/seraphic-verdict.js";
+import * as newfx_7 from "./shadow/abyssal-fracture.js";
+import * as newfx_8 from "./water/abyssal-maelstrom.js";
+import * as newfx_9 from "./nature/prismatic-blossom.js";
+
 export { categories } from "./categories.js";
 
 export const effects = {
+  "arcane/celestial-supernova": newfx_0,
+  "arcane/dimensional-convergence": newfx_1,
+  "arcane/magic-castle": newfx_2,
+  "fire/solar-crown-detonation": newfx_3,
+  "fire/volcanic-cataclysm": newfx_4,
+  "lightning/ion-stormburst": newfx_5,
+  "holy/seraphic-verdict": newfx_6,
+  "shadow/abyssal-fracture": newfx_7,
+  "water/abyssal-maelstrom": newfx_8,
+  "nature/prismatic-blossom": newfx_9,
   "moves/arrow-shot": moves_arrow_shot,
   "moves/dash-strike": moves_dash_strike,
   "moves/earth-stomp": moves_earth_stomp,

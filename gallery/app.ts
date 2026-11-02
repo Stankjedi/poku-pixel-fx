@@ -17,6 +17,9 @@ const categoryKo: Record<string, [string, string]> = {
 const categories = catalogCategories.map(c => ({ ...c, name: categoryKo[c.id]?.[0] ?? c.name, blurb: categoryKo[c.id]?.[1] ?? c.blurb }));
 const backgrounds: Record<string, string> = { dark: "어둡게", ground: "바닥", sky: "하늘", light: "밝게", black: "검정", none: "투명" };
 const tagLabel = (tag: string) => tagsKo[tag] ?? tag;
+// Search individual terms regardless of order, including namespace separators and mixed Korean/English.
+const searchText = (value: string) => value.normalize("NFC").toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const searchTokens = (value: string) => searchText(value).split(/\s+/u).filter(Boolean);
 const palettesKo: Record<string, string> = {
   fire: "불", ember: "불씨", lava: "용암", smoke: "연기", dust: "먼지", ice: "얼음", water: "물", electric: "전기", volt: "전압",
   poison: "독", holy: "신성", heal: "치유", arcane: "비전", shadow: "그림자", blood: "피", earth: "대지", stone: "돌", gold: "금",
@@ -24,7 +27,7 @@ const palettesKo: Record<string, string> = {
 };
 
 interface GalleryMeta { name: string; desc: string; size: [number, number]; origin: [number, number]; fps: number; bg: string; loop: boolean; duration: number; tags: string[]; options: Record<string, unknown>; actor?: number | boolean }
-interface GalleryEffect { id: string; cat: string; name: string; originalName: string; originalDesc: string; meta: GalleryMeta; mod: any }
+interface GalleryEffect { id: string; cat: string; name: string; originalName: string; originalDesc: string; searchIndex: string; meta: GalleryMeta; mod: any }
 interface Tile { fx: GalleryEffect; fig: HTMLElement; cv: HTMLCanvasElement; player: Player | null; visible: boolean; hover: boolean }
 interface Section { c: (typeof categories)[number]; sec: HTMLElement; list: GalleryEffect[] }
 const FX: GalleryEffect[] = (Object.entries(effects) as [string, any][]).map(([id, mod]) => {
@@ -32,7 +35,11 @@ const FX: GalleryEffect[] = (Object.entries(effects) as [string, any][]).map(([i
   const originalName = meta.name, originalDesc = meta.desc;
   const translation = effectsKo[id];
   if (translation) Object.assign(meta, translation);
-  return { id, cat: id.split("/")[0], name: meta.name, originalName, originalDesc, mod: { ...mod, meta }, meta };
+  const cat = id.split("/")[0], category = categories.find(c => c.id === cat), originalCategory = catalogCategories.find(c => c.id === cat);
+  const searchIndex = searchText([id, meta.name, meta.desc, originalName, originalDesc,
+    category?.name ?? "", category?.blurb ?? "", originalCategory?.name ?? "", originalCategory?.blurb ?? "",
+    ...meta.tags, ...meta.tags.map(tagLabel)].join(" "));
+  return { id, cat, name: meta.name, originalName, originalDesc, searchIndex, mod: { ...mod, meta }, meta };
 });
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 // full-screen effects (transitions, weather, impact frames) fill a 16:9 stage edge to edge instead of floating in it
@@ -157,6 +164,7 @@ function build() {
         el("div", { className: "stage" }, cv),
         el("figcaption", {}, [el("b", { textContent: fx.name }), el("small", { textContent: fx.meta.loop ? "반복" : `${+fx.meta.duration.toFixed(2)}초` })]),
       ]);
+      fig.dataset.effectId = fx.id;
       const t = { fx, fig, cv, player: null, visible: false, hover: false };
       fig.addEventListener("click", () => openDetail(fx));
       fig.addEventListener("keydown", (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), openDetail(fx)));
@@ -202,13 +210,13 @@ function setCat(id: string, fromHash = false) {
   if (!fromHash) window.scrollTo({ top: 0 });
 }
 function filter() {
-  const q = state.q.trim().toLowerCase();
+  const words = searchTokens(state.q);
   let shown = 0;
   for (const s of sections) {
     let any = false;
     for (const fx of s.list) {
       const t = tiles.find((x) => x.fx === fx);
-      const hit = (state.cat === "all" || state.cat === s.c.id) && (!q || [fx.id, fx.name, fx.meta.desc, fx.originalName, fx.originalDesc, ...fx.meta.tags, ...fx.meta.tags.map(tagLabel)].join(" ").toLowerCase().includes(q));
+      const hit = (state.cat === "all" || state.cat === s.c.id) && words.every(word => fx.searchIndex.includes(word));
       if (!t) continue;
       t.fig.hidden = !hit;
       any ||= hit;
