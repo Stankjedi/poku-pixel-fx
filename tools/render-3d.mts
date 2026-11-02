@@ -23,7 +23,7 @@ const int = (name: string, def: number) => {
 };
 const frames = int("frames", 24), width = int("width", 192), height = int("height", 128), columns = int("columns", 6);
 const rows = Math.ceil(frames / columns);
-const mod = effects[name];
+const mod = effects[name as keyof typeof effects];
 const fx = name === "frost" ? createFx3D(frost, { seed: int("seed", frost.meta.options.seed) })
   : name === "slash" ? createFx3D(slash, { seed: int("seed", slash.meta.options.seed) })
   : name === "blackhole" ? createFx3D(blackhole, { seed: int("seed", blackhole.meta.options.seed) })
