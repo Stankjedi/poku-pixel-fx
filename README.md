@@ -6,7 +6,7 @@
 
 ## 한국어 빠른 시작
 
-Node.js 18 이상과 로컬 개발 의존성을 준비한 뒤 `npm run build`를 실행합니다. `npm run gallery`를 실행하고 브라우저에서 `http://127.0.0.1:8080/gallery/`를 열면 한국어로 이펙트를 검색하고 미리 볼 수 있습니다.
+Node.js 18 이상과 로컬 개발 의존성을 준비한 뒤 `npm run build`를 실행합니다. `npm run gallery`를 실행하고 브라우저에서 `http://127.0.0.1:8080/gallery/`를 열면 한국어로 이펙트를 검색하고 미리 볼 수 있습니다. 상세 화면에서 스프라이트 시트를 생성한 뒤 PNG 또는 WebP로 내려받을 수 있습니다. WebP는 단일 시트 이미지이며 브라우저 압축으로 색상이 달라질 수 있으므로 정확한 색상이 필요하면 PNG를 사용하세요.
 
 - `node build-tools/tools/list.mjs 횃불`: 한글 또는 영어로 이펙트 검색
 - `node build-tools/tools/render.mjs fire/torch --sheet`: PNG 스프라이트 시트와 JSON 생성

@@ -308,7 +308,41 @@ function sheet() {
   }
   const k = Math.max(1, Math.min(4, Math.floor(1100 / (cols * w))));
   const pic = el("img", { src: cv.toDataURL("image/png"), alt: `${m.name} 스프라이트 시트`, width: cols * w * k, height: rows * h * k });
-  $("#d-sheet").replaceChildren(pic, el("p", { textContent: `${w} × ${h}px 프레임 ${n}개, 가로 ${cols}개, ${m.fps}fps, ${m.loop ? "반복 재생" : "한 번 재생"}. 이미지를 저장하거나 다음 명령을 실행하세요: node build-tools/tools/render.mjs ${fx.id} --sheet` }));
+  const name = fx.id.split("/").pop()!.replace(/[^a-zA-Z0-9_-]/g, "-") || "effect";
+  const png = el("a", { className: "btn", href: pic.src, download: `${name}.png`, textContent: "PNG 다운로드" });
+  // Prevent the hosted gallery's legacy PNG helper from adding a duplicate link.
+  png.dataset.sheetDownload = "true";
+  const status = el("p");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  const webp = el("button", { className: "btn", type: "button", textContent: "WebP 다운로드" });
+  webp.addEventListener("click", () => {
+    if (webp.disabled) return;
+    webp.disabled = true;
+    status.textContent = "WebP 파일을 만드는 중…";
+    try {
+      // Canvas encodes at the actual sheet resolution; quality 1 reduces color loss.
+      cv.toBlob((blob) => {
+        webp.disabled = false;
+        if (!blob || blob.type !== "image/webp") {
+          status.textContent = "이 브라우저는 WebP 내보내기를 지원하지 않습니다. PNG를 이용해 주세요.";
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const link = el("a", { href: url, download: `${name}.webp` });
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        status.textContent = "WebP 다운로드가 시작되었습니다.";
+      }, "image/webp", 1);
+    } catch {
+      webp.disabled = false;
+      status.textContent = "WebP 파일을 만들지 못했습니다. PNG를 이용해 주세요.";
+    }
+  });
+  const downloads = el("div", { className: "row" }, [png, webp]);
+  $("#d-sheet").replaceChildren(pic, downloads, status, el("p", { textContent: `${w} × ${h}px 프레임 ${n}개, 가로 ${cols}개, ${m.fps}fps, ${m.loop ? "반복 재생" : "한 번 재생"}. WebP는 압축 과정에서 색상이 조금 달라질 수 있습니다. 정확한 색상은 PNG를 사용하세요.` }));
 }
 function wireDetail() {
   const d = $("#detail");
