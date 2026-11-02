@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>poku-pixel-fx</title>
+<meta name="description" content="픽셀 아트 이펙트를 재생하고 색을 바꾸고 스프라이트 시트로 내보내세요.">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="ux.css">
+<link rel="stylesheet" href="ratings.css">
+</head>
+<body>
+<!--BODY-->
+<header class="head">
+  <div class="title">
+    <svg class="mark" viewBox="0 0 7 7" shape-rendering="crispEdges" role="img" aria-label="poku-pixel-fx"><rect x="1" y="1" width="6" height="6" fill="#ffffff"/><rect x="0" y="0" width="3" height="3" fill="#f53cd1"/></svg>
+    <div>
+      <h1>poku-pixel-fx.</h1>
+      <p class="sub"><span id="count" hidden>0</span><span id="total-count" aria-live="polite">전체 개수를 확인하는 중…</span></p>
+      <p class="origin">원작: <a href="https://github.com/patch-gg/pixelfx">Patch의 PixelFX</a> · 한글화 오픈소스 포크 · 원본 저작권: Patch, Hugo Duprez</p>
+    </div>
+  </div>
+  <nav class="links" aria-label="갤러리 및 프로젝트 정보">
+    <a href="/shared" class="share-action">작품 공유하기 ↗</a>
+    <a href="licenses.html">라이선스 및 저작권</a>
+  </nav>
+</header>
+<div class="bar">
+  <div class="bar-in">
+    <div class="chips" id="chips" role="toolbar" aria-label="분류"></div>
+    <input id="q" type="search" placeholder="검색" aria-label="이펙트 검색" autocomplete="off">
+  </div>
+</div>
+<p id="community-status" class="community-status" role="status" aria-live="polite"></p>
+<main id="grid"></main>
+<p class="empty" id="none" hidden>검색 결과가 없습니다. 불, 베기, 반복 등을 검색해 보세요.</p>
+<dialog class="detail" id="detail" aria-labelledby="d-name">
+  <div class="sheet">
+    <div>
+      <div class="big"><canvas id="big"></canvas><button class="close" id="d-close" type="button">닫기</button></div>
+    </div>
+    <div class="info">
+      <h2 id="d-name"></h2>
+      <div class="id" id="d-id"></div>
+      <p id="d-desc"></p>
+      <dl class="facts" id="d-facts"></dl>
+      <div class="controls">
+        <div class="row"><label>재생</label><button class="btn" id="d-play" type="button">일시 정지</button><button class="btn" id="d-again" type="button">다시 재생</button><span id="d-speed" class="row"></span></div>
+        <div class="row"><label>배경</label><span id="d-bg" class="row"></span></div>
+        <div class="row"><label>색상</label><select class="btn" id="d-pal" aria-label="색상 팔레트"></select><button class="btn" id="d-seed" type="button">새 시드</button></div>
+        <div class="row"><label>표시</label><button class="btn" id="d-flip" type="button">좌우 반전</button><button class="btn" id="d-actor" type="button">캐릭터</button><button class="btn" id="d-make" type="button">스프라이트 시트</button></div>
+      </div>
+      <div class="code-head"><span>사용 코드</span><span><button class="btn" id="d-copy" type="button">복사</button></span></div>
+      <pre id="d-code"></pre>
+    </div>
+    <div class="sheetout" id="d-sheet"></div>
+  </div>
+</dialog>
+<dialog id="shared-detail" class="shared-dialog" aria-labelledby="shared-title"><button type="button" id="shared-close" class="shared-close" aria-label="닫기">닫기</button><h2 id="shared-title"></h2><canvas id="shared-player"></canvas><p id="shared-details"></p><div class="shared-controls"><button type="button" id="shared-play">일시 정지</button><button type="button" id="shared-replay">다시 재생</button></div><a id="shared-original" target="_blank" rel="noopener noreferrer">원본 PNG 열기</a> <a id="shared-png" download class="btn">PNG 다운로드</a> <button type="button" id="shared-webp" class="btn">움직이는 WebP 다운로드</button><p>움직이는 WebP는 재생 정보가 있는 작품만 만들 수 있으며, 압축으로 색상이 조금 달라질 수 있습니다. 정확한 원본은 PNG 시트를 사용하세요.</p><p id="shared-download-status" role="status" aria-live="polite"></p></dialog>
+<!--/BODY-->
+<script type="module" src="app.js"></script>
+<script type="module" src="community.js"></script>
+<script type="module" src="ratings.js"></script>
+<script type="module" src="library-download.js"></script>
+</body>
+</html>

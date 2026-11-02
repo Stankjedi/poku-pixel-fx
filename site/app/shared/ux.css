@@ -1,0 +1,28 @@
+/* Shared page adopts the gallery's dark surfaces and pink accent. */
+@font-face { font-family: PokuPixel; src: url('/effects/fonts/PokuPixel-Regular.ttf') format('truetype'); font-display: swap; }
+main:has(#upload-title) { color-scheme: dark; font-family: PokuPixel, system-ui, sans-serif !important; line-height: 1.55; }
+main:has(#upload-title) * { box-sizing: border-box; }
+main:has(#upload-title) > a:first-child { display:inline-flex; min-height: 40px; align-items:center; font-weight:700; text-decoration:none; }
+main:has(#upload-title) > a:first-child:hover, main:has(#upload-title) a:hover { text-decoration:underline; }
+main:has(#upload-title) h1, main:has(#upload-title) h2, main:has(#upload-title) h3 { line-height:1.25; }
+main:has(#upload-title) h2 { margin-top:0; }
+main:has(#upload-title) section { border-radius: 8px; }
+main:has(#upload-title) label { display: block; min-width: 0; overflow-wrap:anywhere; }
+main:has(#upload-title) input:not([type=checkbox]), main:has(#upload-title) select { display:block; width:100%; max-width:100%; min-height:42px; margin-top:.3rem; padding:.55rem .7rem; border:1px solid #65566d; border-radius:5px; background:#0c0a10 !important; color:#fff !important; font:inherit; }
+main:has(#upload-title) input[type=file] { padding:.4rem; font-size:.9rem; }
+main:has(#upload-title) input[type=file]::file-selector-button { border:1px solid #76657a; border-radius:4px; background:#27202d; color:white; padding:.35rem .55rem; margin-right:.7rem; cursor:pointer; }
+main:has(#upload-title) input[type=checkbox] { accent-color:#f38cdb; width:17px; height:17px; vertical-align:middle; margin-right:.4rem; }
+main:has(#upload-title) fieldset { min-width:0; border-radius:6px; }
+main:has(#upload-title) legend { color:#f2b2e8; padding:0 .3rem; }
+main:has(#upload-title) button { min-height:40px; border:1px solid #78657c; border-radius:5px; padding:.55rem .85rem; background:#28202e; color:#fff; font:inherit; cursor:pointer; }
+main:has(#upload-title) button[type=submit] { background:#f38cdb !important; color:#1a1020 !important; border-color:#f38cdb; font-weight:700; }
+main:has(#upload-title) button:hover:not(:disabled) { border-color:#f3a5e9; filter:brightness(1.1); }
+main:has(#upload-title) button:disabled { opacity:.55; cursor:wait; }
+main:has(#upload-title) :focus-visible { outline:2px solid #f38cdb; outline-offset:3px; }
+main:has(#upload-title) [role=status]:not(:empty) { color:#f6d0ef; overflow-wrap:anywhere; }
+main:has(#upload-title) article a { overflow-wrap:anywhere; }
+@media(max-width:520px) {
+  main:has(#upload-title) { padding: 1.25rem 1rem !important; }
+  main:has(#upload-title) section { padding: .9rem !important; }
+  main:has(#upload-title) article { padding: .8rem !important; }
+}

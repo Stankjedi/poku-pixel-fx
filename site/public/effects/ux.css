@@ -1,0 +1,29 @@
+/* Consistent gallery cards and controls, with touch-friendly mobile layouts. */
+#grid > .unified-grid { gap: 16px 12px; }
+.shared-tile { grid-column: span 2; grid-row: span 2; }
+.shared-tile .stage { aspect-ratio: 6 / 5; }
+.tile:focus-visible { outline: 2px solid #f38cdb; outline-offset: 4px; }
+.links a.share-action { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; letter-spacing: .02em; }
+.chip { min-height: 32px; }
+.chip:focus-visible, .links a:focus-visible, .shared-dialog :focus-visible { outline: 2px solid #f38cdb; outline-offset: 3px; }
+#q { min-height: 34px; width: min(180px, 28vw); }
+.shared-dialog { max-height: min(90dvh, 960px); overflow: auto; border-radius: 8px; }
+.shared-dialog h2 { margin: 0 3rem .8rem 0; overflow-wrap: anywhere; }
+.shared-dialog canvas { max-height: 62dvh; object-fit: contain; }
+.shared-dialog button { min-height: 38px; border: 1px solid #66566a; background: #211a28; color: #fff; padding: .5rem .75rem; cursor: pointer; }
+.shared-dialog button:hover { border-color: #f38cdb; }
+.shared-dialog a { display: inline-block; margin-top: .75rem; }
+@media (max-width: 520px) {
+  .head { gap: 16px; padding-block: 22px 16px; }
+  .links { width: 100%; align-items: center; justify-content: space-between; gap: 12px; }
+  .links a.share-action { flex: 1; }
+  #q { width: 100%; max-width: none; min-height: 42px; }
+  .chips { scrollbar-width: thin; }
+  .chip { min-height: 38px; }
+  .shared-tile { grid-column: auto; grid-row: auto; }
+  .tile.big { grid-column: auto; grid-row: auto; }
+  .shared-dialog { max-width: 96vw; padding: 16px; }
+}
+
+.origin { margin: .5rem 0 0; color: #bdb3c4; font: 400 13px/1.5 system-ui, sans-serif; }
+.origin a { color: #f3a5e9; text-underline-offset: 3px; }

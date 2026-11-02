@@ -1,0 +1,14 @@
+# Notices
+
+**PixelFX origin.** POKU Pixel FX is a Korean-localized and TypeScript-based open-source fork/derivative of PixelFX by Patch (https://github.com/patch-gg/pixelfx), maintained as a separate repository. The original project license credits Patch and Hugo Duprez.
+
+**Hugo Duprez.** `src/core/sim.ts` and the effects that say so at the top of their file adapt Sprite Fusion's
+open-source pixel art VFX (https://www.spritefusion.com/pixel-art-vfx), Copyright (c) 2026 Hugo Duprez, MIT License.
+
+**Hollow Crown.** `src/core/act.ts` adapts how Hollow Crown plays its skills (poses on 12 fps steps, hit-stops, the springy
+straw target), from
+https://github.com/rehan-remade/hollow-crown, Copyright (c) 2026 rehan-remade, MIT License.
+
+**Poku Pixel.** The gallery font is an original 5×7 pixel font created for this fork. Its source and font file are available under the repository MIT license.
+
+The complete MIT license and copyright notice for Hollow Crown are included in `licenses/HOLLOW-CROWN.txt`; the project license and associated Patch and Hugo Duprez notices are in `LICENSE`.
