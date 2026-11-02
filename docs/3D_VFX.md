@@ -12,6 +12,7 @@ npm run gallery
 node build-tools/tools/render-3d.mjs frost --frames 24 --out records/3d/frost.png
 node build-tools/tools/render-3d.mjs slash --frames 24 --out records/3d/slash.png
 node build-tools/tools/render-3d.mjs blackhole --frames 32 --out records/3d/blackhole.png
+node tools/render-blackhole-gif.mjs --out records/3d/black-hole-cinematic.gif
 ```
 
 The orbitable preview contains **Frost Nova 3D** (solid five-sided ice crystals, expanding ground wave, snowflake windup, physics shards, melt), **Arc Slash 3D** (3D ribbon, secondary echo, collision sparks), and **Black Hole 3D** (lensed dark event horizon, rotating accretion disk, 3D gas plumes, inspiralling meteor fragments). Drag to orbit; wheel to zoom; adjust pixel size, elevation and additive emission. Screenshot PNG download works directly in the browser. The contact-sheet CLI exports PNG and a JSON file containing sample times, camera and options.
@@ -87,6 +88,12 @@ fx.update(1 / 60);
 // painter.setCamera(...).begin("#05030d"); fx.draw(painter);
 ```
 
-The optical treatment uses two new **optional** `Painter3D` primitives: `sphere(center, radius, fill, edge)` for depth-tested true 3D occlusion of background light, and `lensWarp(center, horizon, reach, strength)` for discrete screen-space resampling of the drawn image, additive light and depth. `lensWarp` is designed to be called **before** `sphere`, so the horizon can cover the warped material. It is an artistic gravitational lens approximation, not a physical general-relativity solver. The photon ring faces the camera while the disk, rocks and gas remain in actual 3D world space.
+The general-purpose engine also provides optional `Painter3D.sphere()` and `Painter3D.lensWarp()` primitives for other effects. The **cinematic black-hole effect** uses its own orthographic view-ray disk intersection, analytic horizon depth check and photon-ring shading instead. Its orbiting rock meshes and sparks remain in real XYZ world coordinates; the optical lensing is an artistic approximation, not a GR solver.
 
-The default palette has **11 steps**; supply 11 colors if overriding it. The CPU renderer is suitable for individual hero spells and sprite-sheet baking; benchmark hardware before using many simultaneous black holes.
+The default palette has **11 steps**, and overrides with other lengths are resampled to 11 colors. The CPU renderer is suitable for individual hero spells and sprite-sheet baking; benchmark hardware before using many simultaneous black holes.
+
+## Cinematic Black Hole VFX (quality revision)
+
+The black-hole implementation is **code-generated on every frame**; it never uses the concept-art PNG as an animated texture or billboard. A view ray intersects a physically inclined XYZ accretion plane, and the polar intersection coordinates drive multiple moving, quantized plasma bands. A horizon depth test suppresses back-facing disk material, while orbiting faceted basalt and sparks provide near/far parallax. Camera-facing photon arcs and background lensing are explicitly **art-directed approximations**, not a scientific general-relativity integrator.
+
+The revised effect adds blue-violet ion filaments, layered spiral gas, larger fractured-rock silhouettes, controlled emission and a small two-pass bloom that preserves the pixel-perfect color buffer. It uses a seeded, 120 Hz deterministic timeline (`createFx3D`) with a 7-second one-shot and a fade-out suitable for seamless repeated playback. `blackhole` is available in the interactive 3D gallery and PNG sheet exporter. Performance is resolution-dependent; the browser preview caps its internal raster size while retaining nearest-neighbor output. For larger production scenes, a WebGL/WebGPU implementation is recommended.

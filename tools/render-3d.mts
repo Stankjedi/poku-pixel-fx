@@ -26,7 +26,7 @@ const fx = name === "frost" ? createFx3D(frost, { seed: int("seed", frost.meta.o
   : name === "slash" ? createFx3D(slash, { seed: int("seed", slash.meta.options.seed) })
   : createFx3D(blackhole, { seed: int("seed", blackhole.meta.options.seed) });
 const frame = createFrame3D(width, height);
-const painter = new Painter3D(frame, { yaw: 0.68, elevation: 33 * Math.PI / 180, zoom: name === "blackhole" ? 1.3 : 1, target: [0, name === "frost" ? 0.75 : name === "slash" ? 1.4 : 2.1, 0] });
+const painter = new Painter3D(frame, { yaw: 0.68, elevation: 28 * Math.PI / 180, zoom: name === "blackhole" ? 1.36 : 1, target: [0, name === "frost" ? 0.75 : name === "slash" ? 1.4 : 1.12, 0] });
 const dest = new Uint8ClampedArray(width * height * 4);
 const sheet = new Uint8Array(width * columns * height * rows * 4);
 for (let n = 0; n < frames; n++) {
