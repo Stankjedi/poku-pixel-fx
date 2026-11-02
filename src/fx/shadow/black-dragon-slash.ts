@@ -4,9 +4,9 @@ import { clamp, fit, rand, sparkle, WHITE } from '../../core/index.js';
 // A black dragon is the shadow cast by an instantaneous cut through space.
 export const meta = {
   name: 'Black dragon slash',
-  desc: 'A black dragon darts through an instant sword stroke, leaving a sharp, split void that closes behind it.',
+  desc: 'A looming black dragon face appears behind an instantaneous slash that splits space.',
   tags: ['dragon', 'black dragon', 'slash', 'sword', 'shadow', 'dark', 'void', 'rift', 'combat', 'ultimate', 'one-shot', '흑룡참', '흑룡', '용', '검격', '공간'],
-  size: [256, 192], origin: [128, 96], duration: 1.65, loop: false, fps: 30, bg: 'dark',
+  size: [256, 192], origin: [128, 96], duration: 2.25, loop: false, fps: 30, bg: 'dark',
   options: { palette: ['#050408', '#0d0b12', '#1c1823', '#352d3d', '#6d6177', '#ada5bb', '#e9e5f0', '#ffffff'], seed: 77 },
 };
 const smooth = (v: number) => { const x = clamp(v); return x*x*(3-2*x); };
@@ -15,52 +15,58 @@ const out = (v: number) => 1 - (1-clamp(v))**3;
 export function draw(p: Painter, t: number, o: typeof meta.options) {
   if (t <= 0 || t >= meta.duration) return;
   const C = fit(o.palette, 8);
-  const strike = out((t-.20)/.19);
-  const dragonIn = smooth(t/.12), dragonOut = 1-smooth((t-.39)/.51), a=dragonIn*dragonOut;
-  const hx=-25+99*strike, hy=15-34*strike;
+  const dragonIn = smooth((t-.04)/.24), dragonOut = 1-smooth((t-1.18)/.72), a=dragonIn*dragonOut;
 
-  // The dragon's body is almost black, with a restrained silver-violet rim.
+  // A great horned face hangs behind the cut; no body or wings obscure its silhouette.
   if(a>.001) {
-    const points:[number,number][]=[];
-    for(let i=0;i<=12;i++) {
-      const u=i/12;
-      points.push([hx-9-u*90,hy+5+u*23+Math.sin(u*7-t*12)*13*u]);
-    }
-    for(let i=12;i>0;i--) {
-      const q=i/12, b=points[i-1], c=points[i], w=2+(1-q)*16;
-      p.beam(c[0],c[1],b[0],b[1],w+2,C[0],a);
-      p.beam(c[0],c[1]-2,b[0],b[1]-2,w*.69,C[2],a);
-      p.line(c[0],c[1]-w*.38,b[0],b[1]-w*.38,C[4],a*.75);
-      if(i<11 && i%2===0) {
-        p.tri(c[0]-5,c[1]-w*.4,c[0],c[1]-w*.4-6,c[0]+4,c[1]-w*.3,C[2],a);
-        p.line(c[0]-5,c[1]-w*.4,c[0],c[1]-w*.4-6,C[4],a*.7);
-      }
-    }
-    // One angular wing and a smaller near wing break the long body into a dragon silhouette.
-    const x=hx-30,y=hy+3, flap=Math.sin(t*13)*7;
-    p.poly([[x,y],[x-15,y-19],[x-37,y-39-flap],[x-29,y-15],[x-46,y-5],[x-24,y-8],[x-19,y+4]],C[0],a);
-    p.poly([[x-2,y-3],[x-35,y-37-flap],[x-26,y-14],[x-42,y-6],[x-24,y-10]],C[2],a);
-    p.polyline([[x,y],[x-15,y-19],[x-37,y-39-flap]],C[4],a*.9);
-    p.line(x-15,y-19,x-42,y-6,C[3],a);
-    p.poly([[x+1,y+6],[x-9,y+21],[x-26,y+32+flap],[x-22,y+17],[x-36,y+14],[x-19,y+9]],C[1],a);
-    p.polyline([[x+1,y+6],[x-9,y+21],[x-26,y+32+flap]],C[4],a*.65);
-    // Horned head, open jaw and a concentrated eye glint.
-    p.poly([[hx-14,hy-10],[hx-23,hy-25],[hx-13,hy-21],[hx-4,hy-12],[hx+5,hy-10],[hx+17,hy-5],[hx+26,hy+1],[hx+15,hy+4],[hx+5,hy+2],[hx+16,hy+10],[hx+23,hy+9],[hx+14,hy+16],[hx+1,hy+14],[hx-14,hy+8],[hx-20,hy-1]],C[0],a);
-    p.poly([[hx-16,hy-8],[hx-11,hy-13],[hx+4,hy-11],[hx+17,hy-5],[hx+25,hy+1],[hx+13,hy+2],[hx+1,hy-2],[hx-12,hy+5]],C[2],a);
-    p.polyline([[hx-22,hy-24],[hx-13,hy-19],[hx-4,hy-12],[hx+5,hy-10],[hx+17,hy-5],[hx+26,hy+1]],C[4],a);
-    p.polyline([[hx-10,hy+7],[hx+1,hy+13],[hx+14,hy+15],[hx+23,hy+9]],C[3],a);
-    p.tri(hx-7,hy-10,hx-14,hy-28,hx-2,hy-15,C[2],a);
-    p.line(hx-14,hy-28,hx-5,hy-14,C[5],a*.8);
-    p.beam(hx+2,hy-5,hx+7,hy-6,2,C[6],a);
-    p.glow(hx+5,hy-5,5,C[5],a*.18);
+    p.glow(0,-12,66,C[3],a*.12);
+    // Swept horns and crown form a menacing, unmistakably draconic silhouette.
+    p.poly([[-30,-38],[-44,-54],[-62,-78],[-60,-54],[-49,-29],[-38,-15],[-30,-22]],C[0],a);
+    p.poly([[30,-38],[44,-54],[62,-78],[60,-54],[49,-29],[38,-15],[30,-22]],C[0],a);
+    p.polyline([[-30,-38],[-44,-54],[-62,-78],[-60,-54],[-49,-29]],C[4],a);
+    p.polyline([[30,-38],[44,-54],[62,-78],[60,-54],[49,-29]],C[4],a);
+    p.line(-61,-74,-46,-51,C[5],a*.75); p.line(61,-74,46,-51,C[5],a*.75);
+    // Outward hooked horns and cheek spikes distinguish the dragon from a horned mask.
+    p.poly([[-29,-37],[-42,-53],[-58,-68],[-76,-69],[-67,-76],[-51,-77],[-35,-60],[-22,-42]],C[1],a);
+    p.poly([[29,-37],[42,-53],[58,-68],[76,-69],[67,-76],[51,-77],[35,-60],[22,-42]],C[1],a);
+    p.polyline([[-29,-37],[-42,-53],[-58,-68],[-76,-69],[-67,-76],[-51,-77]],C[4],a);
+    p.polyline([[29,-37],[42,-53],[58,-68],[76,-69],[67,-76],[51,-77]],C[4],a);
+    p.poly([[-40,-5],[-54,5],[-62,4],[-52,16],[-41,19],[-31,12]],C[1],a);
+    p.poly([[40,-5],[54,5],[62,4],[52,16],[41,19],[31,12]],C[1],a);
+    p.polyline([[-40,-5],[-54,5],[-62,4],[-52,16]],C[4],a*.8);
+    p.polyline([[40,-5],[54,5],[62,4],[52,16]],C[4],a*.8);
+    p.poly([[-39,-32],[-31,-49],[-16,-45],[0,-52],[16,-45],[31,-49],[39,-32],[47,-15],[43,15],[31,37],[18,51],[0,58],[-18,51],[-31,37],[-43,15],[-47,-15]],C[0],a);
+    p.polyline([[-47,-15],[-39,-32],[-31,-49],[-16,-45],[0,-52],[16,-45],[31,-49],[39,-32],[47,-15],[43,15],[31,37],[18,51],[0,58],[-18,51],[-31,37],[-43,15],[-47,-15]],C[4],a*.78);
+    // Layered brow and cheek plates retain volume while the base stays ink-black.
+    p.poly([[-38,-22],[-29,-40],[-15,-36],[0,-43],[15,-36],[29,-40],[38,-22],[27,-15],[15,-19],[0,-26],[-15,-19],[-27,-15]],C[2],a);
+    p.poly([[-43,-10],[-29,-14],[-16,-8],[-13,8],[-22,21],[-39,17]],C[1],a);
+    p.poly([[43,-10],[29,-14],[16,-8],[13,8],[22,21],[39,17]],C[1],a);
+    p.poly([[-39,9],[-29,15],[-24,34],[-14,44],[-23,36],[-36,24]],C[2],a);
+    p.poly([[39,9],[29,15],[24,34],[14,44],[23,36],[36,24]],C[2],a);
+    p.polyline([[-37,3],[-27,9],[-20,22]],C[4],a*.65); p.polyline([[37,3],[27,9],[20,22]],C[4],a*.65);
+    // Narrow cold eyes sit beneath heavy brows, aimed at the viewer.
+    p.poly([[-37,-17],[-16,-13],[-19,-7],[-29,-8]],C[5],a);
+    p.poly([[37,-17],[16,-13],[19,-7],[29,-8]],C[5],a);
+    p.line(-32,-13,-21,-11,C[6],a); p.line(32,-13,21,-11,C[6],a);
+    p.glow(-26,-12,8,C[5],a*.16); p.glow(26,-12,8,C[5],a*.16);
+    p.polyline([[-39,-20],[-22,-17],[-13,-12]],C[4],a); p.polyline([[39,-20],[22,-17],[13,-12]],C[4],a);
+    // Faceted nose, nostrils, open mouth and teeth make the lower face legible.
+    p.poly([[0,-22],[-10,-10],[-17,12],[-21,24],[-13,35],[0,38],[13,35],[21,24],[17,12],[10,-10]],C[2],a);
+    p.poly([[0,-20],[-4,11],[-11,25],[0,29],[11,25],[4,11]],C[3],a);
+    p.poly([[-17,22],[-10,20],[-8,23],[-14,26]],C[0],a); p.poly([[17,22],[10,20],[8,23],[14,26]],C[0],a);
+    p.poly([[-20,32],[-10,38],[0,40],[10,38],[20,32],[15,45],[0,51],[-15,45]],C[0],a);
+    p.polyline([[-18,34],[-10,39],[0,41],[10,39],[18,34]],C[4],a*.8);
+    p.tri(-16,36,-11,38,-12,45,C[5],a); p.tri(16,36,11,38,12,45,C[5],a);
+    p.tri(-6,40,-3,41,-4,45,C[4],a); p.tri(6,40,3,41,4,45,C[4],a);
+    p.line(-5,-33,0,-42,C[4],a*.7); p.line(5,-33,0,-42,C[4],a*.7);
   }
 
   // A fast ink-black fissure splits the frame diagonally; only its knife edge catches light.
-  const reveal=out((t-.22)/.13), hold=1-smooth((t-.76)/.63), cut=reveal*hold;
+  const reveal=out((t-.44)/.13), hold=1-smooth((t-1.20)/.68), cut=reveal*hold;
   if(cut>.001) {
     const endX=-108+216*reveal, endY=57-114*reveal;
     const span=Math.hypot(endX+108,endY-57), ux=(endX+108)/(span||1), uy=(endY-57)/(span||1);
-    const nx=-uy,ny=ux, width=(2+7*smooth((t-.28)/.13))*(1-.65*smooth((t-.55)/.65));
+    const nx=-uy,ny=ux, width=(2+7*smooth((t-.52)/.13))*(1-.65*smooth((t-1.10)/.65));
     const points:[number,number][]=[];
     for(let i=0;i<=12;i++) {
       const u=i/12, uneven=(i===0||i===12?0:Math.sin(i*5.6+o.seed)*2.1), bulge=Math.sin(Math.PI*u)*width;
@@ -70,21 +76,42 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
       const u=i/12, uneven=(i===0||i===12?0:Math.sin(i*4.8+o.seed)*1.8), bulge=Math.sin(Math.PI*u)*width;
       points.push([-108+ux*span*u-nx*(bulge+uneven),57+uy*span*u-ny*(bulge+uneven)]);
     }
-    p.poly(points,C[0],cut);
+    // Narrow quads avoid scanning the large empty bounding box around the diagonal.
+    for(let i=0;i<12;i++) p.poly([points[i],points[i+1],points[24-i],points[25-i]],C[0],cut);
     p.polyline(points.slice(0,13),C[5],cut*.8);
     p.polyline(points.slice(13),C[3],cut*.95);
     p.line(-108,57,endX,endY,C[6],cut*.6);
-    p.glowLine(-100,53,endX,endY,8,C[4],cut*.12);
+    for(let i=0;i<6;i++) {
+      const u=i/6,v=(i+1)/6;
+      p.glowLine(-100+(endX+100)*u,53+(endY-53)*u,-100+(endX+100)*v,53+(endY-53)*v,8,C[4],cut*.10);
+    }
     // Angular cracks peel away from the slit in opposite directions, then disappear.
-    const crack=out((t-.31)/.12), crackFade=1-smooth((t-.72)/.45);
+    const crack=out((t-.54)/.12), crackFade=1-smooth((t-1.20)/.55);
     for(let i=0;i<6;i++) {
       const u=.23+i*.1, side=i%2?1:-1, bx=-108+ux*span*u, by=57+uy*span*u;
       const length=(10+(i%3)*5)*crack;
       p.polyline([[bx,by],[bx+nx*side*length*.55+ux*5,by+ny*side*length*.55+uy*5],[bx+nx*side*length+ux*7,by+ny*side*length+uy*7]],C[4],cut*crackFade*.75);
     }
   }
+
+  // The tear opens around the dragon, casting fractured silver arcs into the air.
+  const burst=clamp((t-.53)/.68), burstAlpha=Math.sin(Math.PI*burst);
+  if(burst>0 && burst<1) {
+    const r=8+40*out(burst);
+    p.arc(0,-4,r,2,-2.85,-.45,C[5],burstAlpha*.75);
+    p.arc(0,-4,r*.73,1,.22,2.37,C[4],burstAlpha*.8);
+    p.glow(0,-4,36,C[4],burstAlpha*.14);
+    for(let i=0;i<15;i++) {
+      const angle=i*2.399+o.seed*.01, radius=7+(18+(i%4)*6)*out(burst);
+      const x=Math.cos(angle)*radius, y=-4+Math.sin(angle)*radius*.76;
+      const size=(i%4===0?3:1.5)*(1-burst*.7), nx=Math.cos(angle), ny=Math.sin(angle);
+      p.poly([[x+nx*size*2,y+ny*size*2],[x-ny*size,y+nx*size],[x-nx*size,y-ny*size],[x+ny*size,y-nx*size]],i%4===0?C[6]:C[4],burstAlpha*.8);
+      p.line(x,y,x-nx*(5+8*(1-burst)),y-ny*(5+8*(1-burst)),C[4],burstAlpha*.65);
+    }
+  }
+
   // A two-frame blade flash, then just a few receding sparks.
-  const flash=Math.exp(-Math.abs(t-.34)*40);
+  const flash=Math.exp(-Math.abs(t-.56)*40);
   if(flash>.02) {
     // The silver edge widens for an instant, while the cut's interior stays black.
     p.poly([[-100,54],[-38,20],[45,-28],[100,-54],[48,-23],[-34,26]],C[5],flash*.72);
@@ -94,7 +121,7 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     p.glow(39,-21,24,C[6],flash*.25);
   }
   for(let i=0;i<12;i++) {
-    const u=(t-.36-rand(i,o.seed)*.08)/(.55+rand(i,o.seed+1)*.32); if(u<=0||u>=1) continue;
+    const u=(t-.60-rand(i,o.seed)*.16)/(.75+rand(i,o.seed+1)*.36); if(u<=0||u>=1) continue;
     const angle=rand(i,o.seed+2)*6.283, distance=(10+rand(i,o.seed+3)*39)*out(u), x=31+Math.cos(angle)*distance, y=-15+Math.sin(angle)*distance*.7;
     const k=Math.sin(Math.PI*u)*.8;
     p.line(x,y,x-Math.cos(angle)*(2+6*(1-u)),y-Math.sin(angle)*(2+4*(1-u)),i%4===0?C[6]:C[4],k);
