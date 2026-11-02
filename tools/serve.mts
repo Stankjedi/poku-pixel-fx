@@ -21,6 +21,7 @@ createServer(async (req, res) => {
   if (path === "/") return res.writeHead(302, { location: "/gallery/" }).end();
   if (path.endsWith("/")) path += "index.html";
   if (path === "/gallery/app.js") path = "/build-gallery/app.js";
+  if (path === "/gallery/3d.js") path = "/build-gallery/3d.js";
   const noticePaths: Record<string, string> = {
     "/gallery/LICENSE.txt": "/LICENSE", "/gallery/NOTICE.txt": "/NOTICE.md",
     "/gallery/HOLLOW-CROWN-LICENSE.txt": "/licenses/HOLLOW-CROWN.txt",

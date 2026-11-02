@@ -19,17 +19,31 @@
     "./core/*": {
       "types": "./build/core/*.d.ts",
       "import": "./build/core/*.js"
+    },
+    "./3d": {
+      "types": "./build/3d/index.d.ts",
+      "import": "./build/3d/index.js"
+    },
+    "./3d/*": {
+      "types": "./build/3d/*.d.ts",
+      "import": "./build/3d/*.js"
+    },
+    "./3d/effects/*": {
+      "types": "./build/3d/effects/*.d.ts",
+      "import": "./build/3d/effects/*.js"
     }
   },
   "scripts": {
     "render": "node build-tools/tools/render.mjs",
     "check": "node build-tools/tools/check.mjs",
     "gallery": "node build-tools/tools/serve.mjs",
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.tools.json && tsc -p tsconfig.gallery.json && esbuild gallery/app.ts --bundle --format=esm --outfile=build-gallery/app.js",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.tools.json && tsc -p tsconfig.gallery.json && esbuild gallery/app.ts --bundle --format=esm --outfile=build-gallery/app.js && esbuild gallery/3d.ts --bundle --format=esm --outfile=build-gallery/3d.js",
     "prepack": "npm run build",
     "font": "node build-tools/tools/make-poku-font.mjs",
     "share": "node build-tools/tools/share.mjs",
-    "catalog": "node build-tools/tools/export-catalog.mjs"
+    "catalog": "node build-tools/tools/export-catalog.mjs",
+    "render:3d": "node build-tools/tools/render-3d.mjs",
+    "test:3d": "node --test tests/3d.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
