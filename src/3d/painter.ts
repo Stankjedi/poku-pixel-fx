@@ -2,6 +2,7 @@ import { type Frame3D, type Color3D, clearFrame3D, color3D } from "./frame.js";
 import { type Vec3, clamp3, cross3, dot3, len3, norm3, sub3, TAU3 } from "./math.js";
 
 const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+const LIGHT_DIRECTION = norm3([0.6, 1, -0.45]);
 export interface Camera3D {
   yaw: number;
   /** Radians above the ground; positive elevation looks down onto the scene. */
@@ -24,6 +25,9 @@ export class Painter3D {
   private ce = 1;
   private se = 0;
   private origin: Vec3 = [0, 0, 0];
+  private warpColor?: Uint32Array;
+  private warpLight?: Uint32Array;
+  private warpDepth?: Float32Array;
 
   constructor(frame: Frame3D, camera: Camera3D = DEFAULT_CAMERA_3D) {
     this.frame = frame;
@@ -110,7 +114,7 @@ export class Painter3D {
   /** Flat-lit facet, quantized to a discrete color ramp instead of smooth Gouraud shading. */
   facet(a: Vec3, b: Vec3, c: Vec3, ramp: readonly Color3D[], alpha = 1, emission = 0) {
     const n = norm3(cross3(sub3(b, a), sub3(c, a)));
-    const brightness = Math.abs(dot3(n, norm3([0.6, 1, -0.45])));
+    const brightness = Math.abs(dot3(n, LIGHT_DIRECTION));
     const idx = Math.floor(clamp3(0.22 + brightness * 0.7) * (ramp.length - 1));
     this.triangle(a, b, c, ramp[idx], alpha, emission);
   }
@@ -169,7 +173,14 @@ export class Painter3D {
     const x0 = Math.max(0, Math.floor(p.x - maxR)), x1 = Math.min(w - 1, Math.ceil(p.x + maxR));
     const y0 = Math.max(0, Math.floor(p.y - maxR)), y1 = Math.min(h - 1, Math.ceil(p.y + maxR));
     if (x0 > x1 || y0 > y1) return;
-    const c = this.frame.color.slice(), l = this.frame.light.slice(), z = this.frame.depth.slice();
+    const n = w * h;
+    if (!this.warpColor || this.warpColor.length !== n) {
+      this.warpColor = new Uint32Array(n);
+      this.warpLight = new Uint32Array(n);
+      this.warpDepth = new Float32Array(n);
+    }
+    const c = this.warpColor, l = this.warpLight!, z = this.warpDepth!;
+    c.set(this.frame.color); l.set(this.frame.light); z.set(this.frame.depth);
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const dx = x + 0.5 - p.x, dy = y + 0.5 - p.y, r = Math.hypot(dx, dy);
       if (r <= inner * 0.9 || r >= maxR) continue;
@@ -188,6 +199,8 @@ export class Painter3D {
   }
 
   grid(extent = 8, step = 1) {
+    if (!Number.isFinite(extent) || extent < 0 || !Number.isFinite(step) || step <= 0)
+      throw new RangeError("grid extent must be non-negative and step must be positive");
     for (let i = -extent; i <= extent; i += step) {
       const color = Math.abs(i) < 0.001 ? "#294866" : "#1d304c";
       this.line([i, -0.055, -extent], [i, -0.055, extent], 0.012, color, 0.35);

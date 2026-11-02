@@ -33,11 +33,17 @@ export function chain(cues: Cue[]) {
     };
     return {
       update(dt: number) {
+        if (!Number.isFinite(dt) || dt < 0) throw new RangeError("dt must be finite and non-negative");
+        const previous = t;
         t += dt;
         for (const c of list) {
           if (c.over || t < c.t) continue;
           if (!c.inst) c.inst = createFx(c.fx, c.opts);
-          else c.inst.update(dt);
+          // Each sub-effect advances only within its activation window.
+          // Crossing a cue boundary in a single update must not lose time.
+          const start = Math.max(previous, c.t);
+          const end = Math.min(t, c.until);
+          if (end > start) c.inst.update(end - start);
           if (t >= c.until || (c.inst.done() && !c.fx.meta?.loop)) c.over = true;
         }
       },

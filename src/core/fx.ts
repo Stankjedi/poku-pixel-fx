@@ -91,6 +91,8 @@ export function createFx<O extends EffectOptions>(mod: EffectModule<O>, o: Effec
       return t;
     },
     update(dt: number) {
+      if (!Number.isFinite(dt) || dt < 0) throw new RangeError("dt must be finite and non-negative");
+      if (dt === 0) return;
       t += dt;
       if (!impl.update) return;
       // simulations step at 120 Hz or finer whatever the caller's frame rate, so they look the same everywhere
