@@ -33,6 +33,52 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
       p.dot(Math.cos(a)*radius, -4+Math.sin(a)*radius*.09, i%5===0?C[7]:C[4],alpha);
     }
   }
+  // A full-bodied, billowing eruption: uneven lobes, deep crust edges and bright
+  // upward-flowing seams make the fountain read as a solid volume, not lines.
+  const force = smooth(.08, .32, t) * (1 - smooth(1.7, 3.35, t));
+  if (force > .01) {
+    const height = 150 * Math.min(1, force * 1.8);
+    // Dark ash lobes sit behind the luminous column and rise with its crown.
+    for (let j = 0; j < 13; j++) {
+      const f = rand(j, S + 70), g = rand(j, S + 71);
+      const x = (f - .5) * 92, y = -height * (.48 + .42 * g) - 6;
+      const rr = (9 + 13 * rand(j, S + 72)) * Math.min(1, force * 2);
+      p.disc(x, y, rr, C[0], .72 * force);
+      p.disc(x - rr * .2, y - rr * .18, rr * .68, C[1], .4 * force);
+    }
+    p.shade(-67, -height - 10, 67, -3, (x, y, out) => {
+      const h = (-y - 3) / height;
+      if (h < 0 || h > 1) return;
+      const wobble = Math.sin(y * .115 + t * 5) * 3 + Math.sin(y * .25 - t * 7) * 1.6;
+      const width = ((15 + 27 * Math.sin(h * Math.PI * .85)) * force + 3) * (1 - smooth(.82, 1, h));
+      if (width < .5) return;
+      const nx = (x - wobble) / width;
+      const edge = Math.abs(nx);
+      const rough = rand(Math.floor(x / 3), Math.floor(y / 3), S + 75);
+      if (edge > 1 + .17 * (rough - .5)) return;
+      out.a = Math.min(1, force * 2);
+      const band = Math.sin(y * .23 + t * 13 + nx * 7) + Math.sin(x * .18 - y * .1 - t * 5);
+      const heat = (1 - edge) * 1.1 + (1 - h) * .35 + band * .11;
+      if (edge > .82) out.c = C[1];
+      else if (heat < .38) out.c = C[2];
+      else if (heat < .65) out.c = C[3];
+      else if (heat < .95) out.c = C[4];
+      else if (heat < 1.25) out.c = C[5];
+      else out.c = C[6];
+      if (rough > .91 && edge < .72) out.c = C[Math.max(2, Math.min(6, Math.floor(heat * 4)))];
+      if (heat > 1.05) { out.l = C[4]; out.k = .12 * force; }
+    });
+    p.glow(0, -height * .38, 46, C[3], .18 * force);
+  }
+  // A flared collar of molten rock and jagged ground debris gives the impact weight.
+  for (let i = 0; i < 22; i++) {
+    const q = rand(i, S + 90), side = i % 2 ? 1 : -1;
+    const x = side * (14 + q * 64), rise = (3 + rand(i, S + 91) * 13) * force;
+    const w = 4 + rand(i, S + 92) * 9;
+    p.beam(x - w / 2, -2, x + w / 2, -2 - rise * .2, Math.max(2, rise * .45), C[1], fade);
+    p.line(x - w / 2, -3 - rise * .2, x + w / 2, -3 - rise * .4, C[3], fade * force);
+    if (i % 3 === 0) p.dot(x, -4 - rise * .3, C[5], fade * force);
+  }
   // An uneven fan of lava tongues spreads with height; seeded values remain deterministic.
   for (let i=0;i<34;i++) {
     const phase=rand(i,S), width=rand(i,S+1), shift=rand(i,S+2);

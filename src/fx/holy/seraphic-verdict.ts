@@ -14,7 +14,7 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
   const c = fit(o.palette, 6), appear = peak(t,0.04,0.32), fade = 1-peak(t,1.85,2.8);
   const blast = peak(t,0.22,0.36), pulse = Math.exp(-Math.max(0,t-0.28)*3.0), y = -86;
   // Long layered beam: a narrow white core and discrete gold ribs instead of a smooth gradient.
-  const beam = appear*fade*(1-0.35*peak(t,1.4,2.3));
+  const beam = appear*fade*(1-0.78*peak(t,0.88,1.5))*(1+0.25*Math.sin(t*13));
   if (beam > 0) {
     p.glow(0,y,82,c[3],0.23*beam);
     p.rect(-14,-185,28,180,c[1],0.25*beam);
@@ -38,14 +38,48 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     }
   }
   // Symmetric feathered wings unfurl, their shafts and barbs held on the pixel grid.
-  const wing=appear*fade, stretch=0.3+0.7*blast;
+  const wing=appear*fade*(1-peak(t,.94,1.63)), stretch=(0.3+0.7*blast)*(1+0.12*Math.sin(t*4));
+  // Layered feather masses lead the linework: the wing opens rapidly then flexes.
+  const flex=Math.sin(t*3.4)*5*fade;
+  for(const side of [-1,1]) {
+    const sideStretch=stretch*(side<0 ? 0.91+0.09*Math.sin(t*3.3) : 1.04+0.07*Math.cos(t*4.2));
+    const S=(x:number)=>side*x*sideStretch;
+    p.poly([[S(6),y+9],[S(30),y-18+flex],[S(77),y-32+flex],[S(97),y-17+flex],[S(63),y+5],[S(24),y+22]],c[1],wing*.9);
+    p.poly([[S(8),y+8],[S(32),y-14+flex],[S(82),y-27+flex],[S(68),y-8],[S(26),y+14]],c[2],wing);
+    p.poly([[S(12),y+5],[S(39),y-13+flex],[S(77),y-20+flex],[S(53),y-4],[S(27),y+9]],c[3],wing);
+    for(let j=0;j<6;j++) {
+      const sx=24+j*9, tip=60+j*7, sy=y-6+j*3+flex*.45;
+      p.poly([[S(sx),sy],[S(tip),sy-13+j],[S(tip-8),sy+2],[S(sx+5),sy+8]],j%2?c[4]:c[3],wing*.92);
+      p.line(S(sx),sy+3,S(tip-5),sy-8+j,c[5],wing*.7);
+    }
+  }
+  // Flying diamond shards burst outward from the impact point.
+  for(let j=0;j<20;j++) {
+    const q=clamp((t-.18-j*.013)/1.05), a=j*2.399+o.seed*.03, rr=(8+q*88), x=Math.cos(a)*rr, yy=y+Math.sin(a)*rr*.65;
+    const strength=Math.sin(Math.PI*q)*fade; if(strength<=0) continue;
+    const z=2+3*strength;
+    p.poly([[x,yy-z*1.8],[x+z,yy],[x,yy+z*1.8],[x-z,yy]],c[j%3===0?5:3],strength);
+    p.line(x,yy,x-Math.cos(a)*12*strength,yy-Math.sin(a)*10*strength,c[3],strength*.5);
+  }
   for(const side of [-1,1]) for(let i=0;i<7;i++) {
-    const x=side*(14+i*7)*stretch, yy=y+4+i*3;
-    const tipx=side*(44+i*8)*stretch, tipy=y-18+i*6;
+    const skew=side<0 ? .84+.12*Math.sin(t*4) : 1+.08*Math.cos(t*3);
+    const x=side*(14+i*7)*stretch*skew, yy=y+4+i*3+(side<0?-4:3)*Math.sin(t*3);
+    const tipx=side*(44+i*8)*stretch*skew, tipy=y-18+i*6+(side<0?-5:7)*Math.sin(t*3.4);
     p.line(side*3,y+14,x,yy,c[2],wing*0.75);
     p.line(x,yy,tipx,tipy,c[i%2?3:4],wing);
     p.line(x,yy+2,tipx*0.88,tipy+6,c[2],wing*0.6);
     if(i%2===0) sparkle(p,tipx,tipy,1+2*wing,c[5],c[3],wing*0.65);
+  }
+  // At the midpoint the wings break into an asymmetrical expanding shower.
+  const detonation=Math.exp(-Math.abs(t-1.34)*9)*fade;
+  if(detonation>0.01) { sparkle(p,0,y,34*detonation,WHITE,c[4],detonation); p.glow(0,y,62,c[4],detonation*.65); }
+  for(let j=0;j<38;j++) {
+    const u=clamp((t-1.03-j*.008)/1.42); if(u<=0 || u>=1) continue;
+    const a=j*2.399+o.seed*.03, speed=30+(j%6)*12, x=Math.cos(a)*speed*u+(j%2?8:-4)*u*u;
+    const yy=y+Math.sin(a)*speed*u*.68+38*u*u, k=Math.sin(Math.PI*u)*fade;
+    const z=(j%4===0?5:2)*(1-.6*u);
+    p.poly([[x,yy-z*2],[x+z,yy],[x,yy+z],[x-z,yy]],c[j%4===0?5:3],k);
+    p.line(x,yy,x-Math.cos(a)*16*k,yy-Math.sin(a)*10*k,c[4],k*.6);
   }
   if (pulse>0.01) { sparkle(p,0,y,10+24*pulse,WHITE,c[4],fade); p.glow(0,y,52,c[4],0.6*pulse*fade); }
   // Rising asymmetric ember-stars fill the space without obscuring the core.
