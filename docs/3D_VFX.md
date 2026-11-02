@@ -90,3 +90,23 @@ fx.update(1 / 60);
 The optical treatment uses two new **optional** `Painter3D` primitives: `sphere(center, radius, fill, edge)` for depth-tested true 3D occlusion of background light, and `lensWarp(center, horizon, reach, strength)` for discrete screen-space resampling of the drawn image, additive light and depth. `lensWarp` is designed to be called **before** `sphere`, so the horizon can cover the warped material. It is an artistic gravitational lens approximation, not a physical general-relativity solver. The photon ring faces the camera while the disk, rocks and gas remain in actual 3D world space.
 
 The default palette has **11 steps**; supply 11 colors if overriding it. The CPU renderer is suitable for individual hero spells and sprite-sheet baking; benchmark hardware before using many simultaneous black holes.
+
+
+## Wind Rasenshuriken 3D — original vs refined (2026-11-03)
+
+The gallery exposes **WIND RASENSHURIKEN · ORIGINAL** (a baseline 4-triangle pair shuriken using only the original drawing primitives) and **WIND RASENSHURIKEN · REFINED** (two-layer curved 3D airfoil meshes, ten helical strands, seeded particulate turbulence, four wind-pressure bands and a three-ring detonation). Both have the same 4.6-second choreography, seed 308 and stable world-space XYZ geometry; the refined effect pre-packs its palette into ABGR integers. Use the same camera when comparing.
+
+```bash
+npm run build
+npm run test:3d
+npm run render:3d -- wind --frames 24 --width 260 --height 180 --out records/3d/wind.png
+npm run render:3d -- windOriginal --frames 24 --width 260 --height 180 --out records/3d/wind-original.png
+
+# GIF exporter is optional and needs local ffmpeg:
+npm run render:3d:gif -- wind --fps 20 --width 260 --height 180 --seed 308 --out records/3d/wind.gif
+npm run render:3d:gif -- windOriginal --fps 20 --width 260 --height 180 --seed 308 --out records/3d/wind-original.gif
+```
+
+The GIF exporter writes temporary PNG frames, uses ffmpeg's two-pass adaptive GIF palette, and removes temporary images. Pixel edges are enlarged by nearest-neighbor sampling. GIF palette reduction can alter emitted color; use PNG contact sheets or raw frames for exact colors. The timeline remains fixed-step and effects do not depend on Math.random.
+
+**Correctness note:** looped effects intentionally run indefinitely. This branch preserves their looping behavior. It only stops unnecessary simulation iterations once a non-looping one-shot has completed, validates invalid 2D dt inputs, and fixes sub-effect activation-boundary time accounting.
