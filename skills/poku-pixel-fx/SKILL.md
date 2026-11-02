@@ -6,6 +6,8 @@ license: MIT
 
 # poku-pixel-fx
 
+POKU Pixel FX is a Korean-localized, TypeScript-based open-source fork/derivative of [PixelFX by Patch](https://github.com/patch-gg/pixelfx), maintained as a separate repository without a GitHub network-fork link. The upstream MIT license credits Patch and Hugo Duprez; preserve the copyright and attribution notices in `LICENSE` and `NOTICE.md`.
+
 Requires Node.js 18 or newer; ffmpeg is optional for GIF and MP4 previews.
 
 Pixel art effects as code. Each effect is one file, `src/fx/<category>/<name>.ts`, that draws into two buffers:

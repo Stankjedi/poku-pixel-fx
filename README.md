@@ -1,5 +1,9 @@
 # poku-pixel-fx.
 
+> **원작 및 출처:** POKU Pixel FX는 [Patch의 PixelFX](https://github.com/patch-gg/pixelfx)를 한글화하고 TypeScript로 변환·확장한 오픈소스 포크(파생 버전)입니다. 원본 프로젝트와 별도로 운영하는 독립 저장소이며, GitHub의 포크 연결은 설정되어 있지 않습니다. 원본의 MIT 라이선스에는 Patch와 Hugo Duprez의 저작권이 명시되어 있습니다. Hugo Duprez의 Sprite Fusion 이펙트에서 가져와 적용한 부분의 출처 및 제3자 라이선스는 [NOTICE.md](NOTICE.md)와 [LICENSE](LICENSE)를 확인하세요.
+
+> **Origin:** POKU Pixel FX is a Korean-localized, TypeScript-based open-source fork/derivative of [PixelFX by Patch](https://github.com/patch-gg/pixelfx). This repository is maintained separately and is not linked as a GitHub network fork. The upstream MIT license credits Patch and Hugo Duprez; see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for copyright and third-party notices.
+
 ## 한국어 빠른 시작
 
 Node.js 18 이상과 로컬 개발 의존성을 준비한 뒤 `npm run build`를 실행합니다. `npm run gallery`를 실행하고 브라우저에서 `http://127.0.0.1:8080/gallery/`를 열면 한국어로 이펙트를 검색하고 미리 볼 수 있습니다.

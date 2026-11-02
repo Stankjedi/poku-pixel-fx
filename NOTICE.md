@@ -1,5 +1,7 @@
 # Notices
 
+**PixelFX origin.** This project is a Korean-localized and TypeScript-based open-source fork/derivative of [PixelFX by Patch](https://github.com/patch-gg/pixelfx), maintained as a separate repository. The original project license credits Patch and Hugo Duprez; its MIT copyright and permission notice is retained in `LICENSE`.
+
 **Hugo Duprez.** `src/core/sim.ts` and the effects that say so at the top of their file adapt Sprite Fusion's
 open-source pixel art VFX (https://www.spritefusion.com/pixel-art-vfx), Copyright (c) 2026 Hugo Duprez, MIT License.
 
