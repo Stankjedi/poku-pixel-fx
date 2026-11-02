@@ -148,3 +148,5 @@ The core, all effects, gallery and CLI are TypeScript sources. Build before use;
 ## Share a result
 
 Export a sprite sheet with `node build-tools/tools/render.mjs <category>/<effect> --sheet`. If the user asks to share it on the Poku Pixel FX site, first confirm the site actually offers the relevant upload interface, then follow its visible instructions and upload the user-approved output. Do not claim a link or upload exists until verified. Preserve the library's LICENSE and NOTICE and the relevant third-party copyright and permission notices when redistributing the software.
+
+The public sharing page is https://poku-pixel-fx.stankjedi.chatgpt.site/shared. Sign in with ChatGPT and submit a PNG sprite sheet only when the user authorizes that upload and has the rights to publish it. The current limits are 5 MiB and 2048 pixels per side. The server validates PNG format and dimensions, not whether an image is pixel art or legally cleared.
