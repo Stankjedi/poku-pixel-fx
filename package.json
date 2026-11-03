@@ -25,7 +25,8 @@
     "sync:site": "npm run build && node build-tools/tools/sync-site.mjs",
     "render:3d": "node build-tools/tools/render-3d.mjs",
     "render:3d:gif": "node build-tools/tools/render-3d-gif.mjs",
-    "test:3d": "node --test tests/3d.test.mjs tests/black-hole-3d.test.mjs tests/cinematic.test.mjs tests/wind-rasenshuriken-3d.test.mjs tests/unified-vfx.test.mjs"
+    "test:3d": "node --test tests/3d.test.mjs tests/black-hole-3d.test.mjs tests/cinematic.test.mjs tests/wind-rasenshuriken-3d.test.mjs tests/unified-vfx.test.mjs",
+    "test:quality": "node --test tests/coverage-quality.test.mjs tests/curves-quality.test.mjs tests/particle-quality.test.mjs tests/painter-quality.test.mjs tests/raster3d-quality.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

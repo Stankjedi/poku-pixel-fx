@@ -37,6 +37,7 @@ jobs:
             sudo apt-get install -y ffmpeg
           fi
       - run: npm run test:3d
+      - run: npm run test:quality
       - name: Smoke-test integrated cinematic image exports
         run: |
           for effect in frost slash blackhole wind windOriginal; do

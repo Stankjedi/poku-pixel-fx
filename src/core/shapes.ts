@@ -2,6 +2,9 @@
 
 import { TAU } from "./math.js";
 
+export { cubicBezier, quadraticBezier, catmullRom, pathLengths, resamplePath } from "./curves.js";
+export type { CurveOptions } from "./curves.js";
+
 export type Point = [number, number];
 export interface RandomSource { next(): number }
 export interface BoltOptions { jag?: number; depth?: number }
@@ -27,7 +30,8 @@ export function bolt(r: RandomSource, x0: number, y0: number, x1: number, y1: nu
 
 /** Forks off a bolt path: count branches, each up to len px long. Returns a list of paths. */
 export function forks(r: RandomSource, path: Point[], { count = 3, len = 20, jag = 0.3, spread = 0.9 }: ForkOptions = {}): Point[][] {
-  const out = [];
+  const out: Point[][] = [];
+  if (path.length < 2) return out;
   for (let k = 0; k < count; k++) {
     const i = 1 + Math.floor(r.next() * (path.length - 2)), [x, y] = path[i], [px, py] = path[i - 1];
     const a = Math.atan2(y - py, x - px) + (r.next() < 0.5 ? -1 : 1) * spread * (0.4 + 0.6 * r.next());

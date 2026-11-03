@@ -5,6 +5,7 @@
 import { clamp } from "./math.js";
 import { channelToLinear } from "../render/linear.js";
 import { blendOver, type AlphaMode } from "../render/coverage.js";
+import { cubicBezier, quadraticBezier, catmullRom, pathLengths, type CurveOptions } from "./curves.js";
 import { hex } from "./color.js";
 import { rasterText, textWidth, FONTS } from "./font.js";
 
@@ -28,6 +29,11 @@ export class Painter {
   declare C: Uint32Array; declare L: Uint32Array;
   declare tx: number; declare ty: number; declare fx: number; declare cs: number; declare sn: number;
   declare fade: number; declare lightK: number; declare layer: "front" | "back";
+  private strokeStamp?: Uint32Array;
+  private strokeDistance?: Float32Array;
+  private strokeU?: Float32Array;
+  private strokePixels?: Uint32Array;
+  private strokeId = 0;
   constructor(frame: PaintFrame) {
     this.frame = frame;
     this.reset();
@@ -109,7 +115,8 @@ export class Painter {
   blend(x: number, y: number, c: number, a: number) { this.blendPx(this.cellX(x, y), this.cellY(x, y), c, a); }
   /** A translucent disc: puffs of smoke, vapour, dust. c and a may be functions of (d: 0 center..1 rim, angle). */
   disc(cx: number, cy: number, r: number, c: PaintValue, a: PaintValue) {
-    if (r < 0.5) return this.blend(cx, cy, call(c, 0, 0), call(a, 0, 0));
+    if (!(r > 0)) return;
+    if (r < Math.SQRT1_2) return this.blend(cx, cy, call(c, 0, 0), call(a, 0, 0));
     this.each(cx - r, cy - r, cx + r, cy + r, (x, y, sx, sy) => {
       const dx = x - cx, dy = y - cy, d2 = dx * dx + dy * dy;
       if (d2 > r * r) return;
@@ -148,12 +155,14 @@ export class Painter {
       const x = k & 1 ? x1 : x0, y = k & 2 ? y1 : y0, sx = this.toX(x, y), sy = this.toY(x, y);
       if (sx < ax) ax = sx; if (sx > bx) bx = sx; if (sy < ay) ay = sy; if (sy > by) by = sy;
     }
-    const sx0 = Math.max(Math.floor(ax), this.ox), sx1 = Math.min(Math.ceil(bx), this.ox + this.w - 1);
-    const sy0 = Math.max(Math.floor(ay), this.oy), sy1 = Math.min(Math.ceil(by), this.oy + this.h - 1);
+    const sx0 = Math.max(Math.ceil(ax - 0.5), this.ox), sx1 = Math.min(Math.floor(bx - 0.5), this.ox + this.w - 1);
+    const sy0 = Math.max(Math.ceil(ay - 0.5), this.oy), sy1 = Math.min(Math.floor(by - 0.5), this.oy + this.h - 1);
+    const rotated = this.sn !== 0 || this.cs !== 1;
     for (let sy = sy0; sy <= sy1; sy++)
       for (let sx = sx0; sx <= sx1; sx++) {
-        const cx = sx + 0.5, cy = sy + 0.5;
-        fn(this.fromX(cx, cy), this.fromY(cx, cy), sx, sy);
+        const cx = sx + 0.5, cy = sy + 0.5, lx = this.fromX(cx, cy), ly = this.fromY(cx, cy);
+        if (rotated && (lx < x0 || ly < y0 || lx > x1 || ly > y1)) continue;
+        fn(lx, ly, sx, sy);
       }
   }
 
@@ -174,14 +183,15 @@ export class Painter {
   // ---- shapes. Colors (c) and alphas (a) can be numbers or functions of the shape's own coordinates.
   /** 1 px line. c and a may be functions of u (0 at the start, 1 at the end). */
   line(x0: number, y0: number, x1: number, y1: number, c: PaintValue, a: PaintValue = 1) {
-    let sx = this.cellX(x0, y0), sy = this.cellY(x0, y0);
-    const ex = this.cellX(x1, y1), ey = this.cellY(x1, y1);
+    this.lineCells(this.cellX(x0, y0), this.cellY(x0, y0), this.cellX(x1, y1), this.cellY(x1, y1), c, a);
+  }
+  private lineCells(sx: number, sy: number, ex: number, ey: number, c: PaintValue, a: PaintValue, opacity = 1) {
     const dx = Math.abs(ex - sx), dy = -Math.abs(ey - sy), stepx = sx < ex ? 1 : -1, stepy = sy < ey ? 1 : -1;
     const n = Math.max(dx, -dy) || 1, fc = typeof c === "function", fa = typeof a === "function";
     let err = dx + dy, i = 0;
     for (;;) {
       const u = i++ / n;
-      this.put(sx, sy, (fc ? c(u) : c) as number, (fa ? a(u) : a) as number);
+      this.put(sx, sy, (fc ? c(u, 0) : c) as number, ((fa ? a(u, 0) : a) as number) * opacity);
       if (sx === ex && sy === ey) break;
       const e2 = 2 * err;
       if (e2 >= dy) { err += dy; sx += stepx; }
@@ -190,10 +200,89 @@ export class Painter {
   }
   /** Lines through a list of points [[x, y], ...]. */
   polyline(pts: Point[], c: PaintValue, a: PaintValue = 1) {
-    for (let i = 1; i < pts.length; i++) this.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], c, a);
+    this.stroke(pts, c, a, 1, false);
+  }
+  /** A connected round-ended path, composited once per cell. Callbacks use global arc-length u and across-width v. */
+  path(pts: readonly Point[], c: PaintValue, a: PaintValue = 1, width = 1) {
+    this.stroke(pts, c, a, width, true);
+  }
+  /** Adaptive curves with a quarter-pixel geometric error; snapping happens only during rasterization. */
+  quadratic(p0: Point, p1: Point, p2: Point, c: PaintValue, a: PaintValue = 1, width = 1) {
+    this.path(quadraticBezier(p0, p1, p2), c, a, width);
+  }
+  cubic(p0: Point, p1: Point, p2: Point, p3: Point, c: PaintValue, a: PaintValue = 1, width = 1) {
+    this.path(cubicBezier(p0, p1, p2, p3), c, a, width);
+  }
+  spline(pts: readonly Point[], c: PaintValue, a: PaintValue = 1, width = 1, options: CurveOptions = {}) {
+    this.path(catmullRom(pts, options), c, a, width);
+  }
+  private stroke(pts: readonly Point[], c: PaintValue, a: PaintValue, width: number, globalU: boolean) {
+    if (!pts.length || !(width > 0)) return;
+    if (pts.length === 1) { this.circle(pts[0][0], pts[0][1], width / 2, c, a); return; }
+    const thin = width < Math.SQRT2;
+    if (pts.length === 2 && thin) {
+      const [a0, a1] = pts;
+      this.lineCells(globalU ? Math.floor(this.toX(...a0)) : this.cellX(...a0), globalU ? Math.floor(this.toY(...a0)) : this.cellY(...a0),
+        globalU ? Math.floor(this.toX(...a1)) : this.cellX(...a1), globalU ? Math.floor(this.toY(...a1)) : this.cellY(...a1), c, a, Math.min(1, width));
+      return;
+    }
+    const size = this.w * this.h;
+    if (!this.strokeStamp || this.strokeStamp.length !== size) {
+      this.strokeStamp = new Uint32Array(size);
+      this.strokeDistance = new Float32Array(size);
+      this.strokeU = new Float32Array(size);
+      this.strokePixels = new Uint32Array(size);
+    }
+    this.strokeId = (this.strokeId + 1) >>> 0;
+    if (!this.strokeId) { this.strokeStamp.fill(0); this.strokeId = 1; }
+    const stamp = this.strokeStamp, distance = this.strokeDistance!, us = this.strokeU!, pixels = this.strokePixels!;
+    const id = this.strokeId, lengths = globalU ? pathLengths(pts) : null, total = lengths?.[pts.length - 1] || 1;
+    const r = width / 2, r2 = r * r;
+    let count = 0;
+    const visit = (sx: number, sy: number, d2: number, u: number) => {
+      const x = sx - this.ox, y = sy - this.oy;
+      if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+      const i = y * this.w + x;
+      if (stamp[i] !== id) { stamp[i] = id; pixels[count++] = i; distance[i] = d2; us[i] = u; }
+      else if (d2 < distance[i]) { distance[i] = d2; us[i] = u; }
+    };
+    for (let j = 1; j < pts.length; j++) {
+      const [ax, ay] = pts[j - 1], [bx, by] = pts[j];
+      const start = lengths ? lengths[j - 1] / total : 0, span = lengths ? (lengths[j] - lengths[j - 1]) / total : 1;
+      if (thin) {
+        let sx = globalU ? Math.floor(this.toX(ax, ay)) : this.cellX(ax, ay), sy = globalU ? Math.floor(this.toY(ax, ay)) : this.cellY(ax, ay);
+        const ex = globalU ? Math.floor(this.toX(bx, by)) : this.cellX(bx, by), ey = globalU ? Math.floor(this.toY(bx, by)) : this.cellY(bx, by);
+        const dx = Math.abs(ex - sx), dy = -Math.abs(ey - sy), stepX = sx < ex ? 1 : -1, stepY = sy < ey ? 1 : -1;
+        const n = Math.max(dx, -dy) || 1;
+        let error = dx + dy, step = 0;
+        for (;;) {
+          visit(sx, sy, 0, start + span * step++ / n);
+          if (sx === ex && sy === ey) break;
+          const e2 = error * 2;
+          if (e2 >= dy) { error += dy; sx += stepX; }
+          if (e2 <= dx) { error += dx; sy += stepY; }
+        }
+      } else {
+        const x0 = this.toX(ax, ay), y0 = this.toY(ax, ay), x1 = this.toX(bx, by), y1 = this.toY(bx, by);
+        const dx = x1 - x0, dy = y1 - y0, length2 = dx * dx + dy * dy;
+        const left = Math.max(this.ox, Math.floor(Math.min(x0, x1) - r)), right = Math.min(this.ox + this.w - 1, Math.ceil(Math.max(x0, x1) + r));
+        const top = Math.max(this.oy, Math.floor(Math.min(y0, y1) - r)), bottom = Math.min(this.oy + this.h - 1, Math.ceil(Math.max(y0, y1) + r));
+        for (let sy = top; sy <= bottom; sy++) for (let sx = left; sx <= right; sx++) {
+          const u = length2 ? clamp(((sx + 0.5 - x0) * dx + (sy + 0.5 - y0) * dy) / length2) : 0;
+          const ex = sx + 0.5 - x0 - u * dx, ey = sy + 0.5 - y0 - u * dy, d2 = ex * ex + ey * ey;
+          if (d2 <= r2) visit(sx, sy, d2, start + span * u);
+        }
+      }
+    }
+    for (let j = 0; j < count; j++) {
+      const i = pixels[j], u = us[i], v = thin ? 0 : Math.sqrt(distance[i]) / r;
+      this.put(this.ox + i % this.w, this.oy + Math.floor(i / this.w), call(c, u, v), call(a, u, v) * Math.min(1, width));
+    }
   }
   /** Thick segment with round ends. c and a may be functions of (u along, v across: 0 center, 1 edge). */
   beam(x0: number, y0: number, x1: number, y1: number, width: number, c: PaintValue, a: PaintValue = 1) {
+    if (!(width > 0)) return;
+    if (width < Math.SQRT2) { this.path([[x0, y0], [x1, y1]], c, a, width); return; }
     const r = width / 2, dx = x1 - x0, dy = y1 - y0, L2 = dx * dx + dy * dy || 1e-9;
     this.shade(Math.min(x0, x1) - r, Math.min(y0, y1) - r, Math.max(x0, x1) + r, Math.max(y0, y1) + r, (x, y, o) => {
       const u = clamp(((x - x0) * dx + (y - y0) * dy) / L2), px = x0 + dx * u - x, py = y0 + dy * u - y;
@@ -206,7 +295,8 @@ export class Painter {
   }
   /** Filled disc. c and a may be functions of (d: 0 center to 1 rim, angle). */
   circle(cx: number, cy: number, r: number, c: PaintValue, a: PaintValue = 1) {
-    if (r < 0.6) return this.dot(cx, cy, call(c, 0, 0), call(a, 0, 0));
+    if (!(r > 0)) return;
+    if (r < Math.SQRT1_2) return this.dot(cx, cy, call(c, 0, 0), call(a, 0, 0));
     this.shade(cx - r, cy - r, cx + r, cy + r, (x, y, o) => {
       const dx = x - cx, dy = y - cy, d2 = dx * dx + dy * dy;
       if (d2 > r * r) return;
@@ -228,6 +318,7 @@ export class Painter {
   }
   /** Ring from radius r - w to r. c and a may be functions of (v: 0 inner to 1 outer, angle). */
   ring(cx: number, cy: number, r: number, w: number, c: PaintValue, a: PaintValue = 1) {
+    if (!(r > 0) || !(w > 0)) return;
     const r0 = Math.max(0, r - w);
     this.shade(cx - r, cy - r, cx + r, cy + r, (x, y, o) => {
       const dx = x - cx, dy = y - cy, d2 = dx * dx + dy * dy;
@@ -244,6 +335,7 @@ export class Painter {
    */
   arc(cx: number, cy: number, r: number, w: PaintValue, a0: number, a1: number, c: PaintValue, a: PaintValue = 1) {
     const span = a1 - a0, wf = typeof w === "function";
+    if (!(r > 0) || !(span > 0)) return;
     this.shade(cx - r, cy - r, cx + r, cy + r, (x, y, o) => {
       const dx = x - cx, dy = y - cy, d = Math.sqrt(dx * dx + dy * dy);
       if (d > r) return;
@@ -259,9 +351,17 @@ export class Painter {
   }
   /** Filled rectangle. */
   rect(x: number, y: number, w: number, h: number, c: number, a = 1) {
-    if (this.sn === 0) {
-      const X0 = Math.round(x), Y0 = Math.round(y), X1 = Math.round(x + w), Y1 = Math.round(y + h);
-      for (let yy = Y0; yy < Y1; yy++) for (let xx = X0; xx < X1; xx++) this.put(this.cellX(xx, yy), this.cellY(xx, yy), c, a);
+    if (!(w > 0) || !(h > 0)) return;
+    if (this.sn === 0 && this.cs === 1) {
+      // Transform the rectangle once, then choose destination pixel centers. Rounding local
+      // coordinates first and transforming them again creates seams at fractional placements.
+      const ax = this.toX(x, y), bx = this.toX(x + w, y), ay = this.toY(x, y);
+      // Mirroring reverses which boundary is inclusive: [left,right) becomes (left,right].
+      const left = Math.min(ax, bx) - 0.5, right = Math.max(ax, bx) - 0.5;
+      const X0 = Math.max(this.ox, this.fx === 1 ? Math.ceil(left) : Math.floor(left) + 1);
+      const X1 = Math.min(this.ox + this.w, this.fx === 1 ? Math.ceil(right) : Math.floor(right) + 1);
+      const Y0 = Math.max(this.oy, Math.ceil(ay - 0.5)), Y1 = Math.min(this.oy + this.h, Math.ceil(ay + h - 0.5));
+      for (let yy = Y0; yy < Y1; yy++) for (let xx = X0; xx < X1; xx++) this.put(xx, yy, c, a);
       return;
     }
     this.shade(x, y, x + w, y + h, (lx, ly, o) => {
@@ -292,7 +392,8 @@ export class Painter {
   glow(x: number, y: number, r: number, c: number, k = 0.5) {
     if (r < 1 || k <= 0.004) return;
     const cx = this.toX(x, y), cy = this.toY(x, y);
-    const x0 = Math.floor(cx - r), x1 = Math.ceil(cx + r), y0 = Math.floor(cy - r), y1 = Math.ceil(cy + r);
+    const x0 = Math.max(this.ox, Math.floor(cx - r)), x1 = Math.min(this.ox + this.w - 1, Math.ceil(cx + r));
+    const y0 = Math.max(this.oy, Math.floor(cy - r)), y1 = Math.min(this.oy + this.h - 1, Math.ceil(cy + r));
     for (let sy = y0; sy <= y1; sy++) {
       const dy = (sy + 0.5 - cy) / r;
       for (let sx = x0; sx <= x1; sx++) {
@@ -308,8 +409,8 @@ export class Painter {
     if (r < 1 || k <= 0.004) return;
     const ax = this.toX(x0, y0), ay = this.toY(x0, y0), bx = this.toX(x1, y1), by = this.toY(x1, y1);
     const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1e-9;
-    const X0 = Math.floor(Math.min(ax, bx) - r), X1 = Math.ceil(Math.max(ax, bx) + r);
-    const Y0 = Math.floor(Math.min(ay, by) - r), Y1 = Math.ceil(Math.max(ay, by) + r);
+    const X0 = Math.max(this.ox, Math.floor(Math.min(ax, bx) - r)), X1 = Math.min(this.ox + this.w - 1, Math.ceil(Math.max(ax, bx) + r));
+    const Y0 = Math.max(this.oy, Math.floor(Math.min(ay, by) - r)), Y1 = Math.min(this.oy + this.h - 1, Math.ceil(Math.max(ay, by) + r));
     for (let sy = Y0; sy <= Y1; sy++)
       for (let sx = X0; sx <= X1; sx++) {
         const px = sx + 0.5, py = sy + 0.5, u = clamp(((px - ax) * dx + (py - ay) * dy) / L2);
@@ -323,8 +424,10 @@ export class Painter {
   glowRing(x: number, y: number, R: number, r: number, c: number, k = 0.5) {
     if (r < 1 || k <= 0.004) return;
     const cx = this.toX(x, y), cy = this.toY(x, y), E = R + r;
-    for (let sy = Math.floor(cy - E); sy <= Math.ceil(cy + E); sy++)
-      for (let sx = Math.floor(cx - E); sx <= Math.ceil(cx + E); sx++) {
+    const x0 = Math.max(this.ox, Math.floor(cx - E)), x1 = Math.min(this.ox + this.w - 1, Math.ceil(cx + E));
+    const y0 = Math.max(this.oy, Math.floor(cy - E)), y1 = Math.min(this.oy + this.h - 1, Math.ceil(cy + E));
+    for (let sy = y0; sy <= y1; sy++)
+      for (let sx = x0; sx <= x1; sx++) {
         const d = Math.abs(Math.hypot(sx + 0.5 - cx, sy + 0.5 - cy) - R) / r;
         if (d >= 1) continue;
         const f = 1 - d;
@@ -341,7 +444,22 @@ export class Painter {
   sprite(rows: readonly string[], pal: Record<string, string | number>, x: number, y: number, opts: SpriteOptions = {}) {
     let s = sprites.get(rows);
     if (!s) sprites.set(rows, (s = rows.map((r) => [...r])));
-    const k = opts.scale ?? 1, a = opts.a ?? 1, W = s[0]?.length ?? 0, cache: Record<string, number> = {};
+    const k = opts.scale ?? 1, a = opts.a ?? 1, W = Math.max(0, ...s.map(row => row.length)), cache: Record<string, number> = {};
+    if (!(k > 0) || !W) return;
+    if (this.sn !== 0 || this.cs !== 1 || k % 1 !== 0) {
+      // Inverse mapping fills destination cells. Forward-splatting rotated source pixels
+      // leaves pinholes even in a completely solid sprite.
+      this.shade(x, y, x + W * k, y + s.length * k, (lx, ly, out) => {
+        const col = Math.floor((lx - x) / k), row = Math.floor((ly - y) / k);
+        if (col < 0 || row < 0 || col >= W || row >= s!.length) return;
+        const ch = s![opts.flipY ? s!.length - 1 - row : row][opts.flip ? W - 1 - col : col];
+        if (!ch || ch === "." || ch === " ") return;
+        let color = opts.tint ?? cache[ch];
+        if (color === undefined) color = cache[ch] = pal[ch] === undefined ? 0 : hex(pal[ch]);
+        out.c = color; out.a = a;
+      });
+      return;
+    }
     for (let r = 0; r < s.length; r++)
       for (let q = 0; q < s[r].length; q++) {
         const ch = s[r][q];
@@ -376,12 +494,29 @@ export class Painter {
   }
   /** Fill a mask ({ w, h, data }) with its top-left at (x, y). c may be a function of (mx, my). */
   mask(m: Mask, x: number, y: number, c: PaintValue, a: PaintValue = 1) {
+    if (this.sn !== 0 || this.cs !== 1) {
+      this.shade(x, y, x + m.w, y + m.h, (lx, ly, out) => {
+        const mx = Math.floor(lx - x), my = Math.floor(ly - y);
+        if (mx < 0 || my < 0 || mx >= m.w || my >= m.h || !m.data[my * m.w + mx]) return;
+        out.c = call(c, mx, my); out.a = call(a, mx, my);
+      });
+      return;
+    }
     for (let my = 0; my < m.h; my++)
       for (let mx = 0; mx < m.w; mx++) if (m.data[my * m.w + mx]) this.dot(x + mx, y + my, call(c, mx, my), call(a, mx, my));
   }
   /** The 1 px outline just outside a mask. */
   outline(m: Mask, x: number, y: number, c: PaintValue, a: PaintValue = 1) {
     const at = (mx: number, my: number) => mx >= 0 && my >= 0 && mx < m.w && my < m.h && m.data[my * m.w + mx];
+    if (this.sn !== 0 || this.cs !== 1) {
+      this.shade(x - 1, y - 1, x + m.w + 1, y + m.h + 1, (lx, ly, out) => {
+        const mx = Math.floor(lx - x), my = Math.floor(ly - y);
+        if (!at(mx, my) && (at(mx - 1, my) || at(mx + 1, my) || at(mx, my - 1) || at(mx, my + 1))) {
+          out.c = call(c, mx, my); out.a = call(a, mx, my);
+        }
+      });
+      return;
+    }
     for (let my = -1; my <= m.h; my++)
       for (let mx = -1; mx <= m.w; mx++)
         if (!at(mx, my) && (at(mx - 1, my) || at(mx + 1, my) || at(mx, my - 1) || at(mx, my + 1)))

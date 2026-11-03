@@ -200,13 +200,28 @@ var PATCH = hex("#f53cd1");
 // src/core/particles.ts
 function fly(x, y, vx, vy, t, g = 0, drag = 0) {
   if (drag <= 0) return [x + vx * t, y + vy * t + 0.5 * g * t * t];
-  const f = (1 - Math.exp(-drag * t)) / drag, vt = g / drag;
-  return [x + vx * f, y + vt * t + (vy - vt) * f];
+  const f = -Math.expm1(-drag * t) / drag;
+  return [x + vx * f, y + vy * f + g * accelerationTime(t, drag, f)];
 }
 function flyV(vx, vy, t, g = 0, drag = 0) {
   if (drag <= 0) return [vx, vy + g * t];
-  const e = Math.exp(-drag * t), vt = g / drag;
-  return [vx * e, vt + (vy - vt) * e];
+  const e = Math.exp(-drag * t), f = -Math.expm1(-drag * t) / drag;
+  return [vx * e, vy * e + g * f];
+}
+function accelerationTime(t, drag, f) {
+  const z = drag * t;
+  return Math.abs(z) < 1e-3 ? t * t * (0.5 + z * (-1 / 6 + z * (1 / 24 + z * (-1 / 120 + z / 720)))) : (t - f) / drag;
+}
+function integrateMotion2D(p, dt, ax = 0, ay = 0, drag = 0, dragY = drag) {
+  const ex = Math.exp(-drag * dt), fx = drag === 0 ? dt : -Math.expm1(-drag * dt) / drag;
+  const gx = accelerationTime(dt, drag, fx);
+  const ey = dragY === drag ? ex : Math.exp(-dragY * dt);
+  const fy = dragY === drag ? fx : dragY === 0 ? dt : -Math.expm1(-dragY * dt) / dragY;
+  const gy = dragY === drag ? gx : accelerationTime(dt, dragY, fy);
+  p.x += p.vx * fx + ax * gx;
+  p.y += p.vy * fy + ay * gy;
+  p.vx = p.vx * ex + ax * fx;
+  p.vy = p.vy * ey + ay * fy;
 }
 function cycle(t, period, count, seed2, life, fn) {
   for (let i = 0; i < count; i++) {
@@ -216,6 +231,75 @@ function cycle(t, period, count, seed2, life, fn) {
     let age = ((t - born) % period + period) % period;
     for (; age < L12; age += period) fn(age, L12, rng(seed2, i), i);
   }
+}
+
+// src/core/curves.ts
+var middle = (a, b) => [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
+var copy = (p) => [p[0], p[1]];
+var same = (a, b) => a[0] === b[0] && a[1] === b[1];
+function segmentDistanceSquared(p, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1], length2 = dx * dx + dy * dy;
+  const u = length2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length2)) : 0;
+  const ex = p[0] - a[0] - u * dx, ey = p[1] - a[1] - u * dy;
+  return ex * ex + ey * ey;
+}
+function flatten(out2, a, b, c, d, error2, depth) {
+  if (depth === 16 || segmentDistanceSquared(b, a, d) <= error2 && segmentDistanceSquared(c, a, d) <= error2) {
+    if (!same(out2[out2.length - 1], d)) out2.push(copy(d));
+    return;
+  }
+  const ab = middle(a, b), bc = middle(b, c), cd = middle(c, d);
+  const abc = middle(ab, bc), bcd = middle(bc, cd), center2 = middle(abc, bcd);
+  flatten(out2, a, ab, abc, center2, error2, depth + 1);
+  flatten(out2, center2, bcd, cd, d, error2, depth + 1);
+}
+function errorSquared(tolerance) {
+  if (!(tolerance > 0) || !Number.isFinite(tolerance)) throw new RangeError("Curve tolerance must be a finite positive number");
+  return tolerance * tolerance;
+}
+function cubicBezier(p0, p1, p2, p3, tolerance = 0.25) {
+  const out2 = [copy(p0)];
+  flatten(out2, p0, p1, p2, p3, errorSquared(tolerance), 0);
+  return out2;
+}
+function quadraticBezier(p0, p1, p2, tolerance = 0.25) {
+  return cubicBezier(
+    p0,
+    [p0[0] + (p1[0] - p0[0]) * 2 / 3, p0[1] + (p1[1] - p0[1]) * 2 / 3],
+    [p2[0] + (p1[0] - p2[0]) * 2 / 3, p2[1] + (p1[1] - p2[1]) * 2 / 3],
+    p2,
+    tolerance
+  );
+}
+function catmullRom(points2, { tolerance = 0.25, closed = false } = {}) {
+  const error2 = errorSquared(tolerance), pts = [];
+  for (const point of points2) if (!pts.length || !same(pts[pts.length - 1], point)) pts.push(point);
+  if (closed && pts.length > 1 && same(pts[0], pts[pts.length - 1])) pts.pop();
+  if (pts.length < 2) return pts.map(copy);
+  if (pts.length === 2) return closed ? [copy(pts[0]), copy(pts[1]), copy(pts[0])] : pts.map(copy);
+  const out2 = [copy(pts[0])], n = pts.length;
+  for (let i = 0; i < (closed ? n : n - 1); i++) {
+    const b = pts[i], c = pts[(i + 1) % n];
+    const a = i > 0 ? pts[i - 1] : closed ? pts[n - 1] : [2 * b[0] - c[0], 2 * b[1] - c[1]];
+    const d = i + 2 < n ? pts[i + 2] : closed ? pts[(i + 2) % n] : [2 * c[0] - b[0], 2 * c[1] - b[1]];
+    const dt0 = Math.sqrt(Math.hypot(b[0] - a[0], b[1] - a[1]));
+    const dt1 = Math.sqrt(Math.hypot(c[0] - b[0], c[1] - b[1]));
+    const dt2 = Math.sqrt(Math.hypot(d[0] - c[0], d[1] - c[1]));
+    const c1 = [0, 0], c2 = [0, 0];
+    for (let axis3 = 0; axis3 < 2; axis3++) {
+      const m1 = dt1 * ((b[axis3] - a[axis3]) / dt0 - (c[axis3] - a[axis3]) / (dt0 + dt1) + (c[axis3] - b[axis3]) / dt1);
+      const m2 = dt1 * ((c[axis3] - b[axis3]) / dt1 - (d[axis3] - b[axis3]) / (dt1 + dt2) + (d[axis3] - c[axis3]) / dt2);
+      c1[axis3] = b[axis3] + m1 / 3;
+      c2[axis3] = c[axis3] - m2 / 3;
+    }
+    flatten(out2, b, c1, c2, c, error2, 0);
+  }
+  return out2;
+}
+function pathLengths(points2) {
+  const lengths = new Float64Array(points2.length);
+  for (let i = 1; i < points2.length; i++) lengths[i] = lengths[i - 1] + Math.hypot(points2[i][0] - points2[i - 1][0], points2[i][1] - points2[i - 1][1]);
+  return lengths;
 }
 
 // src/core/shapes.ts
@@ -234,6 +318,7 @@ function bolt(r, x0, y0, x1, y1, { jag = 0.22, depth = 5 } = {}) {
 }
 function forks(r, path2, { count = 3, len: len2 = 20, jag = 0.3, spread = 0.9 } = {}) {
   const out2 = [];
+  if (path2.length < 2) return out2;
   for (let k = 0; k < count; k++) {
     const i = 1 + Math.floor(r.next() * (path2.length - 2)), [x, y] = path2[i], [px, py] = path2[i - 1];
     const a = Math.atan2(y - py, x - px) + (r.next() < 0.5 ? -1 : 1) * spread * (0.4 + 0.6 * r.next());
@@ -286,99 +371,83 @@ var Particles = class {
   get count() {
     return this.list.length;
   }
-  update(dt) {
-    this.t += dt;
+  update(elapsed) {
+    if (elapsed === 0) return;
+    this.t += elapsed;
     const R13 = this.R, t = this.t;
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i];
+      let dt = elapsed;
       if (p.delay > 0) {
-        p.delay -= dt;
-        continue;
+        if (p.delay >= dt) {
+          p.delay -= dt;
+          continue;
+        }
+        dt -= p.delay;
+        p.delay = 0;
       }
       if ((p.life -= dt) <= 0) {
         if (p.k === P.FIRE && p.flag & PF.SMOKES) {
           const big = p.flag & PF.BIG;
           this.spawn(P.SMOKE, p.x, p.y, p.vx * 0.6, p.vy * 0.6 - 6, big ? R13.range(1.3, 2.3) : R13.range(0.8, 1.4), 0, p.size * (big ? 0.85 : 0.7), 0, big ? PF.BIG : 0);
         }
-        this.list.splice(i, 1);
         continue;
       }
       switch (p.k) {
         case P.FIRE:
-          p.vy -= 95 * dt;
-          p.vx += Math.sin(t * 17 + p.seed) * 30 * dt;
-          p.vx -= p.vx * 5 * dt;
-          p.vy -= p.vy * 3.2 * dt;
+          integrateMotion2D(p, dt, Math.sin(t * 17 + p.seed) * 30, -95, 5, 3.2);
           break;
         case P.GRIT: {
-          p.vy += GRAVITY * dt;
-          p.vx -= p.vx * 0.8 * dt;
-          const g = this.ground(p.x), ny = p.y + p.vy * dt;
-          p.x += p.vx * dt;
-          if (p.vy > 0 && p.y <= g && ny >= g) {
+          const g = this.ground(p.x), y0 = p.y;
+          integrateMotion2D(p, dt, 0, GRAVITY, 0.8, 0);
+          if (p.vy > 0 && y0 <= g && p.y >= g) {
             p.y = g - 0.25;
             if (p.vy > 130 && R13.chance(0.4)) p.vy = -p.vy * 0.25, p.vx = p.vx * 0.5 + R13.range(-10, 10);
             else p.vx = p.vy = 0, p.life = Math.min(p.life, 0.5);
-          } else p.y = ny;
-          continue;
+          }
+          break;
         }
         case P.BRAND: {
-          p.vy += GRAVITY * 0.8 * dt;
-          p.vx -= p.vx * 0.9 * dt;
-          if (R13.chance(0.9 * Math.min(1, dt * 60))) this.spawn(P.FIRE, p.x, p.y, p.vx * 0.1 + R13.range(-7, 7), p.vy * 0.1 - 10, R13.range(0.16, 0.32), 0, R13.range(0.9, 1.7) * (0.5 + p.life / p.max * 0.6), 0, R13.chance(0.4) ? PF.SMOKES : 0);
-          const g = this.ground(p.x), ny = p.y + p.vy * dt;
-          p.x += p.vx * dt;
-          if (p.vy > 0 && p.y <= g && ny >= g) {
+          const x0 = p.x, y0 = p.y, g = this.ground(x0);
+          integrateMotion2D(p, dt, 0, GRAVITY * 0.8, 0.9, 0);
+          if (R13.chance(0.9 * Math.min(1, dt * 60))) this.spawn(P.FIRE, x0, y0, p.vx * 0.1 + R13.range(-7, 7), p.vy * 0.1 - 10, R13.range(0.16, 0.32), 0, R13.range(0.9, 1.7) * (0.5 + p.life / p.max * 0.6), 0, R13.chance(0.4) ? PF.SMOKES : 0);
+          if (p.vy > 0 && y0 <= g && p.y >= g) {
             this.onLand?.(p.x, g);
-            this.list.splice(i, 1);
-          } else p.y = ny;
-          continue;
+            p.life = 0;
+          }
+          break;
         }
         case P.SPARK: {
-          p.vy += GRAVITY * 0.45 * dt;
-          p.vx -= p.vx * 2.2 * dt;
-          p.vy -= p.vy * 2.2 * dt;
-          const g = this.ground(p.x), ny = p.y + p.vy * dt;
-          p.x += p.vx * dt;
-          if (p.vy > 0 && p.y <= g && ny >= g) p.vy = -p.vy * 0.45, p.vx *= 0.7, p.y = g - 0.25;
-          else p.y = ny;
-          continue;
+          const g = this.ground(p.x), y0 = p.y;
+          integrateMotion2D(p, dt, 0, GRAVITY * 0.45, 2.2);
+          if (p.vy > 0 && y0 <= g && p.y >= g) p.vy = -p.vy * 0.45, p.vx *= 0.7, p.y = g - 0.25;
+          break;
         }
         case P.STREAK:
-          p.vx += p.vx * 3 * dt, p.vy += p.vy * 3 * dt;
+          integrateMotion2D(p, dt, 0, 0, -3);
           break;
         case P.FLAKE:
-          p.vx -= p.vx * 2.2 * dt;
-          p.vy -= p.vy * 2.2 * dt - 35 * dt;
-          p.x += Math.sin(this.t * 2.5 + p.seed) * 7 * dt;
+          integrateMotion2D(p, dt, 0, 35, 2.2);
+          p.x += Math.sin(t * 2.5 + p.seed) * 7 * dt;
           break;
         case P.EMBER:
-          p.vy += (-30 + Math.sin(t * 3 + p.seed) * 20) * dt;
-          p.vx += Math.cos(t * 2.3 + p.seed) * 45 * dt;
-          p.vx -= p.vx * 1.6 * dt;
-          p.vy -= p.vy * 1.6 * dt;
+          integrateMotion2D(p, dt, Math.cos(t * 2.3 + p.seed) * 45, -30 + Math.sin(t * 3 + p.seed) * 20, 1.6);
           break;
         case P.SMOKE: {
           const big = p.flag & PF.BIG;
-          p.vy -= (big ? 23 : 16) * dt;
-          p.vx += Math.sin(t * 1.3 + p.seed) * 8 * dt;
-          p.vx -= p.vx * 1.6 * dt;
-          p.vy -= p.vy * 1.2 * dt;
+          integrateMotion2D(p, dt, Math.sin(t * 1.3 + p.seed) * 8, big ? -23 : -16, 1.6, 1.2);
           break;
         }
         case P.MOTE:
-          p.vx -= p.vx * 0.6 * dt;
-          p.vy -= p.vy * 0.6 * dt;
+          integrateMotion2D(p, dt, 0, 0, 0.6);
           break;
-        default: {
-          const drag = SOFT.has(p.k) ? 4 : 1.6;
-          p.vx -= p.vx * drag * dt;
-          p.vy -= p.vy * drag * dt + 5 * dt;
-        }
+        default:
+          integrateMotion2D(p, dt, 0, -5, SOFT.has(p.k) ? 4 : 1.6);
       }
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
     }
+    let write = 0;
+    for (const p of this.list) if (p.life > 0) this.list[write++] = p;
+    this.list.length = write;
   }
   draw(p, layer3) {
     for (const q of this.list) {
@@ -533,16 +602,8 @@ var Bits = class {
   update(dt) {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const b = this.list[i];
-      if ((b.life -= dt) <= 0) {
-        this.list.splice(i, 1);
-        continue;
-      }
-      if (b.rest) continue;
-      b.vy += GRAVITY * b.g * dt;
-      b.vx -= b.vx * b.drag * dt;
-      b.vy -= b.vy * b.drag * dt;
-      b.x += b.vx * dt;
-      b.y += b.vy * dt;
+      if ((b.life -= dt) <= 0 || b.rest) continue;
+      integrateMotion2D(b, dt, 0, GRAVITY * b.g, b.drag);
       b.a += b.va * dt;
       const floor4 = this.ground(b.x), sp = b.vy;
       if (b.g <= 0 || b.y < floor4 || sp <= 0) continue;
@@ -551,6 +612,9 @@ var Bits = class {
       else if (b.bounce > 0 && sp > 70) b.vy = -sp * b.bounce, b.vx *= 0.7, b.va *= 0.6;
       else b.rest = true, b.vx = b.vy = 0;
     }
+    let write = 0;
+    for (const b of this.list) if (b.life > 0) this.list[write++] = b;
+    this.list.length = write;
   }
   draw(p) {
     for (const b of this.list) {
@@ -617,16 +681,21 @@ function flare(p, x, y, L12, k, ramp3) {
   }
 }
 function band(p, cx, cy, r, sy, th, k, ramp3, keep2 = () => true, hot = false) {
-  if (r <= 0 || k <= 0) return;
-  const R13 = ramp3.map(hex), n = R13.length;
-  for (let j = 0, m = Math.ceil(r * TAU * 1.2); j < m; j++) {
-    const ang = j / m * TAU, ca = Math.cos(ang), sa = Math.sin(ang);
-    if (!keep2(ang)) continue;
-    for (let o = th; o >= 0; o -= 0.5) {
-      const u = o / th, c = u < 0.15 ? hot ? WHITE : R13[n - 1] : u < 0.4 ? R13[n - 2] : u < 0.7 ? R13[n - 3] : R13[n - 4];
-      p.dot(cx + ca * (r - o), cy + sa * (r - o) * sy, c, k * (u < 0.4 ? 1.2 : 1.15 - u));
-    }
-  }
+  if (r <= 0 || k <= 0 || th <= 0) return;
+  const R13 = ramp3.map(hex), n = R13.length, inner = Math.max(0, r - th), middle2 = (r + inner) * 0.5;
+  const squash = sy === 0 ? 0.5 / r : sy, height5 = r * Math.abs(squash);
+  p.shade(cx - r - 1, cy - height5 - 1, cx + r + 1, cy + height5 + 1, (x, y, out2) => {
+    const dx = x - cx, dy = (y - cy) / squash, radius5 = Math.hypot(dx, dy);
+    const gradient = radius5 > 0 ? Math.hypot(dx, dy / squash) / radius5 : 1;
+    const halfWidth = Math.max((r - inner) * 0.5, Math.SQRT1_2 * gradient);
+    if (Math.abs(radius5 - middle2) > halfWidth) return;
+    let angle2 = Math.atan2(dy, dx);
+    if (angle2 < 0) angle2 += TAU;
+    if (!keep2(angle2)) return;
+    const u = clamp((r - radius5) / th);
+    out2.c = u < 0.15 ? hot ? WHITE : R13[n - 1] : u < 0.4 ? R13[n - 2] : u < 0.7 ? R13[n - 3] : R13[n - 4];
+    out2.a = k * (u < 0.4 ? 1.2 : 1.15 - u);
+  });
 }
 function crystal(p, x, base, h, w, lean, ramp3, opts = {}) {
   if (h < 1.5) return;
@@ -669,6 +738,10 @@ function blendOver(destination, source, opacity) {
   const alpha = Math.min(1, Math.max(0, opacity)) * (source >>> 24) / 255;
   if (!(alpha > 0)) return destination;
   if (alpha >= 1) return source >>> 0;
+  if (destination >>> 24 === 0) {
+    const byteAlpha = Math.round(alpha * 255);
+    return byteAlpha ? (byteAlpha << 24 | source & 16777215) >>> 0 : 0;
+  }
   const behind = (destination >>> 24) / 255 * (1 - alpha);
   const outAlpha = alpha + behind;
   const r = Math.round(((source & 255) * alpha + (destination & 255) * behind) / outAlpha);
@@ -833,6 +906,11 @@ var OUT = { c: 0, a: 1, l: 0, k: 0 };
 var sprites = /* @__PURE__ */ new WeakMap();
 var call = (v, ...args) => typeof v === "function" ? v(...args) : v;
 var Painter = class {
+  strokeStamp;
+  strokeDistance;
+  strokeU;
+  strokePixels;
+  strokeId = 0;
   constructor(frame2) {
     this.frame = frame2;
     this.reset();
@@ -943,7 +1021,8 @@ var Painter = class {
   }
   /** A translucent disc: puffs of smoke, vapour, dust. c and a may be functions of (d: 0 center..1 rim, angle). */
   disc(cx, cy, r, c, a) {
-    if (r < 0.5) return this.blend(cx, cy, call(c, 0, 0), call(a, 0, 0));
+    if (!(r > 0)) return;
+    if (r < Math.SQRT1_2) return this.blend(cx, cy, call(c, 0, 0), call(a, 0, 0));
     this.each(cx - r, cy - r, cx + r, cy + r, (x, y, sx, sy) => {
       const dx = x - cx, dy = y - cy, d2 = dx * dx + dy * dy;
       if (d2 > r * r) return;
@@ -989,12 +1068,14 @@ var Painter = class {
       if (sy < ay) ay = sy;
       if (sy > by) by = sy;
     }
-    const sx0 = Math.max(Math.floor(ax), this.ox), sx1 = Math.min(Math.ceil(bx), this.ox + this.w - 1);
-    const sy0 = Math.max(Math.floor(ay), this.oy), sy1 = Math.min(Math.ceil(by), this.oy + this.h - 1);
+    const sx0 = Math.max(Math.ceil(ax - 0.5), this.ox), sx1 = Math.min(Math.floor(bx - 0.5), this.ox + this.w - 1);
+    const sy0 = Math.max(Math.ceil(ay - 0.5), this.oy), sy1 = Math.min(Math.floor(by - 0.5), this.oy + this.h - 1);
+    const rotated = this.sn !== 0 || this.cs !== 1;
     for (let sy = sy0; sy <= sy1; sy++)
       for (let sx = sx0; sx <= sx1; sx++) {
-        const cx = sx + 0.5, cy = sy + 0.5;
-        fn(this.fromX(cx, cy), this.fromY(cx, cy), sx, sy);
+        const cx = sx + 0.5, cy = sy + 0.5, lx = this.fromX(cx, cy), ly = this.fromY(cx, cy);
+        if (rotated && (lx < x0 || ly < y0 || lx > x1 || ly > y1)) continue;
+        fn(lx, ly, sx, sy);
       }
   }
   /**
@@ -1016,14 +1097,15 @@ var Painter = class {
   // ---- shapes. Colors (c) and alphas (a) can be numbers or functions of the shape's own coordinates.
   /** 1 px line. c and a may be functions of u (0 at the start, 1 at the end). */
   line(x0, y0, x1, y1, c, a = 1) {
-    let sx = this.cellX(x0, y0), sy = this.cellY(x0, y0);
-    const ex = this.cellX(x1, y1), ey = this.cellY(x1, y1);
+    this.lineCells(this.cellX(x0, y0), this.cellY(x0, y0), this.cellX(x1, y1), this.cellY(x1, y1), c, a);
+  }
+  lineCells(sx, sy, ex, ey, c, a, opacity = 1) {
     const dx = Math.abs(ex - sx), dy = -Math.abs(ey - sy), stepx = sx < ex ? 1 : -1, stepy = sy < ey ? 1 : -1;
     const n = Math.max(dx, -dy) || 1, fc = typeof c === "function", fa = typeof a === "function";
     let err = dx + dy, i = 0;
     for (; ; ) {
       const u = i++ / n;
-      this.put(sx, sy, fc ? c(u) : c, fa ? a(u) : a);
+      this.put(sx, sy, fc ? c(u, 0) : c, (fa ? a(u, 0) : a) * opacity);
       if (sx === ex && sy === ey) break;
       const e2 = 2 * err;
       if (e2 >= dy) {
@@ -1038,10 +1120,118 @@ var Painter = class {
   }
   /** Lines through a list of points [[x, y], ...]. */
   polyline(pts, c, a = 1) {
-    for (let i = 1; i < pts.length; i++) this.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], c, a);
+    this.stroke(pts, c, a, 1, false);
+  }
+  /** A connected round-ended path, composited once per cell. Callbacks use global arc-length u and across-width v. */
+  path(pts, c, a = 1, width2 = 1) {
+    this.stroke(pts, c, a, width2, true);
+  }
+  /** Adaptive curves with a quarter-pixel geometric error; snapping happens only during rasterization. */
+  quadratic(p0, p1, p2, c, a = 1, width2 = 1) {
+    this.path(quadraticBezier(p0, p1, p2), c, a, width2);
+  }
+  cubic(p0, p1, p2, p3, c, a = 1, width2 = 1) {
+    this.path(cubicBezier(p0, p1, p2, p3), c, a, width2);
+  }
+  spline(pts, c, a = 1, width2 = 1, options = {}) {
+    this.path(catmullRom(pts, options), c, a, width2);
+  }
+  stroke(pts, c, a, width2, globalU) {
+    if (!pts.length || !(width2 > 0)) return;
+    if (pts.length === 1) {
+      this.circle(pts[0][0], pts[0][1], width2 / 2, c, a);
+      return;
+    }
+    const thin = width2 < Math.SQRT2;
+    if (pts.length === 2 && thin) {
+      const [a0, a1] = pts;
+      this.lineCells(
+        globalU ? Math.floor(this.toX(...a0)) : this.cellX(...a0),
+        globalU ? Math.floor(this.toY(...a0)) : this.cellY(...a0),
+        globalU ? Math.floor(this.toX(...a1)) : this.cellX(...a1),
+        globalU ? Math.floor(this.toY(...a1)) : this.cellY(...a1),
+        c,
+        a,
+        Math.min(1, width2)
+      );
+      return;
+    }
+    const size = this.w * this.h;
+    if (!this.strokeStamp || this.strokeStamp.length !== size) {
+      this.strokeStamp = new Uint32Array(size);
+      this.strokeDistance = new Float32Array(size);
+      this.strokeU = new Float32Array(size);
+      this.strokePixels = new Uint32Array(size);
+    }
+    this.strokeId = this.strokeId + 1 >>> 0;
+    if (!this.strokeId) {
+      this.strokeStamp.fill(0);
+      this.strokeId = 1;
+    }
+    const stamp2 = this.strokeStamp, distance = this.strokeDistance, us = this.strokeU, pixels2 = this.strokePixels;
+    const id = this.strokeId, lengths = globalU ? pathLengths(pts) : null, total = lengths?.[pts.length - 1] || 1;
+    const r = width2 / 2, r2 = r * r;
+    let count = 0;
+    const visit = (sx, sy, d2, u) => {
+      const x = sx - this.ox, y = sy - this.oy;
+      if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+      const i = y * this.w + x;
+      if (stamp2[i] !== id) {
+        stamp2[i] = id;
+        pixels2[count++] = i;
+        distance[i] = d2;
+        us[i] = u;
+      } else if (d2 < distance[i]) {
+        distance[i] = d2;
+        us[i] = u;
+      }
+    };
+    for (let j = 1; j < pts.length; j++) {
+      const [ax, ay] = pts[j - 1], [bx, by] = pts[j];
+      const start = lengths ? lengths[j - 1] / total : 0, span = lengths ? (lengths[j] - lengths[j - 1]) / total : 1;
+      if (thin) {
+        let sx = globalU ? Math.floor(this.toX(ax, ay)) : this.cellX(ax, ay), sy = globalU ? Math.floor(this.toY(ax, ay)) : this.cellY(ax, ay);
+        const ex = globalU ? Math.floor(this.toX(bx, by)) : this.cellX(bx, by), ey = globalU ? Math.floor(this.toY(bx, by)) : this.cellY(bx, by);
+        const dx = Math.abs(ex - sx), dy = -Math.abs(ey - sy), stepX = sx < ex ? 1 : -1, stepY = sy < ey ? 1 : -1;
+        const n = Math.max(dx, -dy) || 1;
+        let error = dx + dy, step2 = 0;
+        for (; ; ) {
+          visit(sx, sy, 0, start + span * step2++ / n);
+          if (sx === ex && sy === ey) break;
+          const e2 = error * 2;
+          if (e2 >= dy) {
+            error += dy;
+            sx += stepX;
+          }
+          if (e2 <= dx) {
+            error += dx;
+            sy += stepY;
+          }
+        }
+      } else {
+        const x0 = this.toX(ax, ay), y0 = this.toY(ax, ay), x1 = this.toX(bx, by), y1 = this.toY(bx, by);
+        const dx = x1 - x0, dy = y1 - y0, length2 = dx * dx + dy * dy;
+        const left = Math.max(this.ox, Math.floor(Math.min(x0, x1) - r)), right = Math.min(this.ox + this.w - 1, Math.ceil(Math.max(x0, x1) + r));
+        const top = Math.max(this.oy, Math.floor(Math.min(y0, y1) - r)), bottom = Math.min(this.oy + this.h - 1, Math.ceil(Math.max(y0, y1) + r));
+        for (let sy = top; sy <= bottom; sy++) for (let sx = left; sx <= right; sx++) {
+          const u = length2 ? clamp(((sx + 0.5 - x0) * dx + (sy + 0.5 - y0) * dy) / length2) : 0;
+          const ex = sx + 0.5 - x0 - u * dx, ey = sy + 0.5 - y0 - u * dy, d2 = ex * ex + ey * ey;
+          if (d2 <= r2) visit(sx, sy, d2, start + span * u);
+        }
+      }
+    }
+    for (let j = 0; j < count; j++) {
+      const i = pixels2[j], u = us[i], v = thin ? 0 : Math.sqrt(distance[i]) / r;
+      this.put(this.ox + i % this.w, this.oy + Math.floor(i / this.w), call(c, u, v), call(a, u, v) * Math.min(1, width2));
+    }
   }
   /** Thick segment with round ends. c and a may be functions of (u along, v across: 0 center, 1 edge). */
   beam(x0, y0, x1, y1, width2, c, a = 1) {
+    if (!(width2 > 0)) return;
+    if (width2 < Math.SQRT2) {
+      this.path([[x0, y0], [x1, y1]], c, a, width2);
+      return;
+    }
     const r = width2 / 2, dx = x1 - x0, dy = y1 - y0, L22 = dx * dx + dy * dy || 1e-9;
     this.shade(Math.min(x0, x1) - r, Math.min(y0, y1) - r, Math.max(x0, x1) + r, Math.max(y0, y1) + r, (x, y, o) => {
       const u = clamp(((x - x0) * dx + (y - y0) * dy) / L22), px = x0 + dx * u - x, py = y0 + dy * u - y;
@@ -1054,7 +1244,8 @@ var Painter = class {
   }
   /** Filled disc. c and a may be functions of (d: 0 center to 1 rim, angle). */
   circle(cx, cy, r, c, a = 1) {
-    if (r < 0.6) return this.dot(cx, cy, call(c, 0, 0), call(a, 0, 0));
+    if (!(r > 0)) return;
+    if (r < Math.SQRT1_2) return this.dot(cx, cy, call(c, 0, 0), call(a, 0, 0));
     this.shade(cx - r, cy - r, cx + r, cy + r, (x, y, o) => {
       const dx = x - cx, dy = y - cy, d2 = dx * dx + dy * dy;
       if (d2 > r * r) return;
@@ -1076,6 +1267,7 @@ var Painter = class {
   }
   /** Ring from radius r - w to r. c and a may be functions of (v: 0 inner to 1 outer, angle). */
   ring(cx, cy, r, w, c, a = 1) {
+    if (!(r > 0) || !(w > 0)) return;
     const r0 = Math.max(0, r - w);
     this.shade(cx - r, cy - r, cx + r, cy + r, (x, y, o) => {
       const dx = x - cx, dy = y - cy, d2 = dx * dx + dy * dy;
@@ -1092,6 +1284,7 @@ var Painter = class {
    */
   arc(cx, cy, r, w, a0, a1, c, a = 1) {
     const span = a1 - a0, wf = typeof w === "function";
+    if (!(r > 0) || !(span > 0)) return;
     this.shade(cx - r, cy - r, cx + r, cy + r, (x, y, o) => {
       const dx = x - cx, dy = y - cy, d = Math.sqrt(dx * dx + dy * dy);
       if (d > r) return;
@@ -1107,9 +1300,14 @@ var Painter = class {
   }
   /** Filled rectangle. */
   rect(x, y, w, h, c, a = 1) {
-    if (this.sn === 0) {
-      const X03 = Math.round(x), Y06 = Math.round(y), X12 = Math.round(x + w), Y12 = Math.round(y + h);
-      for (let yy = Y06; yy < Y12; yy++) for (let xx = X03; xx < X12; xx++) this.put(this.cellX(xx, yy), this.cellY(xx, yy), c, a);
+    if (!(w > 0) || !(h > 0)) return;
+    if (this.sn === 0 && this.cs === 1) {
+      const ax = this.toX(x, y), bx = this.toX(x + w, y), ay = this.toY(x, y);
+      const left = Math.min(ax, bx) - 0.5, right = Math.max(ax, bx) - 0.5;
+      const X03 = Math.max(this.ox, this.fx === 1 ? Math.ceil(left) : Math.floor(left) + 1);
+      const X12 = Math.min(this.ox + this.w, this.fx === 1 ? Math.ceil(right) : Math.floor(right) + 1);
+      const Y06 = Math.max(this.oy, Math.ceil(ay - 0.5)), Y12 = Math.min(this.oy + this.h, Math.ceil(ay + h - 0.5));
+      for (let yy = Y06; yy < Y12; yy++) for (let xx = X03; xx < X12; xx++) this.put(xx, yy, c, a);
       return;
     }
     this.shade(x, y, x + w, y + h, (lx, ly, o) => {
@@ -1147,7 +1345,8 @@ var Painter = class {
   glow(x, y, r, c, k = 0.5) {
     if (r < 1 || k <= 4e-3) return;
     const cx = this.toX(x, y), cy = this.toY(x, y);
-    const x0 = Math.floor(cx - r), x1 = Math.ceil(cx + r), y0 = Math.floor(cy - r), y1 = Math.ceil(cy + r);
+    const x0 = Math.max(this.ox, Math.floor(cx - r)), x1 = Math.min(this.ox + this.w - 1, Math.ceil(cx + r));
+    const y0 = Math.max(this.oy, Math.floor(cy - r)), y1 = Math.min(this.oy + this.h - 1, Math.ceil(cy + r));
     for (let sy = y0; sy <= y1; sy++) {
       const dy = (sy + 0.5 - cy) / r;
       for (let sx = x0; sx <= x1; sx++) {
@@ -1163,8 +1362,8 @@ var Painter = class {
     if (r < 1 || k <= 4e-3) return;
     const ax = this.toX(x0, y0), ay = this.toY(x0, y0), bx = this.toX(x1, y1), by = this.toY(x1, y1);
     const dx = bx - ax, dy = by - ay, L22 = dx * dx + dy * dy || 1e-9;
-    const X03 = Math.floor(Math.min(ax, bx) - r), X12 = Math.ceil(Math.max(ax, bx) + r);
-    const Y06 = Math.floor(Math.min(ay, by) - r), Y12 = Math.ceil(Math.max(ay, by) + r);
+    const X03 = Math.max(this.ox, Math.floor(Math.min(ax, bx) - r)), X12 = Math.min(this.ox + this.w - 1, Math.ceil(Math.max(ax, bx) + r));
+    const Y06 = Math.max(this.oy, Math.floor(Math.min(ay, by) - r)), Y12 = Math.min(this.oy + this.h - 1, Math.ceil(Math.max(ay, by) + r));
     for (let sy = Y06; sy <= Y12; sy++)
       for (let sx = X03; sx <= X12; sx++) {
         const px = sx + 0.5, py = sy + 0.5, u = clamp(((px - ax) * dx + (py - ay) * dy) / L22);
@@ -1178,8 +1377,10 @@ var Painter = class {
   glowRing(x, y, R13, r, c, k = 0.5) {
     if (r < 1 || k <= 4e-3) return;
     const cx = this.toX(x, y), cy = this.toY(x, y), E3 = R13 + r;
-    for (let sy = Math.floor(cy - E3); sy <= Math.ceil(cy + E3); sy++)
-      for (let sx = Math.floor(cx - E3); sx <= Math.ceil(cx + E3); sx++) {
+    const x0 = Math.max(this.ox, Math.floor(cx - E3)), x1 = Math.min(this.ox + this.w - 1, Math.ceil(cx + E3));
+    const y0 = Math.max(this.oy, Math.floor(cy - E3)), y1 = Math.min(this.oy + this.h - 1, Math.ceil(cy + E3));
+    for (let sy = y0; sy <= y1; sy++)
+      for (let sx = x0; sx <= x1; sx++) {
         const d = Math.abs(Math.hypot(sx + 0.5 - cx, sy + 0.5 - cy) - R13) / r;
         if (d >= 1) continue;
         const f = 1 - d;
@@ -1195,7 +1396,21 @@ var Painter = class {
   sprite(rows2, pal, x, y, opts = {}) {
     let s = sprites.get(rows2);
     if (!s) sprites.set(rows2, s = rows2.map((r) => [...r]));
-    const k = opts.scale ?? 1, a = opts.a ?? 1, W12 = s[0]?.length ?? 0, cache9 = {};
+    const k = opts.scale ?? 1, a = opts.a ?? 1, W12 = Math.max(0, ...s.map((row) => row.length)), cache9 = {};
+    if (!(k > 0) || !W12) return;
+    if (this.sn !== 0 || this.cs !== 1 || k % 1 !== 0) {
+      this.shade(x, y, x + W12 * k, y + s.length * k, (lx, ly, out2) => {
+        const col = Math.floor((lx - x) / k), row = Math.floor((ly - y) / k);
+        if (col < 0 || row < 0 || col >= W12 || row >= s.length) return;
+        const ch = s[opts.flipY ? s.length - 1 - row : row][opts.flip ? W12 - 1 - col : col];
+        if (!ch || ch === "." || ch === " ") return;
+        let color = opts.tint ?? cache9[ch];
+        if (color === void 0) color = cache9[ch] = pal[ch] === void 0 ? 0 : hex(pal[ch]);
+        out2.c = color;
+        out2.a = a;
+      });
+      return;
+    }
     for (let r = 0; r < s.length; r++)
       for (let q = 0; q < s[r].length; q++) {
         const ch = s[r][q];
@@ -1230,12 +1445,31 @@ var Painter = class {
   }
   /** Fill a mask ({ w, h, data }) with its top-left at (x, y). c may be a function of (mx, my). */
   mask(m, x, y, c, a = 1) {
+    if (this.sn !== 0 || this.cs !== 1) {
+      this.shade(x, y, x + m.w, y + m.h, (lx, ly, out2) => {
+        const mx = Math.floor(lx - x), my = Math.floor(ly - y);
+        if (mx < 0 || my < 0 || mx >= m.w || my >= m.h || !m.data[my * m.w + mx]) return;
+        out2.c = call(c, mx, my);
+        out2.a = call(a, mx, my);
+      });
+      return;
+    }
     for (let my = 0; my < m.h; my++)
       for (let mx = 0; mx < m.w; mx++) if (m.data[my * m.w + mx]) this.dot(x + mx, y + my, call(c, mx, my), call(a, mx, my));
   }
   /** The 1 px outline just outside a mask. */
   outline(m, x, y, c, a = 1) {
     const at12 = (mx, my) => mx >= 0 && my >= 0 && mx < m.w && my < m.h && m.data[my * m.w + mx];
+    if (this.sn !== 0 || this.cs !== 1) {
+      this.shade(x - 1, y - 1, x + m.w + 1, y + m.h + 1, (lx, ly, out2) => {
+        const mx = Math.floor(lx - x), my = Math.floor(ly - y);
+        if (!at12(mx, my) && (at12(mx - 1, my) || at12(mx + 1, my) || at12(mx, my - 1) || at12(mx, my + 1))) {
+          out2.c = call(c, mx, my);
+          out2.a = call(a, mx, my);
+        }
+      });
+      return;
+    }
     for (let my = -1; my <= m.h; my++)
       for (let mx = -1; mx <= m.w; mx++)
         if (!at12(mx, my) && (at12(mx - 1, my) || at12(mx + 1, my) || at12(mx, my - 1) || at12(mx, my + 1)))
@@ -1909,15 +2143,15 @@ function finish(S4, restFrames) {
   for (const i of touched) {
     if (Mat[i] === 2) continue;
     const t = tones.get(i), votes = [0, 0, 0, 0];
-    let same = false;
+    let same2 = false;
     for (const d of [-1, 1, -BW, BW]) {
       const j = i + d;
       if (Part[j] !== Part[i] || !tones.has(j)) continue;
       const u = tones.get(j);
       votes[u]++;
-      if (u === t) same = true;
+      if (u === t) same2 = true;
     }
-    if (!same && votes.some((v) => v > 0)) tones.set(i, votes.indexOf(Math.max(...votes)));
+    if (!same2 && votes.some((v) => v > 0)) tones.set(i, votes.indexOf(Math.max(...votes)));
   }
   for (const i of touched) {
     if (Mat[i] === 2) continue;
@@ -2421,7 +2655,7 @@ function createAct(mod, o = {}) {
         return c >= 0 && r0 >= 0 && c < 24 && r0 < 38 && REST_MASK[r0 * 24 + c] === 1;
       };
       const C2 = frame2.color, Ls = frame2.light;
-      const copy = (buf, sx, sy, s) => {
+      const copy2 = (buf, sx, sy, s) => {
         const [dx, dy] = shiftOf(sy - FY), px = sx + (flip ? -dx : dx), py = sy + dy;
         if (px < 0 || py < 0 || px >= W12 || py >= H7) return;
         const i = py * W12 + px;
@@ -2440,7 +2674,7 @@ function createAct(mod, o = {}) {
       for (let sy = 0; sy < H7; sy++)
         for (let sx = 0; sx < W12; sx++) {
           const c = A3.color[sy * W12 + sx];
-          if (c) copy(C2, sx, sy, c);
+          if (c) copy2(C2, sx, sy, c);
         }
       drawGhosts();
       const restIndex = (s) => {
@@ -2460,8 +2694,8 @@ function createAct(mod, o = {}) {
       for (let sy = 0; sy < H7; sy++)
         for (let sx = 0; sx < W12; sx++) {
           const j = sy * W12 + sx;
-          if (B5.color[j] && B5.color[j] !== A3.color[j] && !rest(sx, sy)) copy(C2, sx, sy, B5.color[j]);
-          if (B5.light[j] & 16777215) copy(Ls, sx, sy, B5.light[j]);
+          if (B5.color[j] && B5.color[j] !== A3.color[j] && !rest(sx, sy)) copy2(C2, sx, sy, B5.color[j]);
+          if (B5.light[j] & 16777215) copy2(Ls, sx, sy, B5.light[j]);
         }
       drawStraw();
       drawDust();
@@ -3963,7 +4197,8 @@ function mote(p, x, y, vx, vy, c, size = 1, k = 1, glow2 = 0.4) {
 }
 function streak(p, x, y, vx, vy, c, a = 1, maxLen = 7, glow2 = 0.4) {
   const sp = Math.hypot(vx, vy) || 1, ux = vx / sp, uy = vy / sp, L12 = clamp(sp / 30, 1, maxLen);
-  for (let d = L12; d >= 0; d -= 0.5) p.dot(x - ux * d, y - uy * d, d < 1 ? WHITE : d < L12 * 0.5 ? c : scale(c, 0.6), (d < L12 * 0.5 ? 1 : 1.2 - d / L12) * a);
+  for (let d = L12; d > L12 * 0.5; d -= 0.5) p.dither(x - ux * d, y - uy * d, d < 1 ? WHITE : scale(c, 0.6), (1.2 - d / L12) * a);
+  p.path([[x - ux * L12 * 0.5, y - uy * L12 * 0.5], [x, y]], (u) => (1 - u) * L12 * 0.5 < 1 ? WHITE : c, a);
   if (glow2 > 0) p.glow(x, y, 4, c, glow2 * a);
 }
 function arc(r, x0, y0, x1, y1, { jag = 0.3, forks: forks2 = 1, forkLen = 0.5 } = {}) {
@@ -3978,23 +4213,20 @@ function arc(r, x0, y0, x1, y1, { jag = 0.3, forks: forks2 = 1, forkLen = 0.5 } 
   return out2;
 }
 function drawArc(p, paths, cols, k = 1, glowK = 0.5) {
-  const steps = (fn) => {
-    for (const path2 of paths)
-      for (let i = 0; i < path2.pts.length - 1; i++) {
-        const [ax, ay] = path2.pts[i], [bx, by] = path2.pts[i + 1], l = Math.max(1, Math.hypot(bx - ax, by - ay));
-        for (let d = 0; d <= l; d += 0.5) fn(ax + (bx - ax) * d / l, ay + (by - ay) * d / l, path2, i, d === 0);
-      }
-  };
-  if (k > 0.45) steps((x, y, path2) => {
-    if (path2.w >= 1) for (const [dx, dy] of CROSS2) p.dot(x + dx * 1.5, y + dy * 1.5, cols.halo, (k - 0.45) * 1.6);
-  });
-  if (k > 0.25) steps((x, y, path2) => {
-    if (path2.w > 0.4) p.dot(x + 1, y, cols.body), p.dot(x, y + 1, cols.body);
-  });
-  steps((x, y, path2, i, first) => {
-    p.px(x, y, path2.w >= 1 && k > 0.3 ? cols.core : cols.body);
-    if (first && i % 3 === 0) p.glow(x, y, (path2.w >= 1 ? 9 : 5) * (0.5 + k * 0.5), cols.glow, glowK * k * path2.w);
-  });
+  for (const path2 of paths) {
+    const trunk = path2.w >= 1, halo2 = trunk && k > 0.45, body6 = path2.w > 0.4 && k > 0.25;
+    const radius5 = halo2 ? 2.1 : body6 ? 1.3 : 0.5, core2 = trunk && k > 0.3 ? cols.core : cols.body;
+    p.path(
+      path2.pts,
+      (_u, v) => v * radius5 <= 0.75 ? core2 : v * radius5 <= 1.3 ? cols.body : cols.halo,
+      (_u, v) => v * radius5 <= 1.3 ? 1 : (k - 0.45) * 1.6,
+      radius5 * 2
+    );
+    for (let i = 0; i < path2.pts.length - 1; i += 3) {
+      const [x, y] = path2.pts[i];
+      p.glow(x, y, (trunk ? 9 : 5) * (0.5 + k * 0.5), cols.glow, glowK * k * path2.w);
+    }
+  }
 }
 function floorRing(p, cx, cy, r, sy, c, a = 1, keep2 = null) {
   if (r < 0.5) return;
@@ -4945,12 +5177,25 @@ function recolor(p, A3, fn, a = 1) {
 var toneOf = (R13, c, lift5 = 0) => R13[clamp(Math.floor((luma(c) * 1.1 + lift5) * R13.length), 0, R13.length - 1)];
 function oval(p, cx, cy, rx, ry, c, a = 1, keep2 = null) {
   if (rx < 0.5) return;
-  const n = Math.ceil(Math.max(rx, ry) * TAU * 1.5) + 6, fc = typeof c === "function", fa = typeof a === "function";
-  for (let j = 0; j < n; j++) {
-    const g = j / n * TAU;
-    if (keep2 && !keep2(g)) continue;
-    p.dot(cx + Math.cos(g) * rx, cy + Math.sin(g) * ry, fc ? c(g) : c, fa ? a(g) : a);
-  }
+  const n = Math.max(12, Math.ceil(TAU * Math.sqrt(Math.max(rx, Math.abs(ry)) / 1.6)));
+  const points2 = Array.from({ length: n }, (_, j) => [cx + Math.cos(j / n * TAU) * rx, cy + Math.sin(j / n * TAU) * ry]);
+  points2.push(points2[0]);
+  const lengths = pathLengths(points2), total = lengths[n], fc = typeof c === "function", fa = typeof a === "function";
+  const angleAt = (u) => {
+    const distance = u * total;
+    let lo = 0, hi = n;
+    while (hi - lo > 1) {
+      const mid = lo + hi >>> 1;
+      if (lengths[mid] <= distance) lo = mid;
+      else hi = mid;
+    }
+    const fraction = (distance - lengths[lo]) / (lengths[hi] - lengths[lo] || 1);
+    return (lo + fraction) / n * TAU % TAU;
+  };
+  p.path(points2, fc ? (u) => c(angleAt(u)) : c, (u) => {
+    const angle2 = angleAt(u);
+    return keep2 && !keep2(angle2) ? 0 : fa ? a(angle2) : a;
+  });
 }
 var FAR = (g) => Math.sin(g) < 0;
 var NEAR = (g) => Math.sin(g) >= 0;
@@ -5933,7 +6178,9 @@ function crackle(p, b, k, C2, glowK = 0.5, a = 1) {
 }
 var CROSS3 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 function trace(p, pts, c, a = 1, from = 0, to = pts.length - 1) {
-  for (let i = Math.max(0, from); i < Math.min(to, pts.length - 1); i++) p.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], c, a);
+  const start = Math.max(0, Math.floor(from)), end = Math.min(pts.length - 1, Math.ceil(to));
+  if (end <= start) return;
+  p.path(pts.slice(start, end + 1).map(([x, y]) => [x, y]), c, a);
 }
 function scorch2(p, cx, cy, rx, T03, fade = 1, ry = Math.max(2.5, rx * 0.12)) {
   if (fade <= 0) return;
@@ -7278,7 +7525,7 @@ function trace2(p, s, r, u0, u1, c, a, half2 = 0, step2 = 0.6) {
     const g = s.a0 + s.dir * u;
     if (half2 && (Math.sin(g) < 0 ? -1 : 1) !== half2) continue;
     const [x, y] = onSwing(s, r, u), k = typeof a === "function" ? a(u) : a;
-    if (k > 0) p.dot(x, y, typeof c === "function" ? c(u) : c, k);
+    if (k > 0) p.dither(x, y, typeof c === "function" ? c(u) : c, k);
   }
 }
 function glowAlong(p, s, r, u0, u1, rad2, c, k, half2 = 0, step2 = 0.35) {
@@ -7367,11 +7614,14 @@ function star3(p, x, y, spikes3, sc, th, core2, body6, inner, rim2) {
   p.circle(x, y, r, core2);
 }
 function sliver(p, x, y, a, r, arc4, c, k) {
-  const n = Math.ceil(r * arc4 * 2.2);
+  if (r <= 0 || arc4 <= 0 || k <= 0) return;
+  const n = Math.max(2, Math.ceil(arc4 * Math.sqrt(r / 1.6)));
+  const points2 = [];
   for (let j = 0; j <= n; j++) {
-    const u = j / n - 0.5, th = a + u * arc4, w = 1.4 * (1 - Math.abs(u) * 2);
-    for (let o = -w * 0.5; o <= w * 0.5 + 0.01; o += 0.5) p.dot(x + Math.cos(th) * (r + o), y + Math.sin(th) * (r + o), c, k);
+    const th = a + (j / n - 0.5) * arc4;
+    points2.push([x + Math.cos(th) * r, y + Math.sin(th) * r]);
   }
+  p.path(points2, c, (u, v) => k * clamp((1 - Math.abs(2 * u - 1) - v) * 2 + 0.5), 1.4);
 }
 function along3(pts, len2, fn) {
   let d = 0;

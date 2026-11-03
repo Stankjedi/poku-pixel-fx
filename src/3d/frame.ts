@@ -1,10 +1,14 @@
 /** Pixel buffer format matches the 2D engine: color/light are packed ABGR Uint32. */
+import type { AlphaMode } from "../render/coverage.js";
+
 export type Color3D = number | string;
 export interface Frame3D {
   w: number;
   h: number;
   color: Uint32Array;
   light: Uint32Array;
+  /** Continuous opacity by default; select dither for deliberate ordered stippling. */
+  alphaMode?: AlphaMode;
   /** Optional unclamped linear RGB emission for cinematic output. */
   hdrLight?: Float32Array;
   /** Camera depth; larger means nearer. */

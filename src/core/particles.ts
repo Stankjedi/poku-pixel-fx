@@ -9,14 +9,39 @@ import { rng, clamp, type Rng } from "./math.js";
  */
 export function fly(x: number, y: number, vx: number, vy: number, t: number, g = 0, drag = 0): [number, number] {
   if (drag <= 0) return [x + vx * t, y + vy * t + 0.5 * g * t * t];
-  const f = (1 - Math.exp(-drag * t)) / drag, vt = g / drag;
-  return [x + vx * f, y + vt * t + (vy - vt) * f];
+  const f = -Math.expm1(-drag * t) / drag;
+  return [x + vx * f, y + vy * f + g * accelerationTime(t, drag, f)];
 }
 /** Its velocity at t, for streaks that point along the motion. Returns [vx, vy]. */
 export function flyV(vx: number, vy: number, t: number, g = 0, drag = 0): [number, number] {
   if (drag <= 0) return [vx, vy + g * t];
-  const e = Math.exp(-drag * t), vt = g / drag;
-  return [vx * e, vt + (vy - vt) * e];
+  const e = Math.exp(-drag * t), f = -Math.expm1(-drag * t) / drag;
+  return [vx * e, vy * e + g * f];
+}
+
+// Integral of the velocity response. The series avoids subtracting two nearly equal times
+// when drag approaches zero; the result tends continuously to t² / 2.
+function accelerationTime(t: number, drag: number, f: number) {
+  const z = drag * t;
+  return Math.abs(z) < 1e-3
+    ? t * t * (0.5 + z * (-1 / 6 + z * (1 / 24 + z * (-1 / 120 + z / 720))))
+    : (t - f) / drag;
+}
+
+/** Exact motion for constant acceleration and linear drag during one step, without allocations.
+ * Negative drag is supported for intentionally accelerating streaks. Collision response is separate.
+ */
+export function integrateMotion2D(p: { x: number; y: number; vx: number; vy: number }, dt: number,
+  ax = 0, ay = 0, drag = 0, dragY = drag) {
+  const ex = Math.exp(-drag * dt), fx = drag === 0 ? dt : -Math.expm1(-drag * dt) / drag;
+  const gx = accelerationTime(dt, drag, fx);
+  const ey = dragY === drag ? ex : Math.exp(-dragY * dt);
+  const fy = dragY === drag ? fx : dragY === 0 ? dt : -Math.expm1(-dragY * dt) / dragY;
+  const gy = dragY === drag ? gx : accelerationTime(dt, dragY, fy);
+  p.x += p.vx * fx + ax * gx;
+  p.y += p.vy * fy + ay * gy;
+  p.vx = p.vx * ex + ax * fx;
+  p.vy = p.vy * ey + ay * fy;
 }
 
 /**
@@ -71,22 +96,18 @@ export class Particles {
     return p as T & ActiveParticle;
   }
   update(dt: number) {
-    for (let i = this.list.length - 1; i >= 0; i--) {
-      const p = this.list[i];
-      if ((p.age += dt) >= p.life) {
-        this.list.splice(i, 1);
-        continue;
-      }
-      p.vx -= p.vx * p.drag * dt;
-      p.vy += p.g * dt - p.vy * p.drag * dt;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
+    let write = 0;
+    for (const p of this.list) {
+      if ((p.age += dt) >= p.life) continue;
+      integrateMotion2D(p, dt, 0, p.g, Math.max(0, p.drag));
       if (p.ground !== undefined && p.y > p.ground) {
         p.y = p.ground;
         p.vy = -Math.abs(p.vy) * (p.bounce ?? 0.3);
         p.vx *= 0.7;
       }
+      this.list[write++] = p;
     }
+    this.list.length = write;
   }
   /** Life left, 1 at birth to 0 at death. */
   static k(p: Pick<ActiveParticle, "age" | "life">) {
