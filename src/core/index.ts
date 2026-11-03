@@ -16,3 +16,5 @@ export { READY } from "./poses.js";
 export { chain, shiftKeys, shiftHits } from "./chain.js";
 export { CinematicCompositor } from "../render/cinematic.js";
 export type { CinematicFrame, CinematicOptions, BloomOptions } from "../render/cinematic.js";
+export { enableHDRLight } from "../render/hdr.js";
+export type { HDRLightFrame } from "../render/hdr.js";
