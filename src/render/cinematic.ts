@@ -112,7 +112,8 @@ export class CinematicCompositor {
       extract[i + 1] = e[i + 1] * scale;
       extract[i + 2] = e[i + 2] * scale;
     }
-    let source = extract, sw = this.w, sh = this.h;
+    let source: Float32Array = extract;
+    let sw = this.w, sh = this.h;
     for (const level of this.levels) {
       const { w, h, data, scratch } = level;
       // 2x downsample in linear RGB. Edges repeat instead of bleeding black.
