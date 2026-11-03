@@ -1,3 +1,4 @@
+import { channelToLinear } from "./linear.js";
 /**
  * Pixel-art-aware cinematic finishing shared by the 2D and 3D software renderers.
  *
@@ -10,6 +11,7 @@ export interface CinematicFrame {
   readonly h: number;
   readonly color: Uint32Array;
   readonly light: Uint32Array;
+  readonly hdrLight?: Float32Array;
 }
 export interface BloomOptions {
   /** Linear-light emissive threshold (0..infinity). */
@@ -47,12 +49,8 @@ interface BloomLevel {
   data: Float32Array;
   scratch: Float32Array;
 }
-const SRGB_TO_LINEAR = Float32Array.from({ length: 256 }, (_, i) => {
-  const s = i / 255;
-  return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-});
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
-const channel = (c: number, s: number) => SRGB_TO_LINEAR[(c >>> s) & 255];
+const channel = channelToLinear;
 const toSRGB = (v: number) => {
   const x = clamp01(v);
   return Math.round(255 * (x <= 0.0031308 ? x * 12.92 : 1.055 * x ** (1 / 2.4) - 0.055));
@@ -177,6 +175,7 @@ export class CinematicCompositor {
     if (out.length < n * 4) throw new RangeError("Output RGBA buffer is too small");
     if (color.length < n || light.length < n) throw new RangeError("Invalid frame buffers");
     if (options.radiance && options.radiance.length < n * 3) throw new RangeError("HDR radiance buffer is too small");
+    if (frame.hdrLight && frame.hdrLight.length < n * 3) throw new RangeError("HDR emission buffer is too small");
     if (options.occlusion && options.occlusion.length < n) throw new RangeError("Occlusion buffer is too small");
     const bloom = options.bloom === false ? null : options.bloom ?? {};
     const count = bloom ? Math.max(1, Math.min(6, Math.floor(bloom.levels ?? 4))) : 0;
@@ -184,7 +183,7 @@ export class CinematicCompositor {
     const bg = options.background ?? null;
     const opaque = bg !== null, flat = typeof bg === "number";
     const lightStrength = Math.max(0, options.lightStrength ?? 1);
-    const extra = options.radiance, ao = options.occlusion;
+    const extra = options.radiance, nativeHDR = frame.hdrLight, ao = options.occlusion;
 
     for (let i = 0; i < n; i++) {
       const j = i * 3, c = color[i], l = light[i], a = (c >>> 24) / 255;
@@ -194,7 +193,9 @@ export class CinematicCompositor {
       for (let ch = 0; ch < 3; ch++) {
         const shift = ch * 8, v = channel(c, shift);
         this.base[j + ch] = (opaque ? v * a + channel(k, shift) * (1 - a) : v * a) * shade;
-        this.emission[j + ch] = channel(l, shift) * lightStrength + (extra?.[j + ch] ?? 0);
+        // Native HDR already contains Painter emissions: max avoids double-counting
+        // the 8-bit mirror, while still including direct legacy-buffer writes.
+        this.emission[j + ch] = Math.max(channel(l, shift) * lightStrength, nativeHDR?.[j + ch] ?? 0) + (extra?.[j + ch] ?? 0);
       }
     }
     if (bloom && n) this.buildBloom(Math.max(0, bloom.threshold ?? 0.16), Math.max(0, bloom.knee ?? 0.18));
