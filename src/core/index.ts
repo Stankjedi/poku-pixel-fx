@@ -6,6 +6,7 @@ export * from "./particles.js";
 export * from "./shapes.js";
 export { Particles, Bits, Lights, Blazes, P, PF, B, GRAVITY, FIRE_RAMP, SMOKE_RAMP, sparkle, flare, band, crystal } from "./sim.js";
 export { Painter } from "./painter.js";
+export type { AlphaMode } from "../render/coverage.js";
 export { FONTS, textWidth } from "./font.js";
 export { createFrame, clearFrame, createFx, composite, painterFor, resolveOptions } from "./fx.js";
 export { stockActor, drawActor, actorAlphaOf, HERO, HERO2, HERO_PAL, DUMMY_PAL } from "./actor.js";
