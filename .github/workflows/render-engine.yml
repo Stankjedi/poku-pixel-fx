@@ -3,13 +3,16 @@ name: Render engine regression
 on:
   push:
     branches:
+      - main
       - "feat/cinematic-lighting-engine-20261103"
   pull_request:
     paths:
       - "src/**"
-      - "gallery/3d.ts"
+      - "gallery/**"
+      - "tools/**"
       - "tests/**"
-      - "package.json"
+      - "package*.json"
+      - "tsconfig*.json"
       - ".github/workflows/render-engine.yml"
 
 permissions:
@@ -27,18 +30,22 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: npm run test:3d
-      - name: Smoke-test cinematic image export
+      - name: Ensure optional GIF encoder is available for integration QA
         run: |
-          node build-tools/tools/render-3d.mjs frost --frames 2 --width 96 --height 72 --columns 2 --cinematic true --out /tmp/frost-cinematic.png
-          node build-tools/tools/render-3d.mjs blackhole --frames 2 --width 96 --height 72 --columns 2 --cinematic true --out /tmp/blackhole-cinematic.png
-          test -s /tmp/frost-cinematic.png
-          test -s /tmp/blackhole-cinematic.png
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+      - run: npm run test:3d
+      - name: Smoke-test integrated cinematic image exports
+        run: |
+          for effect in frost slash blackhole wind windOriginal; do
+            node build-tools/tools/render-3d.mjs "$effect" --frames 3 --width 96 --height 72 --columns 3 --cinematic true --out "/tmp/${effect}-cinematic.png"
+            test -s "/tmp/${effect}-cinematic.png"
+          done
       - name: Save visual QA sheets
         uses: actions/upload-artifact@v4
         with:
-          name: cinematic-render-sheets
-          path: |
-            /tmp/frost-cinematic.png
-            /tmp/blackhole-cinematic.png
+          name: unified-cinematic-render-sheets
+          path: /tmp/*-cinematic.png
           retention-days: 7

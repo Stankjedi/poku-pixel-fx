@@ -3,6 +3,7 @@ import { channelToLinear } from "../render/linear.js";
 import { type Vec3, clamp3, cross3, dot3, len3, norm3, sub3, TAU3 } from "./math.js";
 
 const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
+const LIGHT_DIRECTION = norm3([0.6, 1, -0.45]);
 export interface Camera3D {
   yaw: number;
   /** Radians above the ground; positive elevation looks down onto the scene. */
@@ -25,6 +26,10 @@ export class Painter3D {
   private ce = 1;
   private se = 0;
   private origin: Vec3 = [0, 0, 0];
+  private warpColor?: Uint32Array;
+  private warpLight?: Uint32Array;
+  private warpDepth?: Float32Array;
+  private warpHDR?: Float32Array;
 
   constructor(frame: Frame3D, camera: Camera3D = DEFAULT_CAMERA_3D) {
     this.frame = frame;
@@ -118,7 +123,7 @@ export class Painter3D {
   /** Flat-lit facet, quantized to a discrete color ramp instead of smooth Gouraud shading. */
   facet(a: Vec3, b: Vec3, c: Vec3, ramp: readonly Color3D[], alpha = 1, emission = 0) {
     const n = norm3(cross3(sub3(b, a), sub3(c, a)));
-    const brightness = Math.abs(dot3(n, norm3([0.6, 1, -0.45])));
+    const brightness = Math.abs(dot3(n, LIGHT_DIRECTION));
     const idx = Math.floor(clamp3(0.22 + brightness * 0.7) * (ramp.length - 1));
     this.triangle(a, b, c, ramp[idx], alpha, emission);
   }
@@ -142,9 +147,7 @@ export class Painter3D {
       this.addLight(y * w + x, c, (1 - d) ** 2 * strength);
     }
   }
-  /** Depth-tested opaque sphere, with a deliberately dark central silhouette.
-   * Uses the front hemisphere in camera space so the far side of a 3D disk is occluded
-   * while matter physically in front of the sphere remains visible. */
+  /** Depth-tested opaque sphere; the front hemisphere occludes color and both light buffers. */
   sphere(center: Vec3, radius: number, fill: Color3D, edge: Color3D = fill) {
     if (radius <= 0) return;
     const p = this.project(center), r = radius * p.scale;
@@ -153,7 +156,6 @@ export class Painter3D {
     const x0 = Math.max(0, Math.floor(p.x - r)), x1 = Math.min(w - 1, Math.ceil(p.x + r));
     const y0 = Math.max(0, Math.floor(p.y - r)), y1 = Math.min(h - 1, Math.ceil(p.y + r));
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      // Pixel-center sampling makes the edge stable under nearest-neighbor enlargement.
       const dx = (x + 0.5 - p.x) / r, dy = (y + 0.5 - p.y) / r, d2 = dx * dx + dy * dy;
       if (d2 > 1) continue;
       const depth = p.depth + radius * Math.sqrt(Math.max(0, 1 - d2));
@@ -161,18 +163,14 @@ export class Painter3D {
       if (depth < this.frame.depth[i]) continue;
       this.frame.depth[i] = depth;
       this.frame.color[i] = d2 > 0.865 ? rim : inner;
-      // An event horizon must occlude emission on the far side as well as color.
       this.frame.light[i] = 0;
-      // Prevent HDR emission behind an opaque horizon from leaking through.
       const hdr = this.frame.hdrLight;
       if (hdr) { hdr[i * 3] = 0; hdr[i * 3 + 1] = 0; hdr[i * 3 + 2] = 0; }
     }
   }
 
-  /** Pixel-sampled radial gravitational lens approximation.
-   * Refracts the rendered scene (including light and depth) without anti-aliasing or
-   * smoothing. Apply BEFORE drawing an opaque occluding horizon. This is an artistic
-   * screen-space approximation, not relativistic geodesic ray-tracing. */
+  /** Pixel-sampled artistic lens approximation, applied BEFORE the opaque horizon.
+   * Reuse snapshots while warping color, depth, legacy light and HDR radiance together. */
   lensWarp(center: Vec3, horizon: number, reach: number, strength = 1) {
     if (horizon <= 0 || reach <= horizon || strength <= 0) return;
     const p = this.project(center), maxR = reach * p.scale, inner = horizon * p.scale;
@@ -180,8 +178,20 @@ export class Painter3D {
     const x0 = Math.max(0, Math.floor(p.x - maxR)), x1 = Math.min(w - 1, Math.ceil(p.x + maxR));
     const y0 = Math.max(0, Math.floor(p.y - maxR)), y1 = Math.min(h - 1, Math.ceil(p.y + maxR));
     if (x0 > x1 || y0 > y1) return;
-    const c = this.frame.color.slice(), l = this.frame.light.slice(), z = this.frame.depth.slice();
-    const hdr = this.frame.hdrLight, hdrCopy = hdr?.slice();
+    const n = w * h;
+    if (!this.warpColor || this.warpColor.length !== n) {
+      this.warpColor = new Uint32Array(n);
+      this.warpLight = new Uint32Array(n);
+      this.warpDepth = new Float32Array(n);
+    }
+    const c = this.warpColor, l = this.warpLight!, z = this.warpDepth!;
+    c.set(this.frame.color); l.set(this.frame.light); z.set(this.frame.depth);
+    const hdr = this.frame.hdrLight;
+    if (hdr) {
+      if (!this.warpHDR || this.warpHDR.length !== hdr.length) this.warpHDR = new Float32Array(hdr.length);
+      this.warpHDR.set(hdr);
+    }
+    const hdrCopy = hdr ? this.warpHDR : undefined;
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const dx = x + 0.5 - p.x, dy = y + 0.5 - p.y, r = Math.hypot(dx, dy);
       if (r <= inner * 0.9 || r >= maxR) continue;
@@ -204,6 +214,8 @@ export class Painter3D {
   }
 
   grid(extent = 8, step = 1) {
+    if (!Number.isFinite(extent) || extent < 0 || !Number.isFinite(step) || step <= 0)
+      throw new RangeError("grid extent must be non-negative and step must be positive");
     for (let i = -extent; i <= extent; i += step) {
       const color = Math.abs(i) < 0.001 ? "#294866" : "#1d304c";
       this.line([i, -0.055, -extent], [i, -0.055, extent], 0.012, color, 0.35);

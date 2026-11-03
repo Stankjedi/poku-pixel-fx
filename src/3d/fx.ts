@@ -58,10 +58,15 @@ export function createFx3D<O extends object>(mod: EffectModule3D<O>, options: Pa
     get t() { return Math.min(steps * tick + accumulator, mod.meta.duration); },
     update(dt) {
       if (!Number.isFinite(dt) || dt < 0) throw new RangeError("dt must be a finite, non-negative number");
+      if (!mod.meta.loop && steps >= durationSteps) return;
       accumulator += dt;
-      // Prevent numerical residue from causing different step counts at 60 vs 120 fps.
+      // Preserve infinite looping effects. Bound only completed one-shots.
       let n = Math.floor((accumulator + 1e-10) / tick);
       accumulator -= n * tick;
+      if (!mod.meta.loop && n >= durationSteps - steps) {
+        n = durationSteps - steps;
+        accumulator = 0;
+      }
       while (n-- > 0) advance();
     },
     draw(painter) { impl.draw(painter); },

@@ -4,34 +4,14 @@
   "description": "Code-driven pixel art effects and animations, and a Claude Code skill to make your own.",
   "type": "module",
   "license": "MIT",
-  "engines": {
-    "node": ">=18"
-  },
+  "engines": { "node": ">=18" },
   "exports": {
-    ".": {
-      "types": "./build/index.d.ts",
-      "import": "./build/index.js"
-    },
-    "./fx/*": {
-      "types": "./build/fx/*.d.ts",
-      "import": "./build/fx/*.js"
-    },
-    "./core/*": {
-      "types": "./build/core/*.d.ts",
-      "import": "./build/core/*.js"
-    },
-    "./3d": {
-      "types": "./build/3d/index.d.ts",
-      "import": "./build/3d/index.js"
-    },
-    "./3d/*": {
-      "types": "./build/3d/*.d.ts",
-      "import": "./build/3d/*.js"
-    },
-    "./3d/effects/*": {
-      "types": "./build/3d/effects/*.d.ts",
-      "import": "./build/3d/effects/*.js"
-    }
+    ".": { "types": "./build/index.d.ts", "import": "./build/index.js" },
+    "./fx/*": { "types": "./build/fx/*.d.ts", "import": "./build/fx/*.js" },
+    "./core/*": { "types": "./build/core/*.d.ts", "import": "./build/core/*.js" },
+    "./3d": { "types": "./build/3d/index.d.ts", "import": "./build/3d/index.js" },
+    "./3d/*": { "types": "./build/3d/*.d.ts", "import": "./build/3d/*.js" },
+    "./3d/effects/*": { "types": "./build/3d/effects/*.d.ts", "import": "./build/3d/effects/*.js" }
   },
   "scripts": {
     "render": "node build-tools/tools/render.mjs",
@@ -43,7 +23,8 @@
     "share": "node build-tools/tools/share.mjs",
     "catalog": "node build-tools/tools/export-catalog.mjs",
     "render:3d": "node build-tools/tools/render-3d.mjs",
-    "test:3d": "node --test tests/3d.test.mjs tests/black-hole-3d.test.mjs tests/cinematic.test.mjs"
+    "render:3d:gif": "node build-tools/tools/render-3d-gif.mjs",
+    "test:3d": "node --test tests/3d.test.mjs tests/black-hole-3d.test.mjs tests/cinematic.test.mjs tests/wind-rasenshuriken-3d.test.mjs tests/unified-vfx.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
@@ -51,10 +32,5 @@
     "fonteditor-core": "^2.6.3",
     "typescript": "^7.0.2"
   },
-  "files": [
-    "build",
-    "LICENSE",
-    "NOTICE.md",
-    "licenses"
-  ]
+  "files": ["build", "LICENSE", "NOTICE.md", "licenses"]
 }
