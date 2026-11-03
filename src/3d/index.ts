@@ -9,3 +9,5 @@ export * as blackHole3D from "./effects/black-hole.js";
 export * from "./lighting.js";
 export { CinematicCompositor } from "../render/cinematic.js";
 export type { CinematicFrame, CinematicOptions, BloomOptions } from "../render/cinematic.js";
+export { enableHDRLight } from "../render/hdr.js";
+export type { HDRLightFrame } from "../render/hdr.js";
