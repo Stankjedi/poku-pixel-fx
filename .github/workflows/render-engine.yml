@@ -28,3 +28,17 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run test:3d
+      - name: Smoke-test cinematic image export
+        run: |
+          node build-tools/tools/render-3d.mjs frost --frames 2 --width 96 --height 72 --columns 2 --cinematic true --out /tmp/frost-cinematic.png
+          node build-tools/tools/render-3d.mjs blackhole --frames 2 --width 96 --height 72 --columns 2 --cinematic true --out /tmp/blackhole-cinematic.png
+          test -s /tmp/frost-cinematic.png
+          test -s /tmp/blackhole-cinematic.png
+      - name: Save visual QA sheets
+        uses: actions/upload-artifact@v4
+        with:
+          name: cinematic-render-sheets
+          path: |
+            /tmp/frost-cinematic.png
+            /tmp/blackhole-cinematic.png
+          retention-days: 7
