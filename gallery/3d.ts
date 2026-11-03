@@ -1,4 +1,4 @@
-import { createFrame3D, compositeFrame3D, Painter3D, createFx3D, CinematicCompositor, CinematicLighting3D, type PointLight3D, type Camera3D, type FxInstance3D } from "../src/3d/index.js";
+import { createFrame3D, compositeFrame3D, Painter3D, createFx3D, CinematicCompositor, CinematicLighting3D, enableHDRLight, type PointLight3D, type Camera3D, type FxInstance3D } from "../src/3d/index.js";
 import * as frost from "../src/3d/effects/frost-nova.js";
 import * as slash from "../src/3d/effects/arc-slash.js";
 import * as blackhole from "../src/3d/effects/black-hole.js";
@@ -75,6 +75,10 @@ function resize() {
 }
 function render() {
   resize();
+  // Legacy black-hole shader writes some light pixels directly; other effects
+  // can capture all Painter3D emission in an extra unclamped HDR buffer.
+  if (selected === "blackhole") frame.hdrLight = undefined;
+  else enableHDRLight(frame);
   const isBlackHole = selected === "blackhole";
   const camera: Camera3D = { yaw, elevation, zoom: zoom * (isBlackHole ? 1.36 : 1), target: [0, selected === "slash" ? 1.4 : isBlackHole ? 1.12 : 0.75, 0] };
   painter.setCamera(camera).begin(isBlackHole ? "#05030d" : "#0a1525");
