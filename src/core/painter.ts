@@ -3,13 +3,14 @@
 // origin; the painter places, mirrors and rotates them, so an effect never needs to know where it is.
 
 import { clamp } from "./math.js";
+import { channelToLinear } from "../render/linear.js";
 import { hex } from "./color.js";
 import { rasterText, textWidth, FONTS } from "./font.js";
 
 // 4x4 ordered (Bayer) thresholds: a pixel at alpha a is drawn when a is above its cell's threshold.
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
 const OUT = { c: 0, a: 1, l: 0, k: 0 };
-export interface PaintFrame { w: number; h: number; ox: number; oy: number; color: Uint32Array; light: Uint32Array }
+export interface PaintFrame { w: number; h: number; ox: number; oy: number; color: Uint32Array; light: Uint32Array; hdrLight?: Float32Array }
 export type PaintValue = number | ((...args: number[]) => number | null | undefined);
 export type Point = [number, number];
 export interface ShaderOutput { c: number; a: number; l: number; k: number }
@@ -70,6 +71,14 @@ export class Painter {
     const x = sx - this.ox, y = sy - this.oy;
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
     const i = y * this.w + x, d = this.L[i];
+    // Optional physically meaningful accumulation without 8-bit channel saturation.
+    const hdr = this.frame.hdrLight;
+    if (hdr) {
+      const j = i * 3;
+      hdr[j] += channelToLinear(c, 0) * k;
+      hdr[j + 1] += channelToLinear(c, 8) * k;
+      hdr[j + 2] += channelToLinear(c, 16) * k;
+    }
     const r = Math.min(255, (d & 255) + (c & 255) * k) | 0;
     const g = Math.min(255, ((d >>> 8) & 255) + ((c >>> 8) & 255) * k) | 0;
     const b = Math.min(255, ((d >>> 16) & 255) + ((c >>> 16) & 255) * k) | 0;
