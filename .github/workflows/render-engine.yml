@@ -1,0 +1,30 @@
+name: Render engine regression
+
+on:
+  push:
+    branches:
+      - "feat/cinematic-lighting-engine-20261103"
+  pull_request:
+    paths:
+      - "src/**"
+      - "gallery/3d.ts"
+      - "tests/**"
+      - "package.json"
+      - ".github/workflows/render-engine.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:3d
