@@ -27,7 +27,7 @@
 <body>
 <main>
   <div class="top">
-    <div><div class="title">POKU / PIXEL FX / 3D</div><div class="sub">DETERMINISTIC · WORLD SPACE · ORDERED DITHER · TWO-BUFFER LIGHT</div></div>
+    <div><div class="title">POKU / PIXEL FX / 3D</div><div class="sub">DETERMINISTIC · WORLD SPACE · PIXEL-CRISP HDR · MULTISCALE BLOOM</div></div>
     <a class="back" href="index.html">← 2D GALLERY</a>
   </div>
   <div class="screen" id="screen">
@@ -42,11 +42,11 @@
     <button id="seed" type="button">NEW SEED</button>
     <label>PIXEL <input type="range" id="pixel" min="2" max="7" value="3"><span id="pxText">3×</span></label>
     <label>CAMERA <input type="range" id="elevation" min="10" max="75" value="28"><span id="elText">28°</span></label>
-    <label>GLOW <input type="checkbox" id="glow" checked></label>
+    <label>CINEMATIC <input type="checkbox" id="glow" checked></label>
     <button id="save" type="button">PNG ↓</button>
     <span class="seed" id="seedText">SEED 4318</span><span class="readout" id="readout">0.00 / 7.00 s</span>
   </div>
-  <div class="notes"><span id="status">3D Pixel Black Hole</span><span>Zero runtime dependencies · Pure TypeScript · CPU pixel renderer</span></div>
+  <div class="notes"><span id="status">3D Pixel Black Hole</span><span>HDR light rig · ACES filmic tone map · depth-aware SSAO · CPU pixel renderer</span></div>
 </main>
 <script type="module" src="3d.js"></script>
 </body>
