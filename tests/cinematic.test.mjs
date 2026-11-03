@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createFrame, CinematicCompositor } from "../build/index.js";
+import { createFrame, clearFrame, painterFor, CinematicCompositor, enableHDRLight } from "../build/index.js";
 import {
   createFrame3D, Painter3D, CinematicLighting3D, color3D,
 } from "../build/3d/index.js";
@@ -114,4 +114,38 @@ test("invalid HDR/occlusion output sizes fail before rendering", () => {
   assert.throws(() => film.render(frame, new Uint8ClampedArray(10)), RangeError);
   assert.throws(() => film.render(frame, new Uint8ClampedArray(64), { radiance: new Float32Array(2) }), RangeError);
   assert.throws(() => film.render(frame, new Uint8ClampedArray(64), { occlusion: new Float32Array(2) }), RangeError);
+});
+
+
+test("existing 2D painter emission can accumulate above the 8-bit ceiling", () => {
+  const frame = enableHDRLight(createFrame(9, 9));
+  const p = painterFor(frame);
+  p.add(4, 4, color3D("#ffffff"), 1.4);
+  p.add(4, 4, color3D("#ffffff"), 1.4);
+  const i = 4 * frame.w + 4;
+  assert.equal(frame.light[i] & 255, 255, "legacy 8-bit mirror saturates as before");
+  assert.ok(frame.hdrLight[i * 3] > 2.7, "HDR buffer retains energy beyond 1");
+  const film = new CinematicCompositor();
+  const hdr = film.render(frame, new Uint8ClampedArray(frame.w * frame.h * 4), {
+    bloom: { threshold: 0.1, intensity: 1.5 }, exposure: 0.55,
+  });
+  const classic = film.render({ ...frame, hdrLight: undefined }, new Uint8ClampedArray(hdr.length), {
+    bloom: { threshold: 0.1, intensity: 1.5 }, exposure: 0.55,
+  });
+  assert.ok(sum(pixel(hdr, 9, 4, 4)) >= sum(pixel(classic, 9, 4, 4)));
+  clearFrame(frame);
+  assert.ok(frame.hdrLight.every(v => v === 0), "HDR light is reset with the frame");
+});
+
+test("3D horizon occludes native HDR energy and begin resets the optional buffer", () => {
+  const frame = enableHDRLight(createFrame3D(72, 54));
+  const p = new Painter3D(frame);
+  p.begin("#080b11");
+  p.point([0, 0, 0], 0.8, "#c5d7ff", 1, 2.8);
+  const center = p.project([0, 0, 0]), i = Math.floor(center.y) * frame.w + Math.floor(center.x);
+  assert.ok(frame.hdrLight[i * 3] > 0);
+  p.sphere([0, 0, 0], 1.2, "#050508");
+  assert.equal(frame.hdrLight[i * 3], 0, "opaque sphere suppresses hidden radiance");
+  p.begin();
+  assert.ok(frame.hdrLight.every(v => v === 0));
 });
