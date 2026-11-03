@@ -41,10 +41,12 @@ export class Particles3D {
   }
   clear() { this.list.length = 0; }
   update(dt: number) {
-    for (let i = this.list.length - 1; i >= 0; i--) {
-      const p = this.list[i];
+    // O(n) stable in-place compaction avoids splice shifts and preserves draw order.
+    let write = 0;
+    for (let read = 0; read < this.list.length; read++) {
+      const p = this.list[read];
       p.life -= dt;
-      if (p.life <= 0) { this.list.splice(i, 1); continue; }
+      if (p.life <= 0) continue;
       const damping = Math.exp(-p.drag * dt);
       p.vx *= damping; p.vz *= damping; p.vy = (p.vy - p.gravity * dt) * damping;
       p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
@@ -54,7 +56,9 @@ export class Particles3D {
         p.vx *= 0.65; p.vz *= 0.65;
         if (Math.abs(p.vy) < 0.08) p.vy = 0;
       }
+      this.list[write++] = p;
     }
+    this.list.length = write;
   }
   draw(painter: Painter3D) {
     for (const p of this.list) {

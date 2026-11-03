@@ -5,6 +5,8 @@ export interface Frame3D {
   h: number;
   color: Uint32Array;
   light: Uint32Array;
+  /** Optional unclamped linear RGB emission for cinematic output. */
+  hdrLight?: Float32Array;
   /** Camera depth; larger means nearer. */
   depth: Float32Array;
 }
@@ -24,6 +26,7 @@ export function createFrame3D(w: number, h: number): Frame3D {
 export function clearFrame3D(frame: Frame3D, background: Color3D = "#0a1424"): Frame3D {
   frame.color.fill(color3D(background));
   frame.light.fill(0);
+  frame.hdrLight?.fill(0);
   frame.depth.fill(-Infinity);
   return frame;
 }

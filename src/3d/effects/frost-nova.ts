@@ -38,6 +38,7 @@ const RELEASE = 0.46, SPREAD = 0.79, HOLD = 2.5;
 export function create(options: FrostNova3DOptions) {
   const rng = new Rng3D(options.seed), reach = Math.max(0.5, options.reach), intensity = Math.max(0.1, options.intensity);
   const palette = options.palette;
+  const crystalPalette = palette.slice(2), burstPalette = palette.slice(5);
   const sites: Site[] = [], particles = new Particles3D(0, 2000);
   for (let ring = 0; ring < 3; ring++) {
     const count = [12, 20, 28][ring];
@@ -80,7 +81,7 @@ export function create(options: FrostNova3DOptions) {
             position: [site.x, 0.04, site.z],
             velocity: [Math.cos(angle) * speed, rng.range(1, 5.5), Math.sin(angle) * speed],
             life: rng.range(0.6, 1.2), radius: rng.range(0.03, 0.085), gravity: 7.5,
-            bounce: 0.28, drag: 0.28, color: rng.pick(palette.slice(5)), emission: 0.1,
+            bounce: 0.28, drag: 0.28, color: rng.pick(burstPalette), emission: 0.1,
             style: rng.chance(0.6) ? "shard" : "point",
           });
         }
@@ -126,7 +127,7 @@ export function create(options: FrostNova3DOptions) {
         const melt = 1 - smooth3(HOLD, 3.72, t);
         if (growth <= 0 || melt <= 0) continue;
         const h = site.h * growth * melt, width = site.width * (0.85 + growth * 0.15) * (1 - 0.45 * (1 - melt));
-        p.crystal([site.x, 0.02, site.z], h, width, site.angle + site.phase * 0.2, site.tilt * growth * melt, palette.slice(2));
+        p.crystal([site.x, 0.02, site.z], h, width, site.angle + site.phase * 0.2, site.tilt * growth * melt, crystalPalette);
         if (site.h > 1.5 && melt > 0.3) {
           const side: Vec3 = [site.x + Math.sin(site.angle) * 0.28, h * 0.6, site.z + Math.cos(site.angle) * 0.28];
           p.line([site.x, h * 0.3, site.z], side, 0.045, palette[6], melt * 0.8, 0.07);

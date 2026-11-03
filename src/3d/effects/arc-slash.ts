@@ -22,6 +22,7 @@ export const meta: EffectMeta3D<ArcSlash3DOptions> = {
 const START = -2.55, SPAN = 3.4;
 export function create(options: ArcSlash3DOptions) {
   const rng = new Rng3D(options.seed), ps = new Particles3D(0, 400), colors = options.palette;
+  const sparkColors = colors.slice(3);
   let t = 0, impact = false;
   const arc = (theta: number, radius: number, layer = 0): Vec3 => {
     const x = 0.4 + Math.cos(theta) * radius;
@@ -42,7 +43,7 @@ export function create(options: ArcSlash3DOptions) {
             position: [head[0] + rng.range(-0.2, 0.2), head[1] + rng.range(-0.3, 0.3), head[2]],
             velocity: [Math.cos(theta) * power, rng.range(-0.8, 3.4), Math.sin(theta) * power],
             life: rng.range(0.14, 0.6), radius: rng.range(0.03, 0.095), gravity: 5, drag: 0.9,
-            color: rng.pick(colors.slice(3)), style: "spark", emission: 0.3,
+            color: rng.pick(sparkColors), style: "spark", emission: 0.3,
           });
         }
       }

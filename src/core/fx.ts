@@ -41,6 +41,7 @@ export function createFrame(w: number, h: number, ox = 0, oy = 0): PaintFrame {
 export function clearFrame(f: PaintFrame) {
   f.color.fill(0);
   f.light.fill(0);
+  f.hdrLight?.fill(0);
   return f;
 }
 
@@ -91,6 +92,8 @@ export function createFx<O extends EffectOptions>(mod: EffectModule<O>, o: Effec
       return t;
     },
     update(dt: number) {
+      if (!Number.isFinite(dt) || dt < 0) throw new RangeError("dt must be finite and non-negative");
+      if (dt === 0) return;
       t += dt;
       if (!impl.update) return;
       // simulations step at 120 Hz or finer whatever the caller's frame rate, so they look the same everywhere
@@ -136,7 +139,6 @@ export function composite<T extends Uint8Array | Uint8ClampedArray>(f: PaintFram
     if (ca === 255) {
       r = c & 255; g = (c >>> 8) & 255; b = (c >>> 16) & 255; a = 255;
     } else if (bg === null) {
-      // translucent color over nothing keeps its alpha
       r = c & 255; g = (c >>> 8) & 255; b = (c >>> 16) & 255; a = ca;
     } else {
       const k = flat ? bg : bg[i], f = ca / 255;
@@ -146,7 +148,6 @@ export function composite<T extends Uint8Array | Uint8ClampedArray>(f: PaintFram
     if (l) {
       const lr = (l & 255) * lightK, lg = ((l >>> 8) & 255) * lightK, lb = ((l >>> 16) & 255) * lightK;
       if (a < 255) {
-        // over transparency: premultiply what's there, add the light, divide by the new alpha
         const pa = a / 255, pr = r * pa + lr, pg = g * pa + lg, pb = b * pa + lb;
         const na = Math.min(1, Math.max(pa, Math.max(lr, lg, lb) / 255));
         if (na > 0) { r = Math.min(255, pr / na); g = Math.min(255, pg / na); b = Math.min(255, pb / na); a = na * 255; }
