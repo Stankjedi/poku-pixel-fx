@@ -41,7 +41,9 @@ export function mote(p: Painter, x: number, y: number, vx: number, vy: number, c
 /** Energy rushing in, drawn like the sim's STREAK: a white tip, a colored body, a dim dotted tail. */
 export function streak(p: Painter, x: number, y: number, vx: number, vy: number, c: number, a = 1, maxLen = 7, glow = 0.4) {
   const sp = Math.hypot(vx, vy) || 1, ux = vx / sp, uy = vy / sp, L = clamp(sp / 30, 1, maxLen);
-  for (let d = L; d >= 0; d -= 0.5) p.dot(x - ux * d, y - uy * d, d < 1 ? WHITE : d < L * 0.5 ? c : scale(c, 0.6), (d < L * 0.5 ? 1 : 1.2 - d / L) * a);
+  // Only the intentionally sparse tail is stippled; the luminous head stays connected while fading.
+  for (let d = L; d > L * 0.5; d -= 0.5) p.dither(x - ux * d, y - uy * d, d < 1 ? WHITE : scale(c, 0.6), (1.2 - d / L) * a);
+  p.path([[x - ux * L * 0.5, y - uy * L * 0.5], [x, y]], (u) => (1 - u) * L * 0.5 < 1 ? WHITE : c, a);
   if (glow > 0) p.glow(x, y, 4, c, glow * a);
 }
 
@@ -62,23 +64,21 @@ export function arc(r: RandomSource, x0: number, y0: number, x1: number, y1: num
 }
 
 /**
- * Draw arc paths the way Sprite Fusion draws its bolts: a dithered halo while it's fresh, a body beside the
- * core, a white core, light along the path. cols: { core, body, halo, glow }; k: 1 fresh .. 0 gone.
+ * Draw the original jagged arc geometry with a halo while fresh, a pale body, a white core and light
+ * along the path. Each band's pixels are resolved once, avoiding opacity spikes at sampled joins.
+ * cols: { core, body, halo, glow }; k: 1 fresh .. 0 gone.
  */
 export function drawArc(p: Painter, paths: ArcPath[], cols: { core: number; body: number; halo: number; glow: number }, k = 1, glowK = 0.5) {
-  const steps = (fn: (x: number, y: number, path: ArcPath, i: number, first: boolean) => void) => {
-    for (const path of paths)
-      for (let i = 0; i < path.pts.length - 1; i++) {
-        const [ax, ay] = path.pts[i], [bx, by] = path.pts[i + 1], l = Math.max(1, Math.hypot(bx - ax, by - ay));
-        for (let d = 0; d <= l; d += 0.5) fn(ax + ((bx - ax) * d) / l, ay + ((by - ay) * d) / l, path, i, d === 0);
-      }
-  };
-  if (k > 0.45) steps((x, y, path) => { if (path.w >= 1) for (const [dx, dy] of CROSS) p.dot(x + dx * 1.5, y + dy * 1.5, cols.halo, (k - 0.45) * 1.6); });
-  if (k > 0.25) steps((x, y, path) => { if (path.w > 0.4) (p.dot(x + 1, y, cols.body), p.dot(x, y + 1, cols.body)); });
-  steps((x, y, path, i, first) => {
-    p.px(x, y, path.w >= 1 && k > 0.3 ? cols.core : cols.body);
-    if (first && i % 3 === 0) p.glow(x, y, (path.w >= 1 ? 9 : 5) * (0.5 + k * 0.5), cols.glow, glowK * k * path.w);
-  });
+  for (const path of paths) {
+    const trunk = path.w >= 1, halo = trunk && k > 0.45, body = path.w > 0.4 && k > 0.25;
+    const radius = halo ? 2.1 : body ? 1.3 : 0.5, core = trunk && k > 0.3 ? cols.core : cols.body;
+    p.path(path.pts, (_u, v) => v * radius <= 0.75 ? core : v * radius <= 1.3 ? cols.body : cols.halo,
+      (_u, v) => v * radius <= 1.3 ? 1 : (k - 0.45) * 1.6, radius * 2);
+    for (let i = 0; i < path.pts.length - 1; i += 3) {
+      const [x, y] = path.pts[i];
+      p.glow(x, y, (trunk ? 9 : 5) * (0.5 + k * 0.5), cols.glow, glowK * k * path.w);
+    }
+  }
 }
 
 /**

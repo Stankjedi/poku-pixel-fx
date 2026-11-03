@@ -145,7 +145,9 @@ const CROSS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
 /** A bolt's trunk as a 1 px line in one color (leaders, afterimages, cooling channels). */
 export function trace(p: Painter, pts: Point[], c: number, a = 1, from = 0, to = pts.length - 1) {
-  for (let i = Math.max(0, from); i < Math.min(to, pts.length - 1); i++) p.line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], c, a);
+  const start = Math.max(0, Math.floor(from)), end = Math.min(pts.length - 1, Math.ceil(to));
+  if (end <= start) return;
+  p.path(pts.slice(start, end + 1).map(([x, y]): [number, number] => [x, y]), c, a);
 }
 
 /**

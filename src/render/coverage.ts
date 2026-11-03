@@ -6,6 +6,10 @@ export function blendOver(destination: number, source: number, opacity: number):
   const alpha = Math.min(1, Math.max(0, opacity)) * (source >>> 24) / 255;
   if (!(alpha > 0)) return destination;
   if (alpha >= 1) return source >>> 0;
+  if ((destination >>> 24) === 0) {
+    const byteAlpha = Math.round(alpha * 255);
+    return byteAlpha ? ((byteAlpha << 24) | (source & 0xffffff)) >>> 0 : 0;
+  }
   const behind = (destination >>> 24) / 255 * (1 - alpha);
   const outAlpha = alpha + behind;
   const r = Math.round(((source & 255) * alpha + (destination & 255) * behind) / outAlpha);

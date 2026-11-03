@@ -7,7 +7,7 @@ import type { Rng } from "../../core/math.js";
 // feathers of light (drawn, and simulated as they rock and sink) and plus signs.
 // Files starting with _ are helpers, not effects.
 
-import { WHITE, TAU, clamp, smooth, luma } from "../../core/index.js";
+import { WHITE, TAU, clamp, smooth, luma, pathLengths } from "../../core/index.js";
 
 /** Holy gold, dark to bright: a plum shadow, rust, amber, gold, pale gold, cream, white. */
 export const GOLD = ["#3b1d2a", "#7a3a2c", "#c4652e", "#f0a040", "#ffd25e", "#fff0a0", "#fffbe0", "#ffffff"];
@@ -69,12 +69,22 @@ export const toneOf = (R: number[], c: number, lift = 0) => R[clamp(Math.floor((
  */
 export function oval(p: Painter, cx: number, cy: number, rx: number, ry: number, c: number | ((g: number) => number), a: number | ((g: number) => number) = 1, keep: ((g: number) => boolean) | null = null) {
   if (rx < 0.5) return;
-  const n = Math.ceil(Math.max(rx, ry) * TAU * 1.5) + 6, fc = typeof c === "function", fa = typeof a === "function";
-  for (let j = 0; j < n; j++) {
-    const g = (j / n) * TAU;
-    if (keep && !keep(g)) continue;
-    p.dot(cx + Math.cos(g) * rx, cy + Math.sin(g) * ry, fc ? c(g) : c, fa ? a(g) : a);
-  }
+  // Chord error stays below 0.2 logical pixels without repeatedly blending dense dot samples.
+  const n = Math.max(12, Math.ceil(TAU * Math.sqrt(Math.max(rx, Math.abs(ry)) / 1.6)));
+  const points: Point[] = Array.from({ length: n }, (_, j) => [cx + Math.cos(j / n * TAU) * rx, cy + Math.sin(j / n * TAU) * ry]);
+  points.push(points[0]);
+  const lengths = pathLengths(points), total = lengths[n], fc = typeof c === "function", fa = typeof a === "function";
+  const angleAt = (u: number) => {
+    const distance = u * total;
+    let lo = 0, hi = n;
+    while (hi - lo > 1) { const mid = (lo + hi) >>> 1; if (lengths[mid] <= distance) lo = mid; else hi = mid; }
+    const fraction = (distance - lengths[lo]) / (lengths[hi] - lengths[lo] || 1);
+    return ((lo + fraction) / n * TAU) % TAU;
+  };
+  p.path(points, fc ? (u) => c(angleAt(u)) : c, (u) => {
+    const angle = angleAt(u);
+    return keep && !keep(angle) ? 0 : fa ? a(angle) : a;
+  });
 }
 export const FAR = (g: number) => Math.sin(g) < 0;
 export const NEAR = (g: number) => Math.sin(g) >= 0;

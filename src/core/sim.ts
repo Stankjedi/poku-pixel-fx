@@ -5,6 +5,8 @@
 // so effects stay in local space and mirror or rotate like any other.
 
 import { Rng, clamp, TAU } from "./math.js";
+import { integrateMotion2D } from "./particles.js";
+import type { Painter } from "./painter.js";
 import { hex, scale, mix, rgb, WHITE } from "./color.js";
 
 type Color = string | number;
@@ -75,95 +77,82 @@ export class Particles {
   get count() {
     return this.list.length;
   }
-  update(dt: number) {
-    this.t += dt;
+  update(elapsed: number) {
+    if (elapsed === 0) return;
+    this.t += elapsed;
     const R = this.R, t = this.t;
+    // Keep reverse update/RNG order. New smoke and flame children are appended and begin next step.
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i];
+      let dt = elapsed;
       if (p.delay > 0) {
-        p.delay -= dt;
-        continue;
+        if (p.delay >= dt) { p.delay -= dt; continue; }
+        dt -= p.delay;
+        p.delay = 0;
       }
       if ((p.life -= dt) <= 0) {
         if (p.k === P.FIRE && p.flag & PF.SMOKES) {
           const big = p.flag & PF.BIG;
           this.spawn(P.SMOKE, p.x, p.y, p.vx * 0.6, p.vy * 0.6 - 6, big ? R.range(1.3, 2.3) : R.range(0.8, 1.4), 0, p.size * (big ? 0.85 : 0.7), 0, big ? PF.BIG : 0);
         }
-        this.list.splice(i, 1);
         continue;
       }
       switch (p.k) {
         case P.FIRE:
-          p.vy -= 95 * dt;
-          p.vx += Math.sin(t * 17 + p.seed) * 30 * dt;
-          p.vx -= p.vx * 5 * dt;
-          p.vy -= p.vy * 3.2 * dt;
+          integrateMotion2D(p, dt, Math.sin(t * 17 + p.seed) * 30, -95, 5, 3.2);
           break;
         case P.GRIT: {
-          p.vy += GRAVITY * dt;
-          p.vx -= p.vx * 0.8 * dt;
-          const g = this.ground(p.x), ny = p.y + p.vy * dt;
-          p.x += p.vx * dt;
-          if (p.vy > 0 && p.y <= g && ny >= g) {
+          const g = this.ground(p.x), y0 = p.y;
+          integrateMotion2D(p, dt, 0, GRAVITY, 0.8, 0);
+          if (p.vy > 0 && y0 <= g && p.y >= g) {
             p.y = g - 0.25;
             if (p.vy > 130 && R.chance(0.4)) (p.vy = -p.vy * 0.25), (p.vx = p.vx * 0.5 + R.range(-10, 10));
             else (p.vx = p.vy = 0), (p.life = Math.min(p.life, 0.5));
-          } else p.y = ny;
-          continue;
+          }
+          break;
         }
         case P.BRAND: {
-          // a burning chunk: arcs, trails flame, and starts a little fire where it lands
-          p.vy += GRAVITY * 0.8 * dt;
-          p.vx -= p.vx * 0.9 * dt;
-          if (R.chance(0.9 * Math.min(1, dt * 60))) this.spawn(P.FIRE, p.x, p.y, p.vx * 0.1 + R.range(-7, 7), p.vy * 0.1 - 10, R.range(0.16, 0.32), 0, R.range(0.9, 1.7) * (0.5 + (p.life / p.max) * 0.6), 0, R.chance(0.4) ? PF.SMOKES : 0);
-          const g = this.ground(p.x), ny = p.y + p.vy * dt;
-          p.x += p.vx * dt;
-          if (p.vy > 0 && p.y <= g && ny >= g) {
+          const x0 = p.x, y0 = p.y, g = this.ground(x0);
+          integrateMotion2D(p, dt, 0, GRAVITY * 0.8, 0.9, 0);
+          if (R.chance(0.9 * Math.min(1, dt * 60))) this.spawn(P.FIRE, x0, y0, p.vx * 0.1 + R.range(-7, 7), p.vy * 0.1 - 10, R.range(0.16, 0.32), 0, R.range(0.9, 1.7) * (0.5 + (p.life / p.max) * 0.6), 0, R.chance(0.4) ? PF.SMOKES : 0);
+          if (p.vy > 0 && y0 <= g && p.y >= g) {
             this.onLand?.(p.x, g);
-            this.list.splice(i, 1);
-          } else p.y = ny;
-          continue;
+            p.life = 0;
+          }
+          break;
         }
         case P.SPARK: {
-          p.vy += GRAVITY * 0.45 * dt;
-          p.vx -= p.vx * 2.2 * dt;
-          p.vy -= p.vy * 2.2 * dt;
-          const g = this.ground(p.x), ny = p.y + p.vy * dt;
-          p.x += p.vx * dt;
-          if (p.vy > 0 && p.y <= g && ny >= g) (p.vy = -p.vy * 0.45), (p.vx *= 0.7), (p.y = g - 0.25);
-          else p.y = ny;
-          continue;
+          const g = this.ground(p.x), y0 = p.y;
+          integrateMotion2D(p, dt, 0, GRAVITY * 0.45, 2.2);
+          if (p.vy > 0 && y0 <= g && p.y >= g) (p.vy = -p.vy * 0.45), (p.vx *= 0.7), (p.y = g - 0.25);
+          break;
         }
-        case P.STREAK: (p.vx += p.vx * 3 * dt), (p.vy += p.vy * 3 * dt); break;
+        case P.STREAK:
+          integrateMotion2D(p, dt, 0, 0, -3);
+          break;
         case P.FLAKE:
-          p.vx -= p.vx * 2.2 * dt;
-          p.vy -= p.vy * 2.2 * dt - 35 * dt;
-          p.x += Math.sin(this.t * 2.5 + p.seed) * 7 * dt;
+          integrateMotion2D(p, dt, 0, 35, 2.2);
+          p.x += Math.sin(t * 2.5 + p.seed) * 7 * dt;
           break;
         case P.EMBER:
-          p.vy += (-30 + Math.sin(t * 3 + p.seed) * 20) * dt;
-          p.vx += Math.cos(t * 2.3 + p.seed) * 45 * dt;
-          p.vx -= p.vx * 1.6 * dt;
-          p.vy -= p.vy * 1.6 * dt;
+          integrateMotion2D(p, dt, Math.cos(t * 2.3 + p.seed) * 45, -30 + Math.sin(t * 3 + p.seed) * 20, 1.6);
           break;
         case P.SMOKE: {
           const big = p.flag & PF.BIG;
-          p.vy -= (big ? 23 : 16) * dt;
-          p.vx += Math.sin(t * 1.3 + p.seed) * 8 * dt;
-          p.vx -= p.vx * 1.6 * dt;
-          p.vy -= p.vy * 1.2 * dt;
+          integrateMotion2D(p, dt, Math.sin(t * 1.3 + p.seed) * 8, big ? -23 : -16, 1.6, 1.2);
           break;
         }
-        case P.MOTE: p.vx -= p.vx * 0.6 * dt; p.vy -= p.vy * 0.6 * dt; break;
-        default: {
-          const drag = SOFT.has(p.k) ? 4 : 1.6;
-          p.vx -= p.vx * drag * dt;
-          p.vy -= p.vy * drag * dt + 5 * dt;
-        }
+        case P.MOTE:
+          integrateMotion2D(p, dt, 0, 0, 0.6);
+          break;
+        default:
+          integrateMotion2D(p, dt, 0, -5, SOFT.has(p.k) ? 4 : 1.6);
       }
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
     }
+    // One stable pass, including newly appended children, avoids quadratic splice shifts.
+    let write = 0;
+    for (const p of this.list) if (p.life > 0) this.list[write++] = p;
+    this.list.length = write;
   }
   draw(p: SimPainter, layer?: Layer) {
     for (const q of this.list) {
@@ -329,16 +318,8 @@ export class Bits<Extra extends object = object> {
   update(dt: number) {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const b = this.list[i];
-      if ((b.life -= dt) <= 0) {
-        this.list.splice(i, 1);
-        continue;
-      }
-      if (b.rest) continue;
-      b.vy += GRAVITY * b.g * dt;
-      b.vx -= b.vx * b.drag * dt;
-      b.vy -= b.vy * b.drag * dt;
-      b.x += b.vx * dt;
-      b.y += b.vy * dt;
+      if ((b.life -= dt) <= 0 || b.rest) continue;
+      integrateMotion2D(b, dt, 0, GRAVITY * b.g, b.drag);
       b.a += b.va * dt;
       const floor = this.ground(b.x), sp = b.vy;
       if (b.g <= 0 || b.y < floor || sp <= 0) continue;
@@ -347,6 +328,9 @@ export class Bits<Extra extends object = object> {
       else if (b.bounce > 0 && sp > 70) (b.vy = -sp * b.bounce), (b.vx *= 0.7), (b.va *= 0.6);
       else (b.rest = true), (b.vx = b.vy = 0);
     }
+    let write = 0;
+    for (const b of this.list) if (b.life > 0) this.list[write++] = b;
+    this.list.length = write;
   }
   draw(p: SimPainter) {
     for (const b of this.list) {
@@ -425,17 +409,25 @@ export function flare(p: SimPainter, x: number, y: number, L: number, k: number,
  * colored by depth through the band with ramp (dark to bright). keep(angle) picks which part to draw, so the
  * far half can go behind things and the near half in front: (g) => Math.sin(g) < 0 is the far half.
  */
-export function band(p: SimPainter, cx: number, cy: number, r: number, sy: number, th: number, k: number, ramp: Color[], keep: (angle: number) => boolean = () => true, hot = false) {
-  if (r <= 0 || k <= 0) return;
-  const R = ramp.map(hex), n = R.length;
-  for (let j = 0, m = Math.ceil(r * TAU * 1.2); j < m; j++) {
-    const ang = (j / m) * TAU, ca = Math.cos(ang), sa = Math.sin(ang);
-    if (!keep(ang)) continue;
-    for (let o = th; o >= 0; o -= 0.5) {
-      const u = o / th, c = u < 0.15 ? (hot ? WHITE : R[n - 1]) : u < 0.4 ? R[n - 2] : u < 0.7 ? R[n - 3] : R[n - 4];
-      p.dot(cx + ca * (r - o), cy + sa * (r - o) * sy, c, k * (u < 0.4 ? 1.2 : 1.15 - u));
-    }
-  }
+export function band(p: Pick<Painter, "shade">, cx: number, cy: number, r: number, sy: number, th: number, k: number, ramp: Color[], keep: (angle: number) => boolean = () => true, hot = false) {
+  if (r <= 0 || k <= 0 || th <= 0) return;
+  const R = ramp.map(hex), n = R.length, inner = Math.max(0, r - th), middle = (r + inner) * 0.5;
+  // A plane seen exactly edge-on still owns a one-pixel row. Other shapes keep their authored squash.
+  const squash = sy === 0 ? 0.5 / r : sy, height = r * Math.abs(squash);
+  p.shade(cx - r - 1, cy - height - 1, cx + r + 1, cy + height + 1, (x, y, out) => {
+    const dx = x - cx, dy = (y - cy) / squash, radius = Math.hypot(dx, dy);
+    // Convert radial distance to screen-normal distance. A subpixel-width band must still own
+    // contiguous pixel cells, including steep/rotated arcs; it is not a cloud of repeated dots.
+    const gradient = radius > 0 ? Math.hypot(dx, dy / squash) / radius : 1;
+    const halfWidth = Math.max((r - inner) * 0.5, Math.SQRT1_2 * gradient);
+    if (Math.abs(radius - middle) > halfWidth) return;
+    let angle = Math.atan2(dy, dx);
+    if (angle < 0) angle += TAU;
+    if (!keep(angle)) return;
+    const u = clamp((r - radius) / th);
+    out.c = u < 0.15 ? (hot ? WHITE : R[n - 1]) : u < 0.4 ? R[n - 2] : u < 0.7 ? R[n - 3] : R[n - 4];
+    out.a = k * (u < 0.4 ? 1.2 : 1.15 - u);
+  });
 }
 
 /**

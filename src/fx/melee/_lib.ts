@@ -79,7 +79,7 @@ export function trace(p: Painter, s: Swing, r: number, u0: number, u1: number, c
     const g = s.a0 + s.dir * u;
     if (half && (Math.sin(g) < 0 ? -1 : 1) !== half) continue;
     const [x, y] = onSwing(s, r, u), k = typeof a === "function" ? a(u) : a;
-    if (k > 0) p.dot(x, y, typeof c === "function" ? c(u) : c, k);
+    if (k > 0) p.dither(x, y, typeof c === "function" ? c(u) : c, k);
   }
 }
 
@@ -196,13 +196,17 @@ export function star(p: Painter, x: number, y: number, spikes: Spike[], sc: numb
   p.circle(x, y, r, core);
 }
 
-/** A thin arc flying out from (x, y): a sliver at radius r around angle a, arc radians long, dithered by k. */
+/** A thin arc flying out from (x, y): a connected sliver at radius r around angle a, faded by k. */
 export function sliver(p: Painter, x: number, y: number, a: number, r: number, arc: number, c: number, k: number) {
-  const n = Math.ceil(r * arc * 2.2);
+  if (r <= 0 || arc <= 0 || k <= 0) return;
+  const n = Math.max(2, Math.ceil(arc * Math.sqrt(r / 1.6)));
+  const points: [number, number][] = [];
   for (let j = 0; j <= n; j++) {
-    const u = j / n - 0.5, th = a + u * arc, w = 1.4 * (1 - Math.abs(u) * 2);
-    for (let o = -w * 0.5; o <= w * 0.5 + 0.01; o += 0.5) p.dot(x + Math.cos(th) * (r + o), y + Math.sin(th) * (r + o), c, k);
+    const th = a + (j / n - 0.5) * arc;
+    points.push([x + Math.cos(th) * r, y + Math.sin(th) * r]);
   }
+  // Coverage tapers the subpixel tip; the connected path keeps its middle continuous while moving.
+  p.path(points, c, (u, v) => k * clamp((1 - Math.abs(2 * u - 1) - v) * 2 + 0.5), 1.4);
 }
 
 /** Part of a polyline: the first `len` px of it. Calls fn(x0, y0, x1, y1, d) for each piece (d: distance along). */
