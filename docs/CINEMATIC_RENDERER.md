@@ -120,6 +120,9 @@ Set bloom: false and toneMap: "none" with exposure/saturation/contrast=1, vignet
 npm ci
 npm run build
 npm run test:3d
+# Render the same frost-nova effect with and without the optional film finish
+node build-tools/tools/render-3d.mjs frost --frames 12 --out records/3d/frost-legacy.png
+node build-tools/tools/render-3d.mjs frost --frames 12 --cinematic true --out records/3d/frost-cinematic.png
 ~~~
 
 The cinematic regression suite checks byte roundtrip (when post-effects disabled), deterministic render, transparent bloom alpha, HDR radiance, unchanged input buffers, 3D point lighting, frame allocations and occlusion safety. Automated test success must be confirmed on the target CI or local runtime.
