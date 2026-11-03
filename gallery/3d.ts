@@ -1,4 +1,4 @@
-import { createFrame3D, compositeFrame3D, Painter3D, createFx3D, type Camera3D, type FxInstance3D } from "../src/3d/index.js";
+import { createFrame3D, compositeFrame3D, Painter3D, createFx3D, CinematicCompositor, CinematicLighting3D, type PointLight3D, type Camera3D, type FxInstance3D } from "../src/3d/index.js";
 import * as frost from "../src/3d/effects/frost-nova.js";
 import * as slash from "../src/3d/effects/arc-slash.js";
 import * as blackhole from "../src/3d/effects/black-hole.js";
@@ -22,6 +22,25 @@ let frame = createFrame3D(16, 16), painter = new Painter3D(frame), image = offCt
 let pixel = 3, yaw = 0.68, elevation = 28 * Math.PI / 180, zoom = 1, glow = true;
 let dragging = false, prevX = 0, prevY = 0;
 let seed = blackhole.meta.options.seed;
+
+// Engine-level cinematic finish. The effect modules and their palettes remain untouched.
+const cinematic = new CinematicCompositor();
+const worldLights = new CinematicLighting3D();
+const rigs: Record<keyof typeof effects, PointLight3D[]> = {
+  blackhole: [
+    { position: [-2.3, 3.3, 1.5], radius: 6.5, color: "#ff874b", intensity: 1.8, specular: 0.5, rim: 0.25 },
+    { position: [2.5, 1.9, -2.2], radius: 5.5, color: "#7b56ff", intensity: 1.35, specular: 0.42, rim: 0.32 },
+  ],
+  frost: [
+    { position: [-2.2, 2.8, 2.0], radius: 7.1, color: "#6fe5ff", intensity: 1.9, specular: 0.55, rim: 0.32 },
+    { position: [2.2, 1.3, -1.8], radius: 6.5, color: "#9d79ff", intensity: 1.05, specular: 0.36 },
+  ],
+  slash: [
+    { position: [-1.2, 3.2, 1.8], radius: 7, color: "#96ccff", intensity: 1.6, specular: 0.6 },
+    { position: [2.6, 2.0, -1.8], radius: 6.4, color: "#eb82ff", intensity: 1.4, specular: 0.42, rim: 0.3 },
+  ],
+};
+
 
 function syncLabels() {
   document.querySelector<HTMLElement>("#pxText")!.textContent = `${pixel}×`;
@@ -61,7 +80,24 @@ function render() {
   painter.setCamera(camera).begin(isBlackHole ? "#05030d" : "#0a1525");
   if (!isBlackHole) painter.grid(8, 1);
   instance.draw(painter);
-  compositeFrame3D(frame, image.data, glow ? 1 : 0);
+  if (glow) {
+    const lighting = worldLights.evaluate(frame, camera, rigs[selected], {
+      ambientOcclusion: { radius: 3, bias: 0.1, intensity: 0.34 },
+    });
+    cinematic.render(frame, image.data, {
+      radiance: lighting.radiance,
+      occlusion: lighting.occlusion,
+      bloom: { threshold: 0.12, knee: 0.2, intensity: 1.1, levels: 4 },
+      toneMap: "aces",
+      exposure: 1.3,
+      saturation: 1.12,
+      contrast: 1.05,
+      vignette: 0.07,
+      chromaticFringe: 0.55,
+    });
+  } else {
+    compositeFrame3D(frame, image.data, 0);
+  }
   offCtx.putImageData(image, 0, 0);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height);
