@@ -6,3 +6,6 @@ export * from "./fx.js";
 export * as frostNova3D from "./effects/frost-nova.js";
 export * as arcSlash3D from "./effects/arc-slash.js";
 export * as blackHole3D from "./effects/black-hole.js";
+export * from "./lighting.js";
+export { CinematicCompositor } from "../render/cinematic.js";
+export type { CinematicFrame, CinematicOptions, BloomOptions } from "../render/cinematic.js";
