@@ -21,10 +21,10 @@ This is a physically **inspired** lighting stack, not a path tracer or physicall
 ## 2D API — all existing effects compatible
 
 ~~~ts
-import { createFrame, createFx, CinematicCompositor } from "poku-pixel-fx";
+import { createFrame, createFx, CinematicCompositor, enableHDRLight } from "poku-pixel-fx";
 import * as spell from "poku-pixel-fx/fx/lightning/lightning-strike"; // illustrative import
 
-const frame = createFrame(224, 128);
+const frame = enableHDRLight(createFrame(224, 128));
 const fx = createFx(spell);
 const finish = new CinematicCompositor(); // reuse this across frames
 const rgba = new Uint8ClampedArray(frame.w * frame.h * 4);
@@ -32,6 +32,7 @@ const rgba = new Uint8ClampedArray(frame.w * frame.h * 4);
 function draw(dt: number) {
   frame.color.fill(0);
   frame.light.fill(0);
+  frame.hdrLight?.fill(0);
   fx.update(dt);
   fx.draw(frame);
   finish.render(frame, rgba, {
@@ -52,10 +53,10 @@ Only the final output is graded. The painter, simulation, deterministic seeds, a
 ~~~ts
 import {
   createFrame3D, Painter3D, createFx3D, frostNova3D,
-  CinematicLighting3D, CinematicCompositor,
+  CinematicLighting3D, CinematicCompositor, enableHDRLight,
 } from "poku-pixel-fx/3d";
 
-const frame = createFrame3D(256, 144);
+const frame = enableHDRLight(createFrame3D(256, 144));
 const camera = { yaw: 0.7, elevation: 0.5, zoom: 1.1 };
 const painter = new Painter3D(frame, camera);
 const spell = createFx3D(frostNova3D, { seed: 42 });
@@ -110,7 +111,7 @@ Set bloom: false and toneMap: "none" with exposure/saturation/contrast=1, vignet
 - CPU software rendering; use small internal pixel dimensions and **nearest-neighbor scale** for presentation. Blur work scales with the total multiresolution pixel count. The processor reuses typed arrays instead of creating per-frame temporary buffers.
 - 3D world-space shading scales with visible geometry pixels × active point lights; SSAO uses eight neighborhood depth probes per geometric pixel.
 - No shadow casting between world objects, temporal reprojection, physically correct BRDF, global illumination, texture normals, GPU instancing, or hardware HDR output. Depth derivative normals can differ from real face normals at narrow silhouettes.
-- The original additive buffers still saturate at 8 bits **before** finishing. New world lights are HDR through the separate float32 radiance buffer; further engine work can migrate core Painter.add() to float accumulation when backward compatibility allows.
+- The original additive buffers still saturate at 8 bits, **but** calling enableHDRLight(frame) makes both 2D Painter.add() and 3D Painter3D.addLight() accumulate their energy in an additional unclamped linear RGB buffer, while continuing to mirror legacy writes. The cinematic renderer chooses the larger emission source per channel so it never counts a mirrored light twice. Custom effects that write directly to frame.light can still participate through the legacy fallback; for custom effects that manually occlude or reproject light, synchronize hdrLight too. The 3D world-light rig uses a separate HDR radiance buffer, summed independently.
 - Avoid chromatic fringe on the original pixel buffer; deliberately blur light only. For large full-screen AAA production workloads, port these established buffers and passes to WebGPU/WebGL with GPU bloom, material/normal targets and physically based lights.
 
 ## Verification
