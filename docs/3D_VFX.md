@@ -12,6 +12,8 @@ npm run gallery
 node build-tools/tools/render-3d.mjs frost --frames 24 --out records/3d/frost.png
 node build-tools/tools/render-3d.mjs slash --frames 24 --out records/3d/slash.png
 node build-tools/tools/render-3d.mjs blackhole --frames 32 --out records/3d/blackhole.png
+# Optional engine-only cinematic light finishing, without editing any effect modules:
+node build-tools/tools/render-3d.mjs frost --frames 24 --cinematic true --out records/3d/frost-cinematic.png
 node tools/render-blackhole-gif.mjs --out records/3d/black-hole-cinematic.gif
 ```
 
