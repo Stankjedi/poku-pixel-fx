@@ -1,16 +1,17 @@
-// The painter draws into a frame's two buffers: `color` (opaque pixels, faded with ordered dither, never
-// blended) and `light` (additive glow, composited on top). Effects draw in local coordinates around their
+// The painter draws into a frame's two buffers: `color` (crisp pixel cells with continuous coverage)
+// and `light` (additive glow, composited on top). Effects draw in local coordinates around their
 // origin; the painter places, mirrors and rotates them, so an effect never needs to know where it is.
 
 import { clamp } from "./math.js";
 import { channelToLinear } from "../render/linear.js";
+import { blendOver, type AlphaMode } from "../render/coverage.js";
 import { hex } from "./color.js";
 import { rasterText, textWidth, FONTS } from "./font.js";
 
 // 4x4 ordered (Bayer) thresholds: a pixel at alpha a is drawn when a is above its cell's threshold.
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
 const OUT = { c: 0, a: 1, l: 0, k: 0 };
-export interface PaintFrame { w: number; h: number; ox: number; oy: number; color: Uint32Array; light: Uint32Array; hdrLight?: Float32Array }
+export interface PaintFrame { w: number; h: number; ox: number; oy: number; color: Uint32Array; light: Uint32Array; hdrLight?: Float32Array; alphaMode?: AlphaMode }
 export type PaintValue = number | ((...args: number[]) => number | null | undefined);
 export type Point = [number, number];
 export interface ShaderOutput { c: number; a: number; l: number; k: number }
@@ -31,6 +32,10 @@ export class Painter {
     this.frame = frame;
     this.reset();
   }
+
+  /** Continuous coverage by default; ordered dither remains available as an authored texture. */
+  get alphaMode(): AlphaMode { return this.frame.alphaMode ?? "coverage"; }
+  set alphaMode(mode: AlphaMode) { this.frame.alphaMode = mode; }
 
   /** Re-read the frame and clear placement, fade and light strength. */
   reset() {
@@ -58,12 +63,16 @@ export class Painter {
 
   // ---- raw writes, screen space, whole pixels. Color 0 means "nothing": it never erases what's there.
   put(sx: number, sy: number, c: number, a = 1) {
-    if (!c) return;
+    if (!c || !(a > 0)) return;
     a *= this.fade;
-    if (a < 1 && a <= BAYER[((sy & 3) << 2) | (sx & 3)]) return;
+    if (!(a > 0)) return;
     const x = sx - this.ox, y = sy - this.oy;
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
-    this.C[y * this.w + x] = c;
+    const i = y * this.w + x;
+    if (this.frame.alphaMode === "dither") {
+      if (a < 1 && a <= BAYER[((sy & 3) << 2) | (sx & 3)]) return;
+      this.C[i] = c;
+    } else this.C[i] = a >= 1 && (c >>> 24) === 255 ? c : blendOver(this.C[i], c, a);
   }
   add(sx: number, sy: number, c: number, k = 1) {
     k *= this.fade * this.lightK;
@@ -86,16 +95,15 @@ export class Painter {
   }
   /**
    * Blend a color over what's there at alpha a (0..1), keeping the result's own alpha: soft smoke, vapour and
-   * mist. Use dithered dot() for hard pixel fades and blend() for translucent volumes.
+   * mist. This always blends, including when the frame explicitly requests artistic dithering.
    */
   blendPx(sx: number, sy: number, c: number, a: number) {
     a *= this.fade;
     if (!c || a <= 0.004) return;
     const x = sx - this.ox, y = sy - this.oy;
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
-    const i = y * this.w + x, d = this.C[i], da = (d >>> 24) / 255, oa = a + da * (1 - a), k = a / oa;
-    const ch = (s: number) => ((((c >>> s) & 255) * k + ((d >>> s) & 255) * (1 - k)) & 255);
-    this.C[i] = (((oa * 255) & 255) << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0);
+    const i = y * this.w + x;
+    this.C[i] = blendOver(this.C[i], c, a);
   }
   /** Translucent pixel at a local point. */
   blend(x: number, y: number, c: number, a: number) { this.blendPx(this.cellX(x, y), this.cellY(x, y), c, a); }
@@ -118,8 +126,15 @@ export class Painter {
   // ---- pixels
   /** One opaque pixel. */
   px(x: number, y: number, c: number) { this.put(this.cellX(x, y), this.cellY(x, y), c, 1); }
-  /** One pixel at alpha a (0..1), faded by ordered dither. */
+  /** One pixel at alpha a (0..1), preserving coverage as it fades. */
   dot(x: number, y: number, c: number, a = 1) { if (a > 0) this.put(this.cellX(x, y), this.cellY(x, y), c, a); }
+  /** Explicit ordered-dither pixel for dissolves, stipple and other authored textures. */
+  dither(x: number, y: number, c: number, a = 1) {
+    const sx = this.cellX(x, y), sy = this.cellY(x, y);
+    if (a * this.fade <= BAYER[((sy & 3) << 2) | (sx & 3)]) return;
+    const px = sx - this.ox, py = sy - this.oy;
+    if (c && px >= 0 && py >= 0 && px < this.w && py < this.h) this.C[py * this.w + px] = c;
+  }
   /** Add light to one pixel. */
   light(x: number, y: number, c: number, k = 1) { this.add(this.cellX(x, y), this.cellY(x, y), c, k); }
 

@@ -664,6 +664,19 @@ var SRGB_TO_LINEAR = Float32Array.from({ length: 256 }, (_, i) => {
 });
 var channelToLinear = (color, offset) => SRGB_TO_LINEAR[color >>> offset & 255];
 
+// src/render/coverage.ts
+function blendOver(destination, source, opacity) {
+  const alpha = Math.min(1, Math.max(0, opacity)) * (source >>> 24) / 255;
+  if (!(alpha > 0)) return destination;
+  if (alpha >= 1) return source >>> 0;
+  const behind = (destination >>> 24) / 255 * (1 - alpha);
+  const outAlpha = alpha + behind;
+  const r = Math.round(((source & 255) * alpha + (destination & 255) * behind) / outAlpha);
+  const g = Math.round(((source >>> 8 & 255) * alpha + (destination >>> 8 & 255) * behind) / outAlpha);
+  const b = Math.round(((source >>> 16 & 255) * alpha + (destination >>> 16 & 255) * behind) / outAlpha);
+  return (Math.round(outAlpha * 255) << 24 | b << 16 | g << 8 | r) >>> 0;
+}
+
 // src/core/font.ts
 var MINI = {
   A: ".#.|#.#|###|#.#|#.#",
@@ -824,6 +837,13 @@ var Painter = class {
     this.frame = frame2;
     this.reset();
   }
+  /** Continuous coverage by default; ordered dither remains available as an authored texture. */
+  get alphaMode() {
+    return this.frame.alphaMode ?? "coverage";
+  }
+  set alphaMode(mode) {
+    this.frame.alphaMode = mode;
+  }
   /** Re-read the frame and clear placement, fade and light strength. */
   reset() {
     const f = this.frame;
@@ -876,12 +896,16 @@ var Painter = class {
   }
   // ---- raw writes, screen space, whole pixels. Color 0 means "nothing": it never erases what's there.
   put(sx, sy, c, a = 1) {
-    if (!c) return;
+    if (!c || !(a > 0)) return;
     a *= this.fade;
-    if (a < 1 && a <= BAYER[(sy & 3) << 2 | sx & 3]) return;
+    if (!(a > 0)) return;
     const x = sx - this.ox, y = sy - this.oy;
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
-    this.C[y * this.w + x] = c;
+    const i = y * this.w + x;
+    if (this.frame.alphaMode === "dither") {
+      if (a < 1 && a <= BAYER[(sy & 3) << 2 | sx & 3]) return;
+      this.C[i] = c;
+    } else this.C[i] = a >= 1 && c >>> 24 === 255 ? c : blendOver(this.C[i], c, a);
   }
   add(sx, sy, c, k = 1) {
     k *= this.fade * this.lightK;
@@ -903,16 +927,15 @@ var Painter = class {
   }
   /**
    * Blend a color over what's there at alpha a (0..1), keeping the result's own alpha: soft smoke, vapour and
-   * mist. Use dithered dot() for hard pixel fades and blend() for translucent volumes.
+   * mist. This always blends, including when the frame explicitly requests artistic dithering.
    */
   blendPx(sx, sy, c, a) {
     a *= this.fade;
     if (!c || a <= 4e-3) return;
     const x = sx - this.ox, y = sy - this.oy;
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
-    const i = y * this.w + x, d = this.C[i], da = (d >>> 24) / 255, oa = a + da * (1 - a), k = a / oa;
-    const ch = (s) => (c >>> s & 255) * k + (d >>> s & 255) * (1 - k) & 255;
-    this.C[i] = (oa * 255 & 255) << 24 | ch(16) << 16 | ch(8) << 8 | ch(0);
+    const i = y * this.w + x;
+    this.C[i] = blendOver(this.C[i], c, a);
   }
   /** Translucent pixel at a local point. */
   blend(x, y, c, a) {
@@ -938,9 +961,16 @@ var Painter = class {
   px(x, y, c) {
     this.put(this.cellX(x, y), this.cellY(x, y), c, 1);
   }
-  /** One pixel at alpha a (0..1), faded by ordered dither. */
+  /** One pixel at alpha a (0..1), preserving coverage as it fades. */
   dot(x, y, c, a = 1) {
     if (a > 0) this.put(this.cellX(x, y), this.cellY(x, y), c, a);
+  }
+  /** Explicit ordered-dither pixel for dissolves, stipple and other authored textures. */
+  dither(x, y, c, a = 1) {
+    const sx = this.cellX(x, y), sy = this.cellY(x, y);
+    if (a * this.fade <= BAYER[(sy & 3) << 2 | sx & 3]) return;
+    const px = sx - this.ox, py = sy - this.oy;
+    if (c && px >= 0 && py >= 0 && px < this.w && py < this.h) this.C[py * this.w + px] = c;
   }
   /** Add light to one pixel. */
   light(x, y, c, k = 1) {
