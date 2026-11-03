@@ -7,6 +7,7 @@
  * It is a screen-space approximation (not shadow mapping or ray tracing).
  */
 import { color3D, type Color3D, type Frame3D } from "./frame.js";
+import { SRGB_TO_LINEAR as LINEAR } from "../render/linear.js";
 import type { Camera3D } from "./painter.js";
 import type { Vec3 } from "./math.js";
 
@@ -36,10 +37,6 @@ export interface LightingResult3D {
   readonly radiance: Float32Array;
   readonly occlusion: Float32Array;
 }
-const LINEAR = Float32Array.from({ length: 256 }, (_, n) => {
-  const c = n / 255;
-  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-});
 const clamp = (x: number) => Math.max(0, Math.min(1, x));
 
 /** Reuses the same buffers across frames to minimize garbage collection. */
