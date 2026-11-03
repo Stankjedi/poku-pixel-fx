@@ -15,6 +15,8 @@ Node.js 18 이상과 로컬 개발 의존성을 준비한 뒤 `npm run build`를
 - `node build-tools/tools/new.mjs fire/my-effect`: 새 TypeScript 이펙트를 만들고 목록에 등록. 다시 빌드한 뒤 사용
 - `node build-tools/tools/check.mjs fire/torch`: 이펙트의 품질 및 동작 검사
 
+**새 선택형 시네마틱 엔진:** 기존 255개 2D 이펙트 및 3D 이펙트 파일을 변경하지 않고, 선형 RGB 기반 HDR 발광 누적, 멀티스케일 블룸, ACES 톤매핑, 월드 좌표 3D 포인트 광원 및 SSAO를 추가했습니다. `enableHDRLight(frame)`로 8비트 포화 없는 발광을 활성화하고, `CinematicCompositor`로 픽셀 경계를 보존하면서 후처리할 수 있습니다. 3D 프리뷰의 **CINEMATIC** 스위치에서 기존 출력과 비교할 수 있습니다. 사용법과 제약은 [시네마틱 렌더링 문서](docs/CINEMATIC_RENDERER.md)를 참고하세요.
+
 GIF·MP4 미리보기에는 로컬 ffmpeg가 필요합니다. 갤러리의 한글은 시스템 글꼴 대체를 사용하며 Poku Pixel 글꼴은 영문·숫자·기본 기호를 제공합니다. 이펙트 식별자와 코드 API, 내보낸 원본 메타데이터는 호환성을 위해 그대로 유지합니다.
 
 
