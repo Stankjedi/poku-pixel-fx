@@ -41,6 +41,7 @@ export function createFrame(w: number, h: number, ox = 0, oy = 0): PaintFrame {
 export function clearFrame(f: PaintFrame) {
   f.color.fill(0);
   f.light.fill(0);
+  f.hdrLight?.fill(0);
   return f;
 }
 
