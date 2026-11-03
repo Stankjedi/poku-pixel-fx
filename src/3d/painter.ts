@@ -1,4 +1,5 @@
 import { type Frame3D, type Color3D, clearFrame3D, color3D } from "./frame.js";
+import { channelToLinear } from "../render/linear.js";
 import { type Vec3, clamp3, cross3, dot3, len3, norm3, sub3, TAU3 } from "./math.js";
 
 const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
@@ -50,6 +51,13 @@ export class Painter3D {
   }
   private addLight(i: number, col: number, amount: number) {
     if (amount <= 0) return;
+    const hdr = this.frame.hdrLight;
+    if (hdr) {
+      const j = i * 3;
+      hdr[j] += channelToLinear(col, 0) * amount;
+      hdr[j + 1] += channelToLinear(col, 8) * amount;
+      hdr[j + 2] += channelToLinear(col, 16) * amount;
+    }
     const previous = this.frame.light[i];
     const r = Math.min(255, (previous & 255) + (col & 255) * amount) | 0;
     const g = Math.min(255, ((previous >>> 8) & 255) + ((col >>> 8) & 255) * amount) | 0;
@@ -155,6 +163,9 @@ export class Painter3D {
       this.frame.color[i] = d2 > 0.865 ? rim : inner;
       // An event horizon must occlude emission on the far side as well as color.
       this.frame.light[i] = 0;
+      // Prevent HDR emission behind an opaque horizon from leaking through.
+      const hdr = this.frame.hdrLight;
+      if (hdr) { hdr[i * 3] = 0; hdr[i * 3 + 1] = 0; hdr[i * 3 + 2] = 0; }
     }
   }
 
@@ -170,6 +181,7 @@ export class Painter3D {
     const y0 = Math.max(0, Math.floor(p.y - maxR)), y1 = Math.min(h - 1, Math.ceil(p.y + maxR));
     if (x0 > x1 || y0 > y1) return;
     const c = this.frame.color.slice(), l = this.frame.light.slice(), z = this.frame.depth.slice();
+    const hdr = this.frame.hdrLight, hdrCopy = hdr?.slice();
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const dx = x + 0.5 - p.x, dy = y + 0.5 - p.y, r = Math.hypot(dx, dy);
       if (r <= inner * 0.9 || r >= maxR) continue;
@@ -184,6 +196,10 @@ export class Painter3D {
       this.frame.color[i] = c[j];
       this.frame.light[i] = l[j];
       this.frame.depth[i] = z[j];
+      if (hdr && hdrCopy) {
+        const a = i * 3, b = j * 3;
+        hdr[a] = hdrCopy[b]; hdr[a + 1] = hdrCopy[b + 1]; hdr[a + 2] = hdrCopy[b + 2];
+      }
     }
   }
 
