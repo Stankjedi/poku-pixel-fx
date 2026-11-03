@@ -6,12 +6,12 @@ const { effects, categories } = await import(new URL('../../build/fx/index.js', 
 const { effectsKo, tagsKo } = await import(new URL('../../build/i18n/ko/index.js', import.meta.url).href);
 
 const args = process.argv.slice(2);
-if (args.length !== 2 || args[0] !== '--output' || !args[1]) {
-  console.error('사용법: npm run catalog -- --output <파일.json>');
+if ((args.length !== 2 && args.length !== 3) || args[0] !== '--output' || !args[1] || (args.length === 3 && args[2] !== '--exclude-shared')) {
+  console.error('사용법: npm run catalog -- --output <파일.json> [--exclude-shared]');
   process.exit(1);
 }
 const path = resolve(args[1]);
-const list = (Object.entries(effects) as [string, { meta: unknown }][]).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([id, mod]) => {
+const list = (Object.entries(effects) as [string, { meta: unknown }][]).filter(([, mod]) => args[2] !== '--exclude-shared' || (mod.meta as { sharedSource?: boolean }).sharedSource !== true).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([id, mod]) => {
   const meta = mod.meta as { name: string; desc: string; tags: string[]; duration: number; fps: number; loop: boolean; size: number[]; origin: number[]; addedAt?: string };
   const ko = effectsKo[id];
   return {

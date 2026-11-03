@@ -57,6 +57,16 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     if (i % 2 === 0 && rayLife > 0.2) sparkle(p, ca * outer, sa * outer, 3 + 3 * rayLife, WHITE, C[4], rayLife * 0.5);
   }
   // Two sharp shockwaves move at different speeds; rings fade as the cinders escape.
+  // Curved prominences rise over the rim before snapping away from the crown.
+  const prominence = smoothstep((t-.08)/.24) * (1-smoothstep((t-1.0)/.5)) * life;
+  if (prominence > .01) for (let i=0;i<5;i++) {
+    const a=TAU*i/5+t*.24, r=radius*.86, spread=.14+.04*rand(i,o.seed,20);
+    const rootA=a-spread, rootB=a+spread, tip=r+15+9*prominence;
+    p.tri(Math.cos(rootA)*r,Math.sin(rootA)*r,
+      Math.cos(a+.09)*tip,Math.sin(a+.09)*tip,
+      Math.cos(rootB)*r,Math.sin(rootB)*r,C[2],prominence*.8);
+    p.line(Math.cos(a)*r,Math.sin(a)*r,Math.cos(a+.09)*tip,Math.sin(a+.09)*tip,C[4],prominence*.75);
+  }
   for (let i = 0; i < 2; i++) {
     const u = clamp((t - 0.27 - i * 0.13) / 1.05);
     if (u > 0 && u < 1) p.ring(0, centerY, 10 + 79 * (1 - Math.pow(1 - u, 2)), 1.2 + 1.4 * (1-u), C[i ? 3 : 5], (1-u) * life);

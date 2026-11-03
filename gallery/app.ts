@@ -31,7 +31,10 @@ interface GalleryMeta { name: string; desc: string; size: [number, number]; orig
 interface GalleryEffect { id: string; cat: string; name: string; originalName: string; originalDesc: string; searchIndex: string; meta: GalleryMeta; mod: any }
 interface Tile { fx: GalleryEffect; fig: HTMLElement; cv: HTMLCanvasElement; player: Player | null; visible: boolean; hover: boolean }
 interface Section { c: (typeof categories)[number]; sec: HTMLElement; list: GalleryEffect[] }
-const FX: GalleryEffect[] = (Object.entries(effects) as [string, any][]).map(([id, mod]) => {
+// Shared submissions stay in the standalone library, but the sharing site displays
+// those records from its own store so an imported source does not duplicate them.
+const hideSharedSources = document.body.hasAttribute("data-exclude-shared-sources");
+const FX: GalleryEffect[] = (Object.entries(effects) as [string, any][]).filter(([, mod]) => !hideSharedSources || mod.meta.sharedSource !== true).map(([id, mod]) => {
   const meta = { fps: 30, bg: "dark", loop: false, duration: 1, tags: [], options: {}, ...mod.meta };
   const originalName = meta.name, originalDesc = meta.desc;
   const translation = effectsKo[id];

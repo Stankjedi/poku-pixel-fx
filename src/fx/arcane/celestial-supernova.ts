@@ -24,11 +24,19 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
   }
   if (t < .44) return;
   const age = Math.max(0, t-.44), power = Math.max(0, 1-age/1.75), r = 10 + 67*(1-Math.exp(-age*2.25));
+  // A rotating equatorial band gives the expanding nebula a clear spatial axis.
+  const band = Math.sin(Math.PI*clamp(age/1.6))*fade;
+  if (band>0) for(let j=0;j<100;j++) {
+    const a=j*TAU/100, radius=16+53*(1-Math.exp(-age*2.5));
+    const x=Math.cos(a)*radius, y=CY+Math.sin(a)*radius*.27+Math.cos(a)*radius*.15;
+    if(j%11<2) continue;
+    p.dot(x,y,j%9===0?C[5]:C[2],band*.65);
+  }
   // Nebula lobes billow outward as a coherent, tiered fireball rather than isolated dots.
   // Each lobe carries a dark rim, an illuminated edge and a cooling inner core.
   for (let i=0; i<24; i++) {
-    const a = i*TAU/24 + (rand(o.seed,i,14)-.5)*.18;
-    const speed = 24 + 21*rand(o.seed,i,15);
+    const a = i*TAU/24 + (rand(o.seed,i,14)-.5)*.28;
+    const speed = 20 + 28*rand(o.seed,i,15);
     const q = clamp(age/(1.20+rand(o.seed,i,16)*.38));
     if(q>=1) continue;
     const travel = speed*(1-Math.pow(1-q,2.5));
@@ -69,6 +77,12 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     p.disc(0, CY, 2 + core*16, C[3], core);
     p.disc(0, CY, 1 + core*9, C[5], core);
     p.disc(0, CY, 1 + core*4, WHITE, core);
+  }
+  // A short, offset after-flare gives the star a directional, imperfect burst.
+  const afterglow=Math.max(0,1-Math.abs(age-.22)/.2)*fade;
+  if(afterglow>0) {
+    p.line(-18,CY+11,22,CY-14,C[4],afterglow*.65);
+    p.line(-12,CY-17,14,CY+18,C[5],afterglow*.6);
   }
   p.glow(0, CY, 26 + core*42, C[3], .46*power*fade);
   // Tilted orbit rings move at separate speeds and phase, avoiding a flat circular sticker.

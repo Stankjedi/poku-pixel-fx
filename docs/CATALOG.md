@@ -1,6 +1,6 @@
 # Catalog
 
-255 effects in 21 categories. Every one is a file in
+257 effects in 21 categories. Every one is a file in
 `src/fx/<category>/<name>.ts`; render any of them with `node build-tools/tools/render.mjs <id> --gif`.
 
 ## moves
@@ -224,6 +224,7 @@ portals, runes, missiles, beams.
 | Rune circle | `arcane/rune-circle` | loop 4s | 136×100 | A rune circle turns on the floor in perspective: a carousel of runes lit by chasing light, a turning square, ticks, motes rising off it. |
 | Spell charge | `arcane/spell-charge` | loop 1.6s | 120×86 | Energy gathers in the caster's hand: streaks and motes spiral in, rings collapse into a swelling orb that crackles with arcs, ready to fire. |
 | Star fall | `arcane/star-fall` | one-shot 2.5s | 232×172 | Stars streak down on long trails across an area, each landing with a white flash, a ring across the floor and a kick of sparks. |
+| Starlight bloom | `arcane/starlight-bloom` | one-shot 1.2s | 96×96 | A turquoise star unfolds into crystal petals, then sheds luminous fragments. |
 | Time stop | `arcane/time-stop` | one-shot 3.6s | 196×136 | A clock face springs open, ticks slower and slower, freezes drained of colour, cracks, then shatters into falling shards. |
 
 ## holy
@@ -292,6 +293,7 @@ poison, vines, thorns, quakes.
 | Acid splash | `nature/acid-splash` | one-shot 2.8s | 184×116 | A gob of acid bursts into a crown and spatters; it eats a glowing, smoking pit into the floor and boils down into it, spitting bright beads, pale steam curling off. |
 | Boulder | `nature/boulder` | one-shot 2.3s | 264×120 | A spinning boulder arcs right shedding dust and pebbles, smashes into the floor in a white flash and bursts into tumbling chunks, gravel and rolling dust. |
 | Earth spike | `nature/earth-spike` | one-shot 3.4s | 272×150 | The floor cracks with light and heaves, a faceted stone spike rams up with two side shards in a burst of chips, grit and dust; rubble rains, then it splits and crumbles. |
+| Emerald fireflies | `nature/emerald-fireflies` | one-shot 2s | 96×112 | Emerald fireflies spiral upward with flickering cores and fading trails. |
 | Healing bloom | `nature/healing-bloom` | one-shot 3.3s | 124×120 | A sprout pushes up and unfurls, a bud swells and opens round a glowing golden heart in a flare of healing light; its petals lift away one by one as motes. |
 | Leaf storm | `nature/leaf-storm` | loop 2.4s | 112×104 | Leaves tumble up a rising spiral round the character, passing behind and in front, turning and flipping, wrapped in bright bands of wind; litter swirls at their feet. |
 | Poison cloud | `nature/poison-cloud` | loop 4s | 256×100 | A miasma hugging the floor: ragged sheets of gas lit yellow-green from within, fading to violet, creep out in tongues that curl over at their tips; plumes twist up as ribbons. |

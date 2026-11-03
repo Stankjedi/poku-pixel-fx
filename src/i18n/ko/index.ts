@@ -35,6 +35,8 @@ export const effectsKo: Record<string, { name: string; desc: string }> = Object.
 export const tagsKo: Record<string, string> = Object.assign({}, tags_moves, tags_ui_pickups, tags_critters_weather, tags_status_spawn, tags_arcane_holy, tags_explosions_projectiles, tags_fire_water, tags_ice_lightning, tags_melee_impacts, tags_nature_shadow, tags_scifi_transitions);
 
 Object.assign(effectsKo, {
+  "arcane/starlight-bloom": { name: "별빛 개화", desc: "별이 수정 꽃잎과 빛나는 파편으로 피어납니다." },
+  "nature/emerald-fireflies": { name: "에메랄드 반딧불", desc: "빛나는 반딧불이 곡선 궤적을 그리며 떠오릅니다." },
   "shadow/black-dragon-slash": { name: "흑룡참", desc: "흑룡의 얼굴이 진동하며 포효하고, 거대한 검격이 앞의 공간을 갈라냅니다." },
   "arcane/celestial-supernova": { name: "천체 초신성", desc: "별이 떠올라 다중 궤도와 성운 파편으로 폭발합니다." },
   "arcane/dimensional-convergence": { name: "차원 융합 소환", desc: "마법진과 회전 궤도가 차원의 핵을 열어냅니다." },

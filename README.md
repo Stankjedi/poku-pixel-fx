@@ -10,6 +10,8 @@
 
 Node.js 18 이상과 로컬 개발 의존성을 준비한 뒤 `npm run build`를 실행합니다. `npm run gallery`를 실행하고 브라우저에서 `http://127.0.0.1:8080/gallery/`를 열면 한국어로 이펙트를 검색하고 미리 볼 수 있습니다. 상세 화면에서 스프라이트 시트를 생성한 뒤 PNG 시트 또는 움직이는 WebP 애니메이션으로 내려받을 수 있습니다. WebP는 상세 미리보기의 설정을 반영하며 브라우저 압축으로 색상이 달라질 수 있습니다. 정확한 색상이 필요하면 PNG를 사용하세요.
 
+사이트의 기본 효과 파일을 현재 라이브러리 코드와 맞추려면 저장소 루트에서 `npm run sync:site`를 실행합니다. 공유 사이트는 공유 원본을 별도 게시물로 표시하므로 해당 원본의 로컬 라이브러리 복사본을 기본 효과 목록에서 제외합니다. 로컬 라이브러리 갤러리에서는 두 복사본을 볼 수 있습니다.
+
 - `node build-tools/tools/list.mjs 횃불`: 한글 또는 영어로 이펙트 검색
 - `node build-tools/tools/render.mjs fire/torch --sheet`: PNG 스프라이트 시트와 JSON 생성
 - `node build-tools/tools/new.mjs fire/my-effect`: 새 TypeScript 이펙트를 만들고 목록에 등록. 다시 빌드한 뒤 사용
@@ -20,7 +22,7 @@ Node.js 18 이상과 로컬 개발 의존성을 준비한 뒤 `npm run build`를
 GIF·MP4 미리보기에는 로컬 ffmpeg가 필요합니다. 갤러리의 한글은 시스템 글꼴 대체를 사용하며 Poku Pixel 글꼴은 영문·숫자·기본 기호를 제공합니다. 이펙트 식별자와 코드 API, 내보낸 원본 메타데이터는 호환성을 위해 그대로 유지합니다.
 
 
-**<!-- count -->255<!-- /count --> pixel art effects and animations, every one a small piece of code.** Fire,
+**<!-- count -->257<!-- /count --> pixel art effects and animations, every one a small piece of code.** Fire,
 explosions, magic, weather, UI, pickups, critters and more. Play them live, recolor and mirror them, drop them into
 a browser game, or export sprite sheets for any engine. Plus a Claude Code skill that makes new ones the way a
 picky pixel artist would: draft, render, look, refine.
@@ -53,11 +55,11 @@ the idea at library scale, with a skill to keep going.
 | **impacts** | 11 | blunt hit, bullet impact, critical hit, ground slam, heavy landing, hit flash… |
 | **projectiles** | 13 | arrow, bullet tracer, cannon shot, energy disc, signal flare, homing missile… |
 | **spawn & death** | 10 | coin drop, disintegrate, dissolve burn, egg hatch, poof, respawn beam… |
-| **arcane** | 15 | arcane beam, arcane missiles, arcane orb, blink in, blink out, magic circle cast… |
+| **arcane** | 16 | arcane beam, arcane missiles, arcane orb, blink in, blink out, magic circle cast… |
 | **holy** | 11 | blessing, divine shield, feather burst, halo, heal, healing ring… |
 | **shadow** | 13 | black hole, curse, dark explosion, eclipse, grasping hands, hex sigil… |
 | **status** | 13 | bleeding, burning, charmed, confused, cursed, frozen… |
-| **nature** | 14 | acid splash, boulder, earth spike, healing bloom, leaf storm, poison cloud… |
+| **nature** | 15 | acid splash, boulder, earth spike, healing bloom, leaf storm, poison cloud… |
 | **weather** | 12 | aurora, blizzard, cherry blossoms, clouds, falling leaves, fireflies… |
 | **ui** | 12 | achievement, coin collect, combo counter, confetti, countdown, crit number… |
 | **pickups** | 11 | chest open, coin spin, collect burst, crystal shard, gem spin, heart pickup… |

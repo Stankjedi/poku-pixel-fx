@@ -28,6 +28,7 @@
     "tools/make-poku-font.mts",
     "tools/share.mts",
     "tools/export-catalog.mts",
+    "tools/sync-site.mts",
     "tools/render-3d.mts",
     "tools/render-3d-gif.mts"
   ]

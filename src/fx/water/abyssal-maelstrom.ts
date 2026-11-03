@@ -30,16 +30,46 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
   // Each blob travels on a slightly offset curve, forming a liquid column with a scalloped rim.
   if (column > 0) {
     const h = 105 * rise, lean = Math.sin(t * 2.2) * 10 * rise;
+    // Far-side spirals expand toward the crown, giving the surge a funnel silhouette.
+    for(let band=0;band<4;band++) {
+      const u=.18+band*.19, cy=-5-u*h, rx=(20+u*31)*column, ry=(4+u*4)*column;
+      const cx=lean*u, phase=t*2+band*.85;
+      for(let j=0;j<40;j++) {
+        const a=j*TAU/40+phase, b=(j+1)*TAU/40+phase;
+        if(Math.sin(a)>0 || j%9<2) continue;
+        p.line(cx+Math.cos(a)*rx,cy+Math.sin(a)*ry,cx+Math.cos(b)*rx,cy+Math.sin(b)*ry,C[2],column*.65);
+      }
+    }
     for (let j = 0; j <= 48; j++) {
-      const u = j / 48, y = -5 - u * h, x = lean * u + Math.sin(u * 8 - t * 3) * (3 + 8 * u);
+      const u = j / 48, y = -5 - u * h, x = lean * u + Math.sin(u * 10 - t * 4) * (5 + 7 * u) * rise;
       const r = (17 - 8 * u + 4 * Math.sin(u * 11 + t * 4)) * column;
       p.disc(x, y, Math.max(1, r + 3), C[1], column * .8);
       p.disc(x - 2, y - 1, Math.max(1, r), C[2], column * .88);
       p.disc(x - 5, y - 2, Math.max(1, r * .62), C[3], column * .7);
       if (j % 5 === 0) { p.disc(x - r * .55, y - 2, Math.max(1, r * .22), C[4], column * .8); }
     }
+    // Broken highlights wrap around the rising column to make its rotation legible.
+    for (let arm = 0; arm < 3; arm++) {
+      for (let j = 0; j < 32; j++) {
+        const u = j / 31, phase = u * 10 - t * 4 + arm * TAU / 3;
+        const x = lean * u + Math.sin(phase) * (5 + 7 * u) * rise;
+        const y = -5 - u * h + Math.cos(phase) * (3 + 4 * u);
+        if (Math.cos(phase) > .35) p.dot(x - 3, y - 2, C[5], column * .65);
+      }
+    }
+    // Elliptical foam bands orbit the column and reveal its rotating volume.
+    for(let band=0;band<3;band++) {
+      const u=.23+band*.22, y=-5-u*h, cx=lean*u+Math.sin(u*10-t*4)*(5+7*u)*rise;
+      const rx=(18+u*8)*column, ry=(3+u*2)*column;
+      for(let j=0;j<60;j++) {
+        const a=j*TAU/60+t*2+band*.8;
+        if(Math.sin(a)<-.25 || j%8===0) continue;
+        const x=cx+Math.cos(a)*rx, yy=y+Math.sin(a)*ry;
+        p.dot(x,yy,j%5===0?C[5]:C[3],column*.75);
+      }
+    }
     // A rounded crown boils and rolls over the top as the column falls.
-    const x = lean + Math.sin(8 - t * 3) * 11, y = -5 - h;
+    const x = lean + Math.sin(10 - t * 4) * 12 * rise, y = -5 - h;
     for (let k = 0; k < 5; k++) {
       const a = k * TAU / 5 + t * 2, r = (5 + 2 * Math.sin(t * 5 + k)) * column;
       p.disc(x + Math.cos(a) * 10 * column, y + Math.sin(a) * 5 * column, r + 3, C[2], column);
@@ -70,6 +100,7 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     if (age <= 0 || age >= life) continue;
     const u = age / life, a = rand(i, o.seed, 3) * TAU, speed = 32 + rand(i, o.seed, 4) * 85;
     const x = Math.cos(a) * speed * u, y = -8 - (40 + Math.abs(Math.sin(a)) * 85) * u + 83 * u * u;
+    if (y > 2) continue; // Droplets disappear at the water surface instead of falling below the floor.
     const k = Math.sin(Math.PI * u) * fade, r = (i % 7 === 0 ? 3.5 : 1.6) * k;
     p.disc(x, y, r + 1, C[2], k * .65); p.disc(x - .5, y - .5, r, C[4], k);
     if (i % 6 === 0) p.dot(x - 1, y - 1, WHITE, k);

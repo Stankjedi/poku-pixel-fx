@@ -657,6 +657,13 @@ function crystal(p, x, base, h, w, lean, ramp3, opts = {}) {
     }
 }
 
+// src/render/linear.ts
+var SRGB_TO_LINEAR = Float32Array.from({ length: 256 }, (_, i) => {
+  const s = i / 255;
+  return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+});
+var channelToLinear = (color, offset) => SRGB_TO_LINEAR[color >>> offset & 255];
+
 // src/core/font.ts
 var MINI = {
   A: ".#.|#.#|###|#.#|#.#",
@@ -882,6 +889,13 @@ var Painter = class {
     const x = sx - this.ox, y = sy - this.oy;
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
     const i = y * this.w + x, d = this.L[i];
+    const hdr = this.frame.hdrLight;
+    if (hdr) {
+      const j = i * 3;
+      hdr[j] += channelToLinear(c, 0) * k;
+      hdr[j + 1] += channelToLinear(c, 8) * k;
+      hdr[j + 2] += channelToLinear(c, 16) * k;
+    }
     const r = Math.min(255, (d & 255) + (c & 255) * k) | 0;
     const g = Math.min(255, (d >>> 8 & 255) + (c >>> 8 & 255) * k) | 0;
     const b = Math.min(255, (d >>> 16 & 255) + (c >>> 16 & 255) * k) | 0;
@@ -1330,6 +1344,7 @@ function createFrame(w, h, ox = 0, oy = 0) {
 function clearFrame(f) {
   f.color.fill(0);
   f.light.fill(0);
+  f.hdrLight?.fill(0);
   return f;
 }
 var painters = /* @__PURE__ */ new WeakMap();
@@ -1340,26 +1355,28 @@ function painterFor(frame2) {
 }
 var FADE = 0.3;
 var isRamp = (v) => Array.isArray(v) && v.length > 0 && v.every((c) => typeof c === "number" || /^#[0-9a-f]{3,8}$/i.test(c));
-function resolveOptions(meta256, o = {}) {
-  const opts = { ...meta256.options ?? {}, ...o };
-  for (const [k, def] of Object.entries(meta256.options ?? {}))
+function resolveOptions(meta258, o = {}) {
+  const opts = { ...meta258.options ?? {}, ...o };
+  for (const [k, def] of Object.entries(meta258.options ?? {}))
     if (isRamp(def) && isRamp(o[k]) && o[k].length !== def.length) opts[k] = fit(o[k], def.length).map(toHex);
-  if (meta256.actor && !opts.actor) opts.actor = stockActor(meta256.actor === 2 ? 2 : 1);
+  if (meta258.actor && !opts.actor) opts.actor = stockActor(meta258.actor === 2 ? 2 : 1);
   return opts;
 }
 function createFx(mod, o = {}) {
-  const meta256 = mod.meta ?? {};
-  const opts = resolveOptions(meta256, o);
+  const meta258 = mod.meta ?? {};
+  const opts = resolveOptions(meta258, o);
   const impl = mod.create ? mod.create(opts) : mod;
-  const D80 = meta256.duration ?? 1;
+  const D80 = meta258.duration ?? 1;
   let t = 0, stopAt = Infinity;
   return {
-    meta: meta256,
+    meta: meta258,
     options: opts,
     get t() {
       return t;
     },
     update(dt) {
+      if (!Number.isFinite(dt) || dt < 0) throw new RangeError("dt must be finite and non-negative");
+      if (dt === 0) return;
       t += dt;
       if (!impl.update) return;
       const n = Math.max(1, Math.ceil(dt * 120 - 1e-9));
@@ -1370,7 +1387,7 @@ function createFx(mod, o = {}) {
       p.place(opts.x ?? 0, opts.y ?? 0, !!opts.flip, opts.angle ?? 0);
       p.fade = stopAt === Infinity ? 1 : clamp(1 - (t - stopAt) / FADE);
       p.lightK = opts.light ?? 1;
-      const tt = meta256.loop ? t % D80 : Math.min(t, D80);
+      const tt = meta258.loop ? t % D80 : Math.min(t, D80);
       if (layer3 !== "front" && impl.drawBack) {
         p.layer = "back";
         impl.drawBack(p, tt, opts);
@@ -1385,7 +1402,7 @@ function createFx(mod, o = {}) {
       if (stopAt === Infinity) stopAt = t;
     },
     done() {
-      return t - stopAt >= FADE || !meta256.loop && t >= D80;
+      return t - stopAt >= FADE || !meta258.loop && t >= D80;
     }
   };
 }
@@ -2191,20 +2208,20 @@ function actSpan(mod) {
   return { from: Math.min(0, k?.[0]?.[0] ?? 0), to: mod.meta?.loop ? Infinity : Math.max(D80, k?.[k.length - 1]?.[0] ?? 0) };
 }
 function createAct(mod, o = {}) {
-  const a = mod.act ?? {}, meta256 = mod.meta ?? {}, D80 = meta256.duration ?? 1, flip = !!o.flip, seed2 = o.seed ?? meta256.options?.seed ?? 1;
+  const a = mod.act ?? {}, meta258 = mod.meta ?? {}, D80 = meta258.duration ?? 1, flip = !!o.flip, seed2 = o.seed ?? meta258.options?.seed ?? 1;
   const fx = createFx(mod, o), track = a.poses ?? [[0, { ...STAND }]], span = actSpan(mod);
   const X = o.x ?? 0, Y4 = o.y ?? 0;
   const targets = (a.targets ?? (a.target ? [a.target] : [])).map((g, i) => new Target(g.x ?? 66, seed2 + 4 + i));
   const hits = (a.hits ?? []).map((h) => ({ ...h })).sort((p, q) => p.t - q.t), dust = (a.dust ?? []).slice();
   const R13 = new Rng(seed2 + 9), specks2 = [];
-  const ramp3 = o.palette ?? meta256.options?.palette, ghosts6 = [], gc = hex(a.ghost ?? ramp3?.[Math.floor(ramp3.length * 0.7)] ?? "#8fb4ff");
+  const ramp3 = o.palette ?? meta258.options?.palette, ghosts6 = [], gc = hex(a.ghost ?? ramp3?.[Math.floor(ramp3.length * 0.7)] ?? "#8fb4ff");
   let t = span.from, stop = 0, stopped = false, shakeT = 0, shake0 = 0, amp = 0, nh = 0, nd = 0, loopN = 0, gAcc = 0;
   let last2 = null;
   const poseNow = () => {
     let tt = t;
-    if (meta256.loop && t >= D80) tt = t % D80;
+    if (meta258.loop && t >= D80) tt = t % D80;
     let q = poseAt(track, tt);
-    if (!meta256.loop && isHeld(track, tt)) {
+    if (!meta258.loop && isHeld(track, tt)) {
       const up = Math.floor(tt * 3) & 1;
       q = { ...STAND, ...q, crouch: (q.crouch ?? 0) + up, fy: (q.fy ?? STAND.fy) + up, by: (q.by ?? STAND.by) + up };
     }
@@ -2218,7 +2235,7 @@ function createAct(mod, o = {}) {
   };
   const out2 = {
     fx,
-    meta: meta256,
+    meta: meta258,
     act: a,
     targets,
     get t() {
@@ -2246,7 +2263,7 @@ function createAct(mod, o = {}) {
       const t0 = t;
       t += dt;
       if (t >= 0) fx.update(t0 < 0 ? t : dt);
-      if (meta256.loop && t >= D80) {
+      if (meta258.loop && t >= D80) {
         const n = Math.floor(t / D80);
         if (n !== loopN) {
           loopN = n;
@@ -2254,7 +2271,7 @@ function createAct(mod, o = {}) {
           nd = 0;
         }
       }
-      const tt = meta256.loop && t >= D80 ? t % D80 : t;
+      const tt = meta258.loop && t >= D80 ? t % D80 : t;
       for (; nh < hits.length && hits[nh].t <= tt; nh++) {
         const h = hits[nh];
         if (h.stop) stop = Math.max(stop, h.stop);
@@ -2361,7 +2378,7 @@ function createAct(mod, o = {}) {
       if (active) fx.draw(A3, "back");
       B5.color.set(A3.color);
       B5.light.set(A3.light);
-      const tt = meta256.loop ? t < 0 ? 0 : t % D80 : clamp(t, 0, D80), alpha = active ? actorAlphaOf(mod, tt, fx.options) : 1;
+      const tt = meta258.loop ? t < 0 ? 0 : t % D80 : clamp(t, 0, D80), alpha = active ? actorAlphaOf(mod, tt, fx.options) : 1;
       drawActor(painterFor(B5).place(FX2, FY, flip), fx.options.actor ?? stockActor(2), alpha);
       if (active) fx.draw(B5, "front");
       const follow = a.follow ?? 1, lean = (q.lean ?? 0) * follow, cr = (q.crouch ?? 0) * follow;
@@ -2478,11 +2495,15 @@ function chain(cues) {
     };
     return {
       update(dt) {
+        if (!Number.isFinite(dt) || dt < 0) throw new RangeError("dt must be finite and non-negative");
+        const previous = t;
         t += dt;
         for (const c of list) {
           if (c.over || t < c.t) continue;
           if (!c.inst) c.inst = createFx(c.fx, c.opts);
-          else c.inst.update(dt);
+          const start = Math.max(previous, c.t);
+          const end = Math.min(t, c.until);
+          if (end > start) c.inst.update(end - start);
           if (t >= c.until || c.inst.done() && !c.fx.meta?.loop) c.over = true;
         }
       },
@@ -4133,10 +4154,10 @@ function noiseFor(D80) {
     return pnoise(tt / D80 * P8 + off2, P8, seed2);
   };
 }
-function looped(t, D80, count, seed2, make, draw124) {
+function looped(t, D80, count, seed2, make, draw126) {
   for (let i = 0; i < count; i++) {
     const r = rng(seed2, i), born = r.next() * D80, q = make(r, i);
-    for (let age = wrap(t - born, D80); age < q.life; age += D80) draw124(q, age, i);
+    for (let age = wrap(t - born, D80); age < q.life; age += D80) draw126(q, age, i);
   }
 }
 var hotFirst = (F) => [...F].reverse();
@@ -31460,12 +31481,12 @@ __export(aurora_exports, {
 
 // src/fx/weather/_lib.ts
 var BAYER5 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
-function box(meta256) {
-  const [W12, H7] = meta256.size, [OX4, OY4] = meta256.origin;
+function box(meta258) {
+  const [W12, H7] = meta258.size, [OX4, OY4] = meta258.origin;
   return { x0: -OX4, y0: -OY4, x1: W12 - OX4, y1: H7 - OY4, w: W12, h: H7 };
 }
-function clip(p, meta256) {
-  const B5 = box(meta256), q = Object.create(p);
+function clip(p, meta258) {
+  const B5 = box(meta258), q = Object.create(p);
   let ok;
   if (p.sn === 0) {
     const a = p.toX(B5.x0, 0), b = p.toX(B5.x1, 0), sx0 = Math.round(Math.min(a, b)), sx1 = Math.round(Math.max(a, b));
@@ -31497,13 +31518,13 @@ function glow(q, B5, x, y, r, c, k) {
   }
 }
 var OUT6 = { c: 0, a: 1, b: 0, l: 0, k: 0 };
-function pass(p, meta256, y0, y1, fn) {
-  const B5 = box(meta256), o = OUT6;
+function pass(p, meta258, y0, y1, fn) {
+  const B5 = box(meta258), o = OUT6;
   y0 = Math.max(B5.y0, Math.floor(y0));
   y1 = Math.min(B5.y1 - 1, Math.ceil(y1));
   if (y0 > y1) return;
   if (p.sn !== 0) {
-    const q = clip(p, meta256);
+    const q = clip(p, meta258);
     for (let y = y0; y <= y1; y++)
       for (let x = B5.x0; x < B5.x1; x++) {
         o.c = 0;
@@ -31557,12 +31578,12 @@ function pass(p, meta256, y0, y1, fn) {
   }
 }
 var ROW = { w: 0, c: null, a: null, b: null, l: null, k: null };
-function rows(p, meta256, y0, y1, fn) {
-  const B5 = box(meta256), w = B5.w, R13 = ROW;
+function rows(p, meta258, y0, y1, fn) {
+  const B5 = box(meta258), w = B5.w, R13 = ROW;
   if (R13.w !== w) Object.assign(R13, { w, c: new Uint32Array(w), a: new Float32Array(w), b: new Uint8Array(w), l: new Uint32Array(w), k: new Float32Array(w) });
   y0 = Math.max(B5.y0, Math.floor(y0));
   y1 = Math.min(B5.y1 - 1, Math.ceil(y1));
-  const rot = p.sn !== 0, q = rot ? clip(p, meta256) : null;
+  const rot = p.sn !== 0, q = rot ? clip(p, meta258) : null;
   const C2 = p.C, L12 = p.L, W12 = p.w, fade = p.fade, lk = p.lightK * fade, fx = p.fx;
   for (let y = y0; y <= y1; y++) {
     R13.c.fill(0);
@@ -40457,9 +40478,16 @@ function draw113(p, t, o) {
   }
   if (t < 0.44) return;
   const age = Math.max(0, t - 0.44), power2 = Math.max(0, 1 - age / 1.75), r = 10 + 67 * (1 - Math.exp(-age * 2.25));
+  const band3 = Math.sin(Math.PI * clamp(age / 1.6)) * fade;
+  if (band3 > 0) for (let j = 0; j < 100; j++) {
+    const a = j * TAU / 100, radius5 = 16 + 53 * (1 - Math.exp(-age * 2.5));
+    const x = Math.cos(a) * radius5, y = CY14 + Math.sin(a) * radius5 * 0.27 + Math.cos(a) * radius5 * 0.15;
+    if (j % 11 < 2) continue;
+    p.dot(x, y, j % 9 === 0 ? C2[5] : C2[2], band3 * 0.65);
+  }
   for (let i = 0; i < 24; i++) {
-    const a = i * TAU / 24 + (rand(o.seed, i, 14) - 0.5) * 0.18;
-    const speed = 24 + 21 * rand(o.seed, i, 15);
+    const a = i * TAU / 24 + (rand(o.seed, i, 14) - 0.5) * 0.28;
+    const speed = 20 + 28 * rand(o.seed, i, 15);
     const q = clamp(age / (1.2 + rand(o.seed, i, 16) * 0.38));
     if (q >= 1) continue;
     const travel3 = speed * (1 - Math.pow(1 - q, 2.5));
@@ -40497,6 +40525,11 @@ function draw113(p, t, o) {
     p.disc(0, CY14, 2 + core2 * 16, C2[3], core2);
     p.disc(0, CY14, 1 + core2 * 9, C2[5], core2);
     p.disc(0, CY14, 1 + core2 * 4, WHITE, core2);
+  }
+  const afterglow2 = Math.max(0, 1 - Math.abs(age - 0.22) / 0.2) * fade;
+  if (afterglow2 > 0) {
+    p.line(-18, CY14 + 11, 22, CY14 - 14, C2[4], afterglow2 * 0.65);
+    p.line(-12, CY14 - 17, 14, CY14 + 18, C2[5], afterglow2 * 0.6);
   }
   p.glow(0, CY14, 26 + core2 * 42, C2[3], 0.46 * power2 * fade);
   for (let ring8 = 0; ring8 < 3; ring8++) {
@@ -40563,6 +40596,13 @@ function draw114(p, t, o) {
     }
   }
   p.glow(0, -4, 53 * rise, C2[3], 0.22 * fade);
+  for (let i = 0; i < 4; i++) {
+    const a = phase * 0.5 + i * TAU / 4, x = Math.cos(a) * 45 * rise, y = -4 + Math.sin(a) * 10 * rise;
+    const z = 2.5 * rise;
+    p.poly([[x, y - z], [x + z, y], [x, y + z], [x - z, y]], C2[4], fade * 0.75);
+    p.dot(x, y, C2[6], fade);
+    if (rise > 0.5) p.line(x * 0.85, y, x * 0.62, y - (2 + rise * 2), C2[3], fade * 0.5);
+  }
   const opening = easeOut((t - 0.13) / 0.42) * fade;
   const shiver = Math.sin(t * 13) * 1.4 + Math.sin(t * 7) * 2;
   const centerY = -57, width2 = (24 + 3 * Math.sin(t * 4)) * opening, height5 = 43 * opening;
@@ -40726,9 +40766,10 @@ function tower(p, x, y, w, h, roofH, c, phase, flag) {
     if (wy + 7 >= y + h) break;
     p.rect(x - 3, wy, 6, 8, c[0]);
     p.poly([[x - 3, wy], [x, wy - 4], [x + 3, wy]], c[0]);
+    const flicker = 0.65 + 0.35 * Math.sin(phase * 2 + x * 0.17 + j * 1.8);
     p.rect(x - 2, wy + 1, 4, 5, c[3]);
-    p.rect(x - 1, wy + 1, 2, 4, c[5]);
-    p.dot(x, wy - 1, c[6], 0.85);
+    p.rect(x - 1, wy + 1, 2, 4, c[5], flicker);
+    p.dot(x, wy - 1, c[6], 0.55 + 0.3 * flicker);
   }
   if (flag) {
     const tip = y - 4 - roofH - 7, flap = Math.sin(phase * 2 + x * 0.2) * 2;
@@ -40759,6 +40800,11 @@ function draw115(p, t, o) {
   for (let i = 0; i < 4; i++) {
     const a = diamond2[i], b = diamond2[(i + 1) % 4];
     p.line(a[0], a[1], b[0], b[1], c[3], 0.7);
+  }
+  for (let i = 0; i < 4; i++) {
+    const a = ph + i * TAU / 4, x = Math.cos(a) * 74, y = ground2 - 19 + Math.sin(a) * 7;
+    p.poly([[x, y - 3], [x + 2, y], [x, y + 3], [x - 2, y]], c[4], 0.8);
+    p.dot(x, y, c[6], 0.9);
   }
   const charge = Math.min(1, Math.max(0, reveal * (1 - spires) * 2));
   if (charge > 0.01) for (const x of [-43, -30, -16, 0, 16, 30, 43]) {
@@ -40895,6 +40941,22 @@ function draw116(p, t, o) {
     p.glowLine(ca * inner, sa * inner, ca * (inner + length * 0.8), sa * (inner + length * 0.8), 5, C2[3], 0.14 * rayLife);
     if (i % 2 === 0 && rayLife > 0.2) sparkle(p, ca * outer, sa * outer, 3 + 3 * rayLife, WHITE, C2[4], rayLife * 0.5);
   }
+  const prominence = smoothstep((t - 0.08) / 0.24) * (1 - smoothstep((t - 1) / 0.5)) * life;
+  if (prominence > 0.01) for (let i = 0; i < 5; i++) {
+    const a = TAU * i / 5 + t * 0.24, r = radius5 * 0.86, spread = 0.14 + 0.04 * rand(i, o.seed, 20);
+    const rootA = a - spread, rootB = a + spread, tip = r + 15 + 9 * prominence;
+    p.tri(
+      Math.cos(rootA) * r,
+      Math.sin(rootA) * r,
+      Math.cos(a + 0.09) * tip,
+      Math.sin(a + 0.09) * tip,
+      Math.cos(rootB) * r,
+      Math.sin(rootB) * r,
+      C2[2],
+      prominence * 0.8
+    );
+    p.line(Math.cos(a) * r, Math.sin(a) * r, Math.cos(a + 0.09) * tip, Math.sin(a + 0.09) * tip, C2[4], prominence * 0.75);
+  }
   for (let i = 0; i < 2; i++) {
     const u = clamp((t - 0.27 - i * 0.13) / 1.05);
     if (u > 0 && u < 1) p.ring(0, centerY, 10 + 79 * (1 - Math.pow(1 - u, 2)), 1.2 + 1.4 * (1 - u), C2[i ? 3 : 5], (1 - u) * life);
@@ -40957,6 +41019,16 @@ function draw117(p, t, o) {
   const force = smooth(0.08, 0.32, t) * (1 - smooth(1.7, 3.35, t));
   if (force > 0.01) {
     const height5 = 150 * Math.min(1, force * 1.8);
+    for (let i = 0; i < 12; i++) {
+      const age = t - (0.18 + i * 0.075);
+      if (age <= 0 || age >= 1.5) continue;
+      const q = age / 1.5, side = i % 2 ? 1 : -1;
+      const x = side * (16 + rand(i, S4 + 110) * 24 + q * (12 + rand(i, S4 + 111) * 23));
+      const y = -12 - q * (65 + rand(i, S4 + 112) * 55), r = (5 + q * 10) * (1 - 0.35 * q);
+      const alpha = Math.sin(Math.PI * q) * fade * 0.45;
+      p.disc(x, y, r, C2[0], alpha);
+      p.disc(x - 2, y - 3, r * 0.55, C2[1], alpha * 0.55);
+    }
     for (let j = 0; j < 13; j++) {
       const f = rand(j, S4 + 70), g = rand(j, S4 + 71);
       const x = (f - 0.5) * 92, y = -height5 * (0.48 + 0.42 * g) - 6;
@@ -40999,6 +41071,15 @@ function draw117(p, t, o) {
     p.line(x - w / 2, -3 - rise * 0.2, x + w / 2, -3 - rise * 0.4, C2[3], fade * force);
     if (i % 3 === 0) p.dot(x, -4 - rise * 0.3, C2[5], fade * force);
   }
+  for (let i = 0; i < 13; i++) {
+    const age = t - 0.24 - i * 0.035, life = 1.25 + rand(i, S4 + 103) * 0.5;
+    if (age <= 0 || age >= life) continue;
+    const u = age / life, side = i % 2 ? 1 : -1;
+    const x = side * (8 + rand(i, S4 + 104) * 42) * u, y = -15 - (42 + rand(i, S4 + 105) * 95) * u + 35 * u * u;
+    const r = (3 + rand(i, S4 + 106) * 4) * (1 - 0.35 * u), a = Math.sin(Math.PI * u) * fade;
+    p.poly([[x - r, y], [x - r * 0.45, y - r], [x + r * 0.65, y - r * 0.7], [x + r, y + r * 0.3], [x, y + r]], C2[0], a);
+    p.line(x - r * 0.4, y, x + r * 0.5, y - r * 0.35, C2[3], a * (1 - u));
+  }
   for (let i = 0; i < 34; i++) {
     const phase = rand(i, S4), width2 = rand(i, S4 + 1), shift2 = rand(i, S4 + 2);
     const height5 = (38 + phase * 115) * eruption;
@@ -41040,8 +41121,8 @@ var meta250 = {
   name: "Ion stormburst",
   desc: "A violet storm condenses into a falling ion core; branching lightning erupts, then a spinning electrical shock ring shatters into drifting sparks.",
   tags: ["lightning", "electric", "storm", "ion", "thunder", "burst", "shockwave", "magic", "one-shot"],
-  size: [208, 176],
-  origin: [104, 150],
+  size: [232, 184],
+  origin: [116, 154],
   duration: 2.4,
   loop: false,
   fps: 30,
@@ -41118,6 +41199,16 @@ function draw118(p, t, o) {
   if (t >= 0.4) {
     const u = clamp((t - 0.4) / 1.7), shock = (1 - u) * end, r = 6 + 74 * (1 - Math.pow(1 - phase, 3));
     p.glow(0, -8, 55 + 14 * phase, c[2], 0.45 * shock);
+    for (let i = 0; i < 6; i++) {
+      const angle2 = i * TAU / 6 + t * 3, span = 0.24, alpha = shock * (0.45 + 0.3 * Math.sin(t * 14 + i));
+      let px = Math.cos(angle2) * r, py = -8 + Math.sin(angle2) * r * 0.19;
+      for (let j = 1; j <= 4; j++) {
+        const a = angle2 + span * j / 4, x = Math.cos(a) * (r + (j % 2 ? 2 : -1)), y = -8 + Math.sin(a) * r * 0.19;
+        p.line(px, py, x, y, c[j % 2 ? 5 : 3], alpha);
+        px = x;
+        py = y;
+      }
+    }
     for (let i = 0; i < 76; i++) {
       const a = i * TAU / 76, flicker = rand(o.seed, i, Math.floor(t * 8));
       if (flicker < u * 0.44) continue;
@@ -41126,6 +41217,10 @@ function draw118(p, t, o) {
       if (Math.sin(a) > 0) p.dot(x, y + 1, c[2], shock * 0.7);
     }
     if (u < 0.5) sparkle(p, 0, -22, 25 * (1 - u * 1.6), WHITE, c[3], shock);
+    if (u < 0.4) for (const side of [-1, 1]) {
+      const length = (30 + (side > 0 ? 12 : 0)) * phase, alpha = shock * (1 - u / 0.4);
+      p.polyline([[0, -9], [side * length * 0.3, -14], [side * length * 0.48, -7], [side * length * 0.72, -12], [side * length, -5]], c[4], alpha);
+    }
     for (let side of [-1, 1]) {
       for (let k = 0; k < 4; k++) {
         const reach2 = (12 + k * 17) * Math.min(1, phase * 2), y = -3 - k % 2 * 3;
@@ -41206,6 +41301,11 @@ function draw119(p, t, o) {
     }
   }
   const wing2 = appear * fade * (1 - peak(t, 0.94, 1.63)), stretch = (0.3 + 0.7 * blast) * (1 + 0.12 * Math.sin(t * 4));
+  if (wing2 > 0.01) for (let i = 0; i < 72; i++) {
+    if (i % 12 < 3) continue;
+    const a = i * TAU / 72, r = 20 + 11 * blast;
+    p.dot(Math.cos(a) * r, y + Math.sin(a) * r * 0.42, c[i % 9 === 0 ? 5 : 3], wing2 * 0.75);
+  }
   const flex = Math.sin(t * 3.4) * 5 * fade;
   for (const side of [-1, 1]) {
     const sideStretch = stretch * (side < 0 ? 0.91 + 0.09 * Math.sin(t * 3.3) : 1.04 + 0.07 * Math.cos(t * 4.2));
@@ -41250,6 +41350,15 @@ function draw119(p, t, o) {
     p.poly([[x, yy - z * 2], [x + z, yy], [x, yy + z], [x - z, yy]], c[j % 4 === 0 ? 5 : 3], k);
     p.line(x, yy, x - Math.cos(a) * 16 * k, yy - Math.sin(a) * 10 * k, c[4], k * 0.6);
   }
+  for (let i = 0; i < 8; i++) {
+    const u = clamp((t - 0.8 - i * 0.08) / 1.7);
+    if (u <= 0 || u >= 1) continue;
+    const side = i % 2 ? 1 : -1, x = side * (19 + i * 7) + Math.sin(u * 5 + i) * 7;
+    const yy = y - 4 + u * (58 + i * 3), len2 = (5 + i % 3) * Math.sin(Math.PI * u);
+    const alpha = Math.sin(Math.PI * u) * fade;
+    p.poly([[x, yy - len2], [x + side * 2, yy - 1], [x, yy + len2], [x - side * 2, yy + 1]], c[3], alpha);
+    p.line(x, yy - len2, x, yy + len2, c[5], alpha * 0.75);
+  }
   if (pulse3 > 0.01) {
     sparkle(p, 0, y, 10 + 24 * pulse3, WHITE, c[4], fade);
     p.glow(0, y, 52, c[4], 0.6 * pulse3 * fade);
@@ -41289,6 +41398,13 @@ function draw120(p, t, o) {
   const pinch = 1 - 0.7 * ramp2(t, 1.03, 1.55), twist = Math.sin(t * 3.2) * 0.22;
   const width2 = (2 + 37 * rise) * close * pinch * (0.89 + 0.11 * Math.sin(t * 7)), height5 = 72 * rise * close * (1 - 0.25 * ramp2(t, 1.1, 1.7));
   p.glow(0, 0, 74, c[2], 0.32 * k);
+  for (let i = 0; i < 7; i++) {
+    const a = TAU * i / 7 + 0.12, inner = 37 * rise, outer = (54 + i % 3 * 9) * rise;
+    const x = Math.cos(a) * inner, y = Math.sin(a) * inner * 0.8;
+    const nx = Math.cos(a) * outer, ny = Math.sin(a) * outer * 0.8;
+    p.line(x, y, (x + nx) * 0.5 + 3, (y + ny) * 0.5 - 2, c[2], k * 0.6);
+    p.line((x + nx) * 0.5 + 3, (y + ny) * 0.5 - 2, nx, ny, c[3], k * 0.55);
+  }
   for (let ring8 = 0; ring8 < 3; ring8++) {
     const radius5 = (30 + ring8 * 20) * (0.5 + 0.5 * rise), rot = t * (ring8 % 2 ? -0.9 : 1.15), squash = 0.55 + ring8 * 0.11;
     for (let j = 0; j < 38; j++) {
@@ -41310,7 +41426,7 @@ function draw120(p, t, o) {
       right.unshift([w * 0.78 + bend2, yy]);
     }
     for (let j = 0; j < 16; j++) {
-      const a = TAU * j / 16 + t * 0.8, ca = Math.cos(a), sa = Math.sin(a), phase = (j * 7 + o.seed) % 5;
+      const a = TAU * j / 16 + t * 0.8 + Math.sin(j * 13 + o.seed) * 0.1, ca = Math.cos(a), sa = Math.sin(a), phase = (j * 7 + o.seed) % 5;
       const inner = 26 + phase * 3, outer = (57 + phase * 6) * rise * close;
       const breadth = 0.1 + 0.05 * (j % 3);
       p.poly([[ca * inner, sa * inner * 0.82], [Math.cos(a - breadth) * outer, Math.sin(a - breadth) * outer * 0.82], [Math.cos(a + breadth) * outer * 0.74, Math.sin(a + breadth) * outer * 0.74 * 0.82]], c[j % 3 === 0 ? 3 : 2], k * 0.85);
@@ -41399,8 +41515,17 @@ function draw121(p, t, o) {
   }
   if (column3 > 0) {
     const h = 105 * rise, lean = Math.sin(t * 2.2) * 10 * rise;
+    for (let band3 = 0; band3 < 4; band3++) {
+      const u = 0.18 + band3 * 0.19, cy = -5 - u * h, rx = (20 + u * 31) * column3, ry = (4 + u * 4) * column3;
+      const cx = lean * u, phase = t * 2 + band3 * 0.85;
+      for (let j = 0; j < 40; j++) {
+        const a = j * TAU / 40 + phase, b = (j + 1) * TAU / 40 + phase;
+        if (Math.sin(a) > 0 || j % 9 < 2) continue;
+        p.line(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, cx + Math.cos(b) * rx, cy + Math.sin(b) * ry, C2[2], column3 * 0.65);
+      }
+    }
     for (let j = 0; j <= 48; j++) {
-      const u = j / 48, y2 = -5 - u * h, x2 = lean * u + Math.sin(u * 8 - t * 3) * (3 + 8 * u);
+      const u = j / 48, y2 = -5 - u * h, x2 = lean * u + Math.sin(u * 10 - t * 4) * (5 + 7 * u) * rise;
       const r = (17 - 8 * u + 4 * Math.sin(u * 11 + t * 4)) * column3;
       p.disc(x2, y2, Math.max(1, r + 3), C2[1], column3 * 0.8);
       p.disc(x2 - 2, y2 - 1, Math.max(1, r), C2[2], column3 * 0.88);
@@ -41409,7 +41534,25 @@ function draw121(p, t, o) {
         p.disc(x2 - r * 0.55, y2 - 2, Math.max(1, r * 0.22), C2[4], column3 * 0.8);
       }
     }
-    const x = lean + Math.sin(8 - t * 3) * 11, y = -5 - h;
+    for (let arm2 = 0; arm2 < 3; arm2++) {
+      for (let j = 0; j < 32; j++) {
+        const u = j / 31, phase = u * 10 - t * 4 + arm2 * TAU / 3;
+        const x2 = lean * u + Math.sin(phase) * (5 + 7 * u) * rise;
+        const y2 = -5 - u * h + Math.cos(phase) * (3 + 4 * u);
+        if (Math.cos(phase) > 0.35) p.dot(x2 - 3, y2 - 2, C2[5], column3 * 0.65);
+      }
+    }
+    for (let band3 = 0; band3 < 3; band3++) {
+      const u = 0.23 + band3 * 0.22, y2 = -5 - u * h, cx = lean * u + Math.sin(u * 10 - t * 4) * (5 + 7 * u) * rise;
+      const rx = (18 + u * 8) * column3, ry = (3 + u * 2) * column3;
+      for (let j = 0; j < 60; j++) {
+        const a = j * TAU / 60 + t * 2 + band3 * 0.8;
+        if (Math.sin(a) < -0.25 || j % 8 === 0) continue;
+        const x2 = cx + Math.cos(a) * rx, yy = y2 + Math.sin(a) * ry;
+        p.dot(x2, yy, j % 5 === 0 ? C2[5] : C2[3], column3 * 0.75);
+      }
+    }
+    const x = lean + Math.sin(10 - t * 4) * 12 * rise, y = -5 - h;
     for (let k = 0; k < 5; k++) {
       const a = k * TAU / 5 + t * 2, r = (5 + 2 * Math.sin(t * 5 + k)) * column3;
       p.disc(x + Math.cos(a) * 10 * column3, y + Math.sin(a) * 5 * column3, r + 3, C2[2], column3);
@@ -41437,6 +41580,7 @@ function draw121(p, t, o) {
     if (age <= 0 || age >= life) continue;
     const u = age / life, a = rand(i, o.seed, 3) * TAU, speed = 32 + rand(i, o.seed, 4) * 85;
     const x = Math.cos(a) * speed * u, y = -8 - (40 + Math.abs(Math.sin(a)) * 85) * u + 83 * u * u;
+    if (y > 2) continue;
     const k = Math.sin(Math.PI * u) * fade, r = (i % 7 === 0 ? 3.5 : 1.6) * k;
     p.disc(x, y, r + 1, C2[2], k * 0.65);
     p.disc(x - 0.5, y - 0.5, r, C2[4], k);
@@ -41455,7 +41599,7 @@ __export(prismatic_blossom_exports, {
   draw: () => draw122,
   meta: () => meta254
 });
-var meta254 = { addedAt: "2026-11-02T13:49:39Z", name: "Prismatic blossom", desc: "A radiant crystalline flower erupts, unfurls uneven petals, then shatters into drifting leaves and luminous pollen.", tags: ["nature", "flower", "blossom", "bloom", "crystal", "magic", "healing", "burst", "one-shot"], size: [224, 190], origin: [112, 166], duration: 3.4, loop: false, fps: 24, bg: "ground", options: { palette: ["#092825", "#13523d", "#20845c", "#47bd78", "#95efaa", "#d8ffba", "#ffffff"], seed: 38 } };
+var meta254 = { addedAt: "2026-11-02T13:49:39Z", name: "Prismatic blossom", desc: "A radiant crystalline flower erupts, unfurls uneven petals, then shatters into drifting leaves and luminous pollen.", tags: ["nature", "flower", "blossom", "bloom", "crystal", "magic", "healing", "burst", "one-shot"], size: [268, 200], origin: [134, 166], duration: 3.4, loop: false, fps: 24, bg: "ground", options: { palette: ["#092825", "#13523d", "#20845c", "#47bd78", "#95efaa", "#d8ffba", "#ffffff"], seed: 38 } };
 function draw122(p, t, o) {
   if (t < 0 || t >= meta254.duration) return;
   const C2 = fit(o.palette, 7), fade = clamp((meta254.duration - t) / 0.65), grow = clamp(t / 0.56), bloom = clamp((t - 0.28) / 0.65), burst3 = clamp(1 - Math.abs(t - 0.86) / 0.22), cy = -71;
@@ -41489,11 +41633,19 @@ function draw122(p, t, o) {
     p.poly([[sx, sy], [midX + tx, midY + ty], [tipx, tipy]], layer3 ? C2[5] : C2[4], alpha);
     p.line(midX + tx, midY + ty, tipx, tipy, C2[6], alpha * 0.8);
     p.line(sx, sy, tipx, tipy, C2[4], alpha * 0.7);
+    if (open > 0.35) {
+      p.line(sx + dx * dist * 0.25, sy + dy * dist * 0.25, midX + tx * 0.65, midY + ty * 0.65, C2[5], alpha * 0.65);
+    }
   }
   const heart2 = fade * bloom * clamp((2.3 - t) / 0.9);
   p.glow(0, cy, 55, C2[3], 0.55 * heart2);
   p.disc(0, cy, 8 * heart2, C2[4], heart2);
   sparkle(p, 0, cy, (10 + 9 * burst3) * heart2, WHITE, C2[5], heart2);
+  for (let i = 0; i < 7; i++) {
+    const a = i * TAU / 7 + t * 0.45, r = (5 + 5 * bloom) * heart2, x = Math.cos(a) * r, y = cy + Math.sin(a) * r * 0.62;
+    p.line(0, cy, x, y, C2[3], heart2 * 0.8);
+    p.dot(x, y, C2[6], heart2);
+  }
   for (let i = 0; i < 48; i++) {
     const delay = 0.42 + rand(i, o.seed, 11) * 1.8, age = t - delay, life = 0.55 + rand(i, o.seed, 12) * 0.9;
     if (age <= 0 || age >= life) continue;
@@ -41558,7 +41710,21 @@ function draw123(p, t, o) {
     p.poly([[40, -5], [54, 5], [62, 4], [52, 16], [41, 19], [31, 12]], C2[1], a);
     p.polyline([[-40, -5], [-54, 5], [-62, 4], [-52, 16]], C2[4], a * 0.8);
     p.polyline([[40, -5], [54, 5], [62, 4], [52, 16]], C2[4], a * 0.8);
-    p.poly([[-39, -32], [-31, -49], [-16, -45], [0, -52], [16, -45], [31, -49], [39, -32], [47, -15], [43, 15], [31, 37], [18, 51], [0, 58], [-18, 51], [-31, 37], [-43, 15], [-47, -15]], C2[0], a);
+    for (const side of [-1, 1]) {
+      p.poly([
+        [side * 37, -6],
+        [side * 52, -15],
+        [side * 70, -20],
+        [side * 59, -8],
+        [side * 73, -4],
+        [side * 55, 1],
+        [side * 43, 9]
+      ], C2[1], a);
+      p.polyline([[side * 37, -6], [side * 52, -15], [side * 70, -20], [side * 59, -8], [side * 73, -4]], C2[4], a * 0.7);
+      p.line(side * 46, 0, side * 63, -8, C2[3], a * 0.9);
+    }
+    p.poly([[0, -52], [-16, -45], [-31, -49], [-39, -32], [-47, -15], [-43, 15], [-31, 37], [-18, 51], [0, 58]], C2[0], a);
+    p.poly([[0, -52], [16, -45], [31, -49], [39, -32], [47, -15], [43, 15], [31, 37], [18, 51], [0, 58]], C2[0], a);
     p.polyline([[-47, -15], [-39, -32], [-31, -49], [-16, -45], [0, -52], [16, -45], [31, -49], [39, -32], [47, -15], [43, 15], [31, 37], [18, 51], [0, 58], [-18, 51], [-31, 37], [-43, 15], [-47, -15]], C2[4], a * 0.78);
     p.poly([[-38, -22], [-29, -40], [-15, -36], [0, -43], [15, -36], [29, -40], [38, -22], [27, -15], [15, -19], [0, -26], [-15, -19], [-27, -15]], C2[2], a);
     p.poly([[-43, -10], [-29, -14], [-16, -8], [-13, 8], [-22, 21], [-39, 17]], C2[1], a);
@@ -41575,10 +41741,17 @@ function draw123(p, t, o) {
     p.glow(26, -12, 8, C2[5], a * 0.16);
     p.polyline([[-39, -20], [-22, -17], [-13, -12]], C2[4], a);
     p.polyline([[39, -20], [22, -17], [13, -12]], C2[4], a);
+    for (const side of [-1, 1]) for (let row = 0; row < 3; row++) {
+      const x = side * (26 + row * 3), y = -2 + row * 8;
+      p.line(x - side * 4, y - 2, x, y, C2[3], a * 0.85);
+      p.line(x, y, x - side * 3, y + 3, C2[4], a * 0.55);
+    }
     p.poly([[0, -22], [-10, -10], [-17, 12], [-21, 24], [-13, 35], [0, 38], [13, 35], [21, 24], [17, 12], [10, -10]], C2[2], a);
     p.poly([[0, -20], [-4, 11], [-11, 25], [0, 29], [11, 25], [4, 11]], C2[3], a);
     p.poly([[-17, 22], [-10, 20], [-8, 23], [-14, 26]], C2[0], a);
     p.poly([[17, 22], [10, 20], [8, 23], [14, 26]], C2[0], a);
+    p.line(-12, 20, -8, 19, C2[5], a * 0.7);
+    p.line(12, 20, 8, 19, C2[5], a * 0.7);
     const jaw2 = roar * 24;
     p.poly([[-22, 31], [-19, 42 + jaw2 * 0.45], [-12, 49 + jaw2], [0, 53 + jaw2], [12, 49 + jaw2], [19, 42 + jaw2 * 0.45], [22, 31]], C2[0], a);
     p.poly([[-18, 34], [-14, 39 + jaw2 * 0.4], [-9, 45 + jaw2 * 0.82], [0, 48 + jaw2 * 0.9], [9, 45 + jaw2 * 0.82], [14, 39 + jaw2 * 0.4], [18, 34]], C2[1], a);
@@ -41613,6 +41786,9 @@ function draw123(p, t, o) {
     for (let i = 0; i < 12; i++) p.poly([points2[i], points2[i + 1], points2[24 - i], points2[25 - i]], C2[0], cut2);
     p.polyline(points2.slice(0, 13), C2[5], cut2 * 0.8);
     p.polyline(points2.slice(13), C2[3], cut2 * 0.95);
+    const echo = Math.exp(-Math.abs(t - 0.77) * 9) * cut2;
+    p.line(-104, 48, endX - 4, endY - 9, C2[4], echo * 0.65);
+    p.line(-102, 66, endX + 6, endY + 8, C2[2], echo * 0.8);
     p.line(-108, 57, endX, endY, C2[6], cut2 * 0.6);
     for (let i = 0; i < 6; i++) {
       const u = i / 6, v = (i + 1) / 6;
@@ -41642,7 +41818,8 @@ function draw123(p, t, o) {
   }
   const flash3 = Math.exp(-Math.abs(t - 0.73) * 29);
   if (flash3 > 0.02) {
-    p.poly([[-110, 58], [-40, 10], [42, -36], [108, -57], [49, -14], [-35, 34]], C2[5], flash3 * 0.9);
+    p.poly([[-110, 58], [-40, 10], [49, -14], [-35, 34]], C2[5], flash3 * 0.9);
+    p.poly([[-40, 10], [42, -36], [108, -57], [49, -14]], C2[5], flash3 * 0.9);
     p.line(-100, 54, 100, -54, C2[7], flash3);
     sparkle(p, 39, -21, 27 * flash3, WHITE, C2[6], flash3 * 0.9);
     p.glowLine(-60, 32, 90, -49, 7, C2[5], flash3 * 0.23);
@@ -41654,6 +41831,96 @@ function draw123(p, t, o) {
     const angle2 = rand(i, o.seed + 2) * 6.283, distance = (10 + rand(i, o.seed + 3) * 39) * out(u), x = 31 + Math.cos(angle2) * distance, y = -15 + Math.sin(angle2) * distance * 0.7;
     const k = Math.sin(Math.PI * u) * 0.8;
     p.line(x, y, x - Math.cos(angle2) * (2 + 6 * (1 - u)), y - Math.sin(angle2) * (2 + 4 * (1 - u)), i % 4 === 0 ? C2[6] : C2[4], k);
+  }
+}
+
+// src/fx/arcane/starlight-bloom.ts
+var starlight_bloom_exports = {};
+__export(starlight_bloom_exports, {
+  draw: () => draw124,
+  meta: () => meta256
+});
+var meta256 = {
+  sharedSource: true,
+  name: "Starlight bloom",
+  desc: "A turquoise star unfolds into crystal petals, then sheds luminous fragments.",
+  tags: ["magic", "star", "burst", "bloom", "crystal", "\uBCC4\uBE5B", "\uB9C8\uBC95"],
+  size: [96, 96],
+  origin: [48, 48],
+  duration: 1.2,
+  loop: false,
+  fps: 20,
+  bg: "dark",
+  options: { palette: ["#10265a", "#315cba", "#39c6ce", "#a2fff0", "#ffffff"], seed: 17 }
+};
+function draw124(p, t, o) {
+  if (t <= 0 || t >= meta256.duration) return;
+  const c = fit(o.palette, 5), u = t / meta256.duration;
+  const bloom = clamp((u - 0.06) / 0.24), fade = Math.pow(1 - u, 1.4);
+  const flash3 = Math.max(0, 1 - Math.abs(u - 0.16) / 0.12);
+  p.glow(0, 0, 25 + 12 * bloom, c[2], 0.34 * fade);
+  for (let i = 0; i < 8; i++) {
+    const a = i * TAU / 8 + 0.1 * u, ca = Math.cos(a), sa = Math.sin(a);
+    const petal2 = clamp((u - 0.06 - i % 4 * 0.012) / 0.24);
+    const length = (i % 2 ? 18 : 30) * petal2 * (1 - 0.25 * u), width2 = (i % 2 ? 2.5 : 4) * petal2;
+    const tipX = ca * length, tipY = sa * length, mx = ca * length * 0.48, my = sa * length * 0.48;
+    p.poly([[0, 0], [mx - sa * width2, my + ca * width2], [tipX, tipY], [mx + sa * width2, my - ca * width2]], c[1], fade);
+    p.poly([[0, 0], [mx - sa * width2, my + ca * width2], [tipX, tipY]], c[2], fade);
+    p.line(0, 0, tipX, tipY, c[3], fade * 0.8);
+  }
+  p.disc(0, 0, 4 + 2 * bloom, c[2], fade);
+  p.disc(0, 0, 2 + 3 * flash3, c[4], fade);
+  if (flash3 > 0) sparkle(p, 0, 0, 15 * flash3, WHITE, c[3], flash3);
+  for (let i = 0; i < 18; i++) {
+    const q = clamp((u - 0.16 - rand(i, o.seed, 1) * 0.16) / (0.65 + rand(i, o.seed, 2) * 0.18));
+    if (q <= 0 || q >= 1) continue;
+    const a = i * TAU / 18 + rand(i, o.seed, 3) * 0.14, d = 7 + (18 + rand(i, o.seed, 4) * 20) * (1 - (1 - q) ** 2);
+    const x = Math.cos(a) * d, y = Math.sin(a) * d, k = Math.sin(Math.PI * q) * fade;
+    p.line(x - Math.cos(a) * 4 * k, y - Math.sin(a) * 4 * k, x, y, c[2], k * 0.7);
+    if (i % 3 === 0) sparkle(p, x, y, 2 + 2 * k, c[4], c[2], k);
+    else p.dot(x, y, c[3], k);
+  }
+}
+
+// src/fx/nature/emerald-fireflies.ts
+var emerald_fireflies_exports = {};
+__export(emerald_fireflies_exports, {
+  draw: () => draw125,
+  meta: () => meta257
+});
+var meta257 = {
+  sharedSource: true,
+  name: "Emerald fireflies",
+  desc: "Emerald fireflies spiral upward with warm flickering cores and fading trails.",
+  tags: ["nature", "fireflies", "spiral", "emerald", "\uBC18\uB527\uBD88", "\uC790\uC5F0"],
+  size: [96, 112],
+  origin: [48, 100],
+  duration: 2,
+  loop: false,
+  fps: 15,
+  bg: "dark",
+  options: { palette: ["#133e38", "#247452", "#68cf78", "#d8ffad"], seed: 21 }
+};
+function draw125(p, t, o) {
+  if (t <= 0 || t >= meta257.duration) return;
+  const c = fit(o.palette, 4);
+  for (let i = 0; i < 13; i++) {
+    const delay = i * 0.055, life = 1.35 + rand(i, o.seed, 1) * 0.35, u = (t - delay) / life;
+    if (u <= 0 || u >= 1) continue;
+    const k = Math.sin(Math.PI * u), phase = i * TAU / 13 + u * (TAU * 1.15 + rand(i, o.seed, 2));
+    const radius5 = 6 + 19 * u, x = Math.cos(phase) * radius5, y = -8 - 68 * u + Math.sin(phase * 2) * 3;
+    const flicker = 0.68 + 0.32 * Math.sin(t * 13 + i * 2.7), head5 = (i % 4 === 0 ? 2.5 : 1.5) * k;
+    for (let j = 3; j >= 1; j--) {
+      const v = Math.max(0, u - j * 0.025), a = i * TAU / 13 + v * (TAU * 1.15 + rand(i, o.seed, 2));
+      const tx = Math.cos(a) * (6 + 19 * v), ty = -8 - 68 * v + Math.sin(a * 2) * 3;
+      p.dot(tx, ty, c[1], k * (0.5 - j * 0.1));
+      if (j === 1 && i % 3 === 0) p.dot(tx, ty + 1, c[2], k * 0.4);
+    }
+    p.glow(x, y, 6 + 3 * k, c[2], 0.25 * k * flicker);
+    p.disc(x, y, head5 + 1, c[1], 0.7 * k);
+    p.disc(x, y, head5, c[2], k);
+    p.dot(x, y, c[3], k * flicker);
+    if (i % 4 === 0 && k > 0.55) sparkle(p, x, y, 2 * k, c[3], c[2], 0.45 * k);
   }
 }
 
@@ -41684,6 +41951,8 @@ var categories = [
 
 // src/fx/index.ts
 var effects = {
+  "arcane/starlight-bloom": starlight_bloom_exports,
+  "nature/emerald-fireflies": emerald_fireflies_exports,
   "shadow/black-dragon-slash": black_dragon_slash_exports,
   "arcane/celestial-supernova": celestial_supernova_exports,
   "arcane/dimensional-convergence": dimensional_convergence_exports,
@@ -43864,6 +44133,8 @@ var tags_scifi_transitions_default = {
 var effectsKo = Object.assign({}, moves_default, fire_default, explosions_default, water_default, ice_default, lightning_default, scifi_default, melee_default, impacts_default, projectiles_default, spawn_default, arcane_default, holy_default, shadow_default, status_default, nature_default, weather_default, ui_default, pickups_default, transitions_default, critters_default);
 var tagsKo = Object.assign({}, tags_moves_default, tags_ui_pickups_default, tags_critters_weather_default, tags_status_spawn_default, tags_arcane_holy_default, tags_explosions_projectiles_default, tags_fire_water_default, tags_ice_lightning_default, tags_melee_impacts_default, tags_nature_shadow_default, tags_scifi_transitions_default);
 Object.assign(effectsKo, {
+  "arcane/starlight-bloom": { name: "\uBCC4\uBE5B \uAC1C\uD654", desc: "\uBCC4\uC774 \uC218\uC815 \uAF43\uC78E\uACFC \uBE5B\uB098\uB294 \uD30C\uD3B8\uC73C\uB85C \uD53C\uC5B4\uB0A9\uB2C8\uB2E4." },
+  "nature/emerald-fireflies": { name: "\uC5D0\uBA54\uB784\uB4DC \uBC18\uB527\uBD88", desc: "\uBE5B\uB098\uB294 \uBC18\uB527\uBD88\uC774 \uACE1\uC120 \uADA4\uC801\uC744 \uADF8\uB9AC\uBA70 \uB5A0\uC624\uB985\uB2C8\uB2E4." },
   "shadow/black-dragon-slash": { name: "\uD751\uB8E1\uCC38", desc: "\uD751\uB8E1\uC758 \uC5BC\uAD74\uC774 \uC9C4\uB3D9\uD558\uBA70 \uD3EC\uD6A8\uD558\uACE0, \uAC70\uB300\uD55C \uAC80\uACA9\uC774 \uC55E\uC758 \uACF5\uAC04\uC744 \uAC08\uB77C\uB0C5\uB2C8\uB2E4." },
   "arcane/celestial-supernova": { name: "\uCC9C\uCCB4 \uCD08\uC2E0\uC131", desc: "\uBCC4\uC774 \uB5A0\uC62C\uB77C \uB2E4\uC911 \uADA4\uB3C4\uC640 \uC131\uC6B4 \uD30C\uD3B8\uC73C\uB85C \uD3ED\uBC1C\uD569\uB2C8\uB2E4." },
   "arcane/dimensional-convergence": { name: "\uCC28\uC6D0 \uC735\uD569 \uC18C\uD658", desc: "\uB9C8\uBC95\uC9C4\uACFC \uD68C\uC804 \uADA4\uB3C4\uAC00 \uCC28\uC6D0\uC758 \uD575\uC744 \uC5F4\uC5B4\uB0C5\uB2C8\uB2E4." },
@@ -44044,26 +44315,27 @@ var palettesKo = {
   candy: "\uC0AC\uD0D5",
   night: "\uBC24"
 };
-var FX = Object.entries(effects).map(([id, mod]) => {
-  const meta256 = { fps: 30, bg: "dark", loop: false, duration: 1, tags: [], options: {}, ...mod.meta };
-  const originalName = meta256.name, originalDesc = meta256.desc;
+var hideSharedSources = document.body.hasAttribute("data-exclude-shared-sources");
+var FX = Object.entries(effects).filter(([, mod]) => !hideSharedSources || mod.meta.sharedSource !== true).map(([id, mod]) => {
+  const meta258 = { fps: 30, bg: "dark", loop: false, duration: 1, tags: [], options: {}, ...mod.meta };
+  const originalName = meta258.name, originalDesc = meta258.desc;
   const translation = effectsKo[id];
-  if (translation) Object.assign(meta256, translation);
+  if (translation) Object.assign(meta258, translation);
   const cat = id.split("/")[0], category = categories2.find((c) => c.id === cat), originalCategory = categories.find((c) => c.id === cat);
   const searchIndex = searchText([
     id,
-    meta256.name,
-    meta256.desc,
+    meta258.name,
+    meta258.desc,
     originalName,
     originalDesc,
     category?.name ?? "",
     category?.blurb ?? "",
     originalCategory?.name ?? "",
     originalCategory?.blurb ?? "",
-    ...meta256.tags,
-    ...meta256.tags.map(tagLabel)
+    ...meta258.tags,
+    ...meta258.tags.map(tagLabel)
   ].join(" "));
-  return { id, cat, name: meta256.name, originalName, originalDesc, searchIndex, mod: { ...mod, meta: meta256 }, meta: meta256 };
+  return { id, cat, name: meta258.name, originalName, originalDesc, searchIndex, mod: { ...mod, meta: meta258 }, meta: meta258 };
 });
 var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 var isScreen = (fx) => fx.meta.size[0] >= 320 && Math.abs(fx.meta.size[0] / fx.meta.size[1] - 16 / 9) < 0.05;

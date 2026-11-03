@@ -39,6 +39,15 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
   const force = smooth(.08, .32, t) * (1 - smooth(1.7, 3.35, t));
   if (force > .01) {
     const height = 150 * Math.min(1, force * 1.8);
+    // Ash rolls upward from both sides of the vent and cools as it spreads.
+    for (let i=0;i<12;i++) {
+      const age=t-(.18+i*.075); if(age<=0 || age>=1.5) continue;
+      const q=age/1.5, side=i%2?1:-1;
+      const x=side*(16+rand(i,S+110)*24+q*(12+rand(i,S+111)*23));
+      const y=-12-q*(65+rand(i,S+112)*55), r=(5+q*10)*(1-.35*q);
+      const alpha=Math.sin(Math.PI*q)*fade*.45;
+      p.disc(x,y,r,C[0],alpha); p.disc(x-2,y-3,r*.55,C[1],alpha*.55);
+    }
     // Dark ash lobes sit behind the luminous column and rise with its crown.
     for (let j = 0; j < 13; j++) {
       const f = rand(j, S + 70), g = rand(j, S + 71);
@@ -81,6 +90,16 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     if (i % 3 === 0) p.dot(x, -4 - rise * .3, C[5], fade * force);
   }
   // An uneven fan of lava tongues spreads with height; seeded values remain deterministic.
+  // Cooling crust breaks off the rising column; bright cracks narrow as it cools.
+  for (let i=0;i<13;i++) {
+    const age=t-.24-i*.035, life=1.25+rand(i,S+103)*.5;
+    if(age<=0 || age>=life) continue;
+    const u=age/life, side=i%2?1:-1;
+    const x=side*(8+rand(i,S+104)*42)*u, y=-15-(42+rand(i,S+105)*95)*u+35*u*u;
+    const r=(3+rand(i,S+106)*4)*(1-.35*u), a=Math.sin(Math.PI*u)*fade;
+    p.poly([[x-r,y],[x-r*.45,y-r],[x+r*.65,y-r*.7],[x+r,y+r*.3],[x,y+r]],C[0],a);
+    p.line(x-r*.4,y,x+r*.5,y-r*.35,C[3],a*(1-u));
+  }
   for (let i=0;i<34;i++) {
     const phase=rand(i,S), width=rand(i,S+1), shift=rand(i,S+2);
     const height=(38+phase*115)*eruption;

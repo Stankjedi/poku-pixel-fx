@@ -28,6 +28,14 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     }
   }
   p.glow(0, -4, 53*rise, C[3], .22*fade);
+  // Four rotating cardinal runes clarify the ritual's scale and orientation.
+  for(let i=0;i<4;i++) {
+    const a=phase*.5+i*TAU/4, x=Math.cos(a)*45*rise, y=-4+Math.sin(a)*10*rise;
+    const z=2.5*rise;
+    p.poly([[x,y-z],[x+z,y],[x,y+z],[x-z,y]],C[4],fade*.75);
+    p.dot(x,y,C[6],fade);
+    if(rise>.5) p.line(x*.85,y, x*.62,y-(2+rise*2), C[3], fade*.5);
+  }
   // A torn, opaque rift is the main silhouette, with layered moving sheets of energy.
   // Its irregular outline expands from a thin seam and contracts before the final fade.
   const opening = easeOut((t-.13)/.42) * fade;

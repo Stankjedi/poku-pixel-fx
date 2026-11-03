@@ -42,7 +42,16 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     p.poly([[40,-5],[54,5],[62,4],[52,16],[41,19],[31,12]],C[1],a);
     p.polyline([[-40,-5],[-54,5],[-62,4],[-52,16]],C[4],a*.8);
     p.polyline([[40,-5],[54,5],[62,4],[52,16]],C[4],a*.8);
-    p.poly([[-39,-32],[-31,-49],[-16,-45],[0,-52],[16,-45],[31,-49],[39,-32],[47,-15],[43,15],[31,37],[18,51],[0,58],[-18,51],[-31,37],[-43,15],[-47,-15]],C[0],a);
+    // Horned cheek frills sweep backward from the head, rather than reading as ears.
+    for(const side of [-1,1]) {
+      p.poly([[side*37,-6],[side*52,-15],[side*70,-20],[side*59,-8],
+        [side*73,-4],[side*55,1],[side*43,9]],C[1],a);
+      p.polyline([[side*37,-6],[side*52,-15],[side*70,-20],[side*59,-8],[side*73,-4]],C[4],a*.7);
+      p.line(side*46,0,side*63,-8,C[3],a*.9);
+    }
+    // Separate the two halves along the centre so each fill tests fewer edges.
+    p.poly([[0,-52],[-16,-45],[-31,-49],[-39,-32],[-47,-15],[-43,15],[-31,37],[-18,51],[0,58]],C[0],a);
+    p.poly([[0,-52],[16,-45],[31,-49],[39,-32],[47,-15],[43,15],[31,37],[18,51],[0,58]],C[0],a);
     p.polyline([[-47,-15],[-39,-32],[-31,-49],[-16,-45],[0,-52],[16,-45],[31,-49],[39,-32],[47,-15],[43,15],[31,37],[18,51],[0,58],[-18,51],[-31,37],[-43,15],[-47,-15]],C[4],a*.78);
     // Layered brow and cheek plates retain volume while the base stays ink-black.
     p.poly([[-38,-22],[-29,-40],[-15,-36],[0,-43],[15,-36],[29,-40],[38,-22],[27,-15],[15,-19],[0,-26],[-15,-19],[-27,-15]],C[2],a);
@@ -57,10 +66,17 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     p.line(-32,-13,-21,-11,C[6],a); p.line(32,-13,21,-11,C[6],a);
     p.glow(-26,-12,8,C[5],a*.16); p.glow(26,-12,8,C[5],a*.16);
     p.polyline([[-39,-20],[-22,-17],[-13,-12]],C[4],a); p.polyline([[39,-20],[22,-17],[13,-12]],C[4],a);
+    // Sparse raised scales pick out the cheek planes while keeping the face black.
+    for (const side of [-1, 1]) for (let row=0; row<3; row++) {
+      const x=side*(26+row*3), y=-2+row*8;
+      p.line(x-side*4,y-2,x,y,C[3],a*.85);
+      p.line(x,y,x-side*3,y+3,C[4],a*.55);
+    }
     // Faceted nose, nostrils, open mouth and teeth make the lower face legible.
     p.poly([[0,-22],[-10,-10],[-17,12],[-21,24],[-13,35],[0,38],[13,35],[21,24],[17,12],[10,-10]],C[2],a);
     p.poly([[0,-20],[-4,11],[-11,25],[0,29],[11,25],[4,11]],C[3],a);
     p.poly([[-17,22],[-10,20],[-8,23],[-14,26]],C[0],a); p.poly([[17,22],[10,20],[8,23],[14,26]],C[0],a);
+    p.line(-12,20,-8,19,C[5],a*.7); p.line(12,20,8,19,C[5],a*.7);
     // The bottom jaw drops independently; teeth and dark mouth reveal a real roar.
     const jaw=roar*24;
     p.poly([[-22,31],[-19,42+jaw*.45],[-12,49+jaw],[0,53+jaw],[12,49+jaw],[19,42+jaw*.45],[22,31]],C[0],a);
@@ -95,6 +111,10 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     for(let i=0;i<12;i++) p.poly([points[i],points[i+1],points[24-i],points[25-i]],C[0],cut);
     p.polyline(points.slice(0,13),C[5],cut*.8);
     p.polyline(points.slice(13),C[3],cut*.95);
+    // A separated echo of the blade briefly reveals the depth of the torn space.
+    const echo = Math.exp(-Math.abs(t-.77)*9)*cut;
+    p.line(-104,48,endX-4,endY-9,C[4],echo*.65);
+    p.line(-102,66,endX+6,endY+8,C[2],echo*.8);
     p.line(-108,57,endX,endY,C[6],cut*.6);
     for(let i=0;i<6;i++) {
       const u=i/6,v=(i+1)/6;
@@ -130,7 +150,10 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
   const flash=Math.exp(-Math.abs(t-.73)*29);
   if(flash>.02) {
     // The silver edge widens for an instant, while the cut's interior stays black.
-    p.poly([[-110,58],[-40,10],[42,-36],[108,-57],[49,-14],[-35,34]],C[5],flash*.9);
+    // Split the same diagonal polygon along an interior edge so rasterization
+    // avoids scanning the large empty corners of its bounding box.
+    p.poly([[-110,58],[-40,10],[49,-14],[-35,34]],C[5],flash*.9);
+    p.poly([[-40,10],[42,-36],[108,-57],[49,-14]],C[5],flash*.9);
     p.line(-100,54,100,-54,C[7],flash);
     sparkle(p,39,-21,27*flash,WHITE,C[6],flash*.9);
     p.glowLine(-60,32,90,-49,7,C[5],flash*.23);

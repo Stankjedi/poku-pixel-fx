@@ -53,7 +53,8 @@ function tower(p: Painter, x: number, y: number, w: number, h: number, roofH: nu
   for(let j=0;j<2;j++){
     const wy=y+10+j*11; if(wy+7>=y+h) break;
     p.rect(x-3,wy,6,8,c[0]); p.poly([[x-3,wy],[x,wy-4],[x+3,wy]],c[0]);
-    p.rect(x-2,wy+1,4,5,c[3]); p.rect(x-1,wy+1,2,4,c[5]); p.dot(x,wy-1,c[6],.85);
+    const flicker=.65+.35*Math.sin(phase*2+x*.17+j*1.8);
+    p.rect(x-2,wy+1,4,5,c[3]); p.rect(x-1,wy+1,2,4,c[5],flicker); p.dot(x,wy-1,c[6],.55+.3*flicker);
   }
   if(flag){
     const tip=y-4-roofH-7, flap=Math.sin(phase*2+x*.2)*2;
@@ -82,6 +83,12 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
   }
   const diamond:Point[]=[[0,ground-13],[55,ground],[0,ground+13],[-55,ground]];
   for(let i=0;i<4;i++){const a=diamond[i],b=diamond[(i+1)%4];p.line(a[0],a[1],b[0],b[1],c[3],.7);}
+  // Floating diamond beacons revolve around the seal on a seamless period.
+  for(let i=0;i<4;i++) {
+    const a=ph+i*TAU/4, x=Math.cos(a)*74, y=ground-19+Math.sin(a)*7;
+    p.poly([[x,y-3],[x+2,y],[x,y+3],[x-2,y]],c[4],.8);
+    p.dot(x,y,c[6],.9);
+  }
   // The charging shafts follow the appearance and fading instead of flashing at the seam.
   const charge=Math.min(1, Math.max(0, reveal*(1-spires)*2));
   if(charge>.01) for(const x of [-43,-30,-16,0,16,30,43]) {

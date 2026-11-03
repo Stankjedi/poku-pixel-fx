@@ -40,6 +40,12 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
   }
   // Symmetric feathered wings unfurl, their shafts and barbs held on the pixel grid.
   const wing=appear*fade*(1-peak(t,.94,1.63)), stretch=(0.3+0.7*blast)*(1+0.12*Math.sin(t*4));
+  // A broken aureole behind the wings forms a recognizable divine silhouette.
+  if(wing>.01) for(let i=0;i<72;i++) {
+    if(i%12<3) continue;
+    const a=i*TAU/72, r=20+11*blast;
+    p.dot(Math.cos(a)*r,y+Math.sin(a)*r*.42,c[i%9===0?5:3],wing*.75);
+  }
   // Layered feather masses lead the linework: the wing opens rapidly then flexes.
   const flex=Math.sin(t*3.4)*5*fade;
   for(const side of [-1,1]) {
@@ -81,6 +87,15 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     const z=(j%4===0?5:2)*(1-.6*u);
     p.poly([[x,yy-z*2],[x+z,yy],[x,yy+z],[x-z,yy]],c[j%4===0?5:3],k);
     p.line(x,yy,x-Math.cos(a)*16*k,yy-Math.sin(a)*10*k,c[4],k*.6);
+  }
+  // A few distinct feathers turn and drift after the wings dissolve.
+  for(let i=0;i<8;i++) {
+    const u=clamp((t-.8-i*.08)/1.7); if(u<=0||u>=1) continue;
+    const side=i%2?1:-1, x=side*(19+i*7)+Math.sin(u*5+i)*7;
+    const yy=y-4+u*(58+i*3), len=(5+i%3)*Math.sin(Math.PI*u);
+    const alpha=Math.sin(Math.PI*u)*fade;
+    p.poly([[x,yy-len],[x+side*2,yy-1],[x,yy+len],[x-side*2,yy+1]],c[3],alpha);
+    p.line(x,yy-len,x,yy+len,c[5],alpha*.75);
   }
   if (pulse>0.01) { sparkle(p,0,y,10+24*pulse,WHITE,c[4],fade); p.glow(0,y,52,c[4],0.6*pulse*fade); }
   // Rising asymmetric ember-stars fill the space without obscuring the core.

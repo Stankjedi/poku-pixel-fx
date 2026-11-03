@@ -16,6 +16,14 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
   const pinch=1-.70*ramp(t,1.03,1.55), twist=Math.sin(t*3.2)*.22;
   const width=(2+37*rise)*close*pinch*(.89+.11*Math.sin(t*7)), height=72*rise*close*(1-.25*ramp(t,1.1,1.7));
   p.glow(0,0,74,c[2],0.32*k);
+  // Broken radial fault lines lead the eye toward the opening rather than forming a flat star.
+  for(let i=0;i<7;i++) {
+    const a=TAU*i/7+.12, inner=37*rise, outer=(54+i%3*9)*rise;
+    const x=Math.cos(a)*inner,y=Math.sin(a)*inner*.8;
+    const nx=Math.cos(a)*outer,ny=Math.sin(a)*outer*.8;
+    p.line(x,y,(x+nx)*.5+3,(y+ny)*.5-2,c[2],k*.6);
+    p.line((x+nx)*.5+3,(y+ny)*.5-2,nx,ny,c[3],k*.55);
+  }
   // Three tilted, counter-rotating fragment rings create the pull towards the tear.
   for(let ring=0;ring<3;ring++) {
     const radius=(30+ring*20)*(0.5+0.5*rise), rot=t*(ring%2?-.9:1.15), squash=.55+ring*.11;
@@ -39,7 +47,7 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     }
     // A layered irregular corona gives the fracture a wide physical silhouette.
     for(let j=0;j<16;j++) {
-      const a=TAU*j/16+t*.8, ca=Math.cos(a), sa=Math.sin(a), phase=(j*7+o.seed)%5;
+      const a=TAU*j/16+t*.8+Math.sin(j*13+o.seed)*.10, ca=Math.cos(a), sa=Math.sin(a), phase=(j*7+o.seed)%5;
       const inner=26+phase*3, outer=(57+phase*6)*rise*close;
       const breadth=.10+.05*(j%3);
       p.poly([[ca*inner,sa*inner*.82],[Math.cos(a-breadth)*outer,Math.sin(a-breadth)*outer*.82],[Math.cos(a+breadth)*outer*.74,Math.sin(a+breadth)*outer*.74*.82]], c[j%3===0?3:2], k*.85);

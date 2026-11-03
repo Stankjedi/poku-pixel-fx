@@ -7,7 +7,7 @@ export const meta = {
   name: 'Ion stormburst',
   desc: 'A violet storm condenses into a falling ion core; branching lightning erupts, then a spinning electrical shock ring shatters into drifting sparks.',
   tags: ['lightning', 'electric', 'storm', 'ion', 'thunder', 'burst', 'shockwave', 'magic', 'one-shot'],
-  size: [208, 176], origin: [104, 150], duration: 2.4, loop: false, fps: 30, bg: 'ground',
+  size: [232, 184], origin: [116, 154], duration: 2.4, loop: false, fps: 30, bg: 'ground',
   options: { palette: ['#100e3a', '#342f9e', '#7055e4', '#58a9ff', '#8deaff', '#e7ffff', '#ffffff'], seed: 43 },
 };
 
@@ -83,6 +83,15 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
   if (t >= 0.40) {
     const u = clamp((t - 0.40) / 1.7), shock = (1 - u) * end, r = 6 + 74 * (1 - Math.pow(1 - phase, 3));
     p.glow(0, -8, 55 + 14 * phase, c[2], 0.45 * shock);
+    // Short arcs race along the shock front instead of a uniformly lit ring.
+    for (let i=0;i<6;i++) {
+      const angle=i*TAU/6+t*3, span=.24, alpha=shock*(.45+.3*Math.sin(t*14+i));
+      let px=Math.cos(angle)*r, py=-8+Math.sin(angle)*r*.19;
+      for(let j=1;j<=4;j++) {
+        const a=angle+span*j/4, x=Math.cos(a)*(r+(j%2?2:-1)), y=-8+Math.sin(a)*r*.19;
+        p.line(px,py,x,y,c[j%2?5:3],alpha); px=x; py=y;
+      }
+    }
     // Perspective ellipse ring consists of segmented moving shards, not a smooth vector contour.
     for (let i = 0; i < 76; i++) {
       const a = i * TAU / 76, flicker = rand(o.seed, i, Math.floor(t * 8));
@@ -92,6 +101,11 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
       if (Math.sin(a) > 0) p.dot(x, y + 1, c[2], shock * 0.7);
     }
     if (u < 0.5) sparkle(p, 0, -22, 25 * (1 - u * 1.6), WHITE, c[3], shock);
+    // A pair of short-lived, asymmetric ground arcs bridges the impact and ring.
+    if(u<.4) for(const side of [-1,1]) {
+      const length=(30+(side>0?12:0))*phase, alpha=shock*(1-u/.4);
+      p.polyline([[0,-9],[side*length*.3,-14],[side*length*.48,-7],[side*length*.72,-12],[side*length,-5]],c[4],alpha);
+    }
     // Broken glowing cracks and heavy shards give the strike a grounded impact.
     for (let side of [-1, 1]) {
       for (let k = 0; k < 4; k++) {

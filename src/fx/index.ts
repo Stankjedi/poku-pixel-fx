@@ -256,10 +256,14 @@ import * as newfx_7 from "./shadow/abyssal-fracture.js";
 import * as newfx_8 from "./water/abyssal-maelstrom.js";
 import * as newfx_9 from "./nature/prismatic-blossom.js";
 import * as blackDragonSlash from "./shadow/black-dragon-slash.js";
+import * as starlightBloom from "./arcane/starlight-bloom.js";
+import * as emeraldFireflies from "./nature/emerald-fireflies.js";
 
 export { categories } from "./categories.js";
 
 export const effects = {
+  "arcane/starlight-bloom": starlightBloom,
+  "nature/emerald-fireflies": emeraldFireflies,
   "shadow/black-dragon-slash": blackDragonSlash,
   "arcane/celestial-supernova": newfx_0,
   "arcane/dimensional-convergence": newfx_1,
