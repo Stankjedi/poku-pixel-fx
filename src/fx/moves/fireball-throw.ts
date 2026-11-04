@@ -1,9 +1,12 @@
-import { chain, READY, PAL } from "../../core/index.js";
+import { chain, READY, PAL, smooth } from "../../core/index.js";
 import * as charge from "../arcane/spell-charge.js";
 import * as fireball from "../fire/fireball.js";
 import * as blast from "../explosions/small-explosion.js";
 
-const THROW = 0.95, FLY = 0.46, HIT = THROW + FLY, SPEED = 340, TX = 190;
+const THROW = 0.95, FLY = 0.46, HIT = THROW + FLY, TX = 190, LAUNCH_X = 28;
+// The hot nose, not the center, contacts the target. Derive speed from that contact.
+const NOSE = 5.6, SPEED = (TX - NOSE - LAUNCH_X) / FLY;
+const HANDOFF = 0.05;
 
 export const meta = {
   name: "Fireball throw",
@@ -16,7 +19,7 @@ export const meta = {
   fps: 30,
   bg: "ground",
   actor: 2,
-  options: { seed: 1 },
+  options: { seed: 1, choreography: "continuous" as "continuous" | "classic" },
 };
 
 const HOLD = { ...READY, x: -3, crouch: 4, lean: 2, fx: 18, fy: -22, bx: 11, by: -17, ffx: 10, fbx: -8 };
@@ -44,8 +47,16 @@ export const act = {
   dust: [{ t: THROW, x: 13, n: 7, dir: 1 }],
 };
 
-export const create = chain([
-  { fx: charge, t: 0.08, until: THROW, palette: PAL.fire },
-  { fx: fireball, t: THROW, until: HIT, x: (t) => 28 + (t - THROW) * SPEED, y: -22 },
-  { fx: blast, t: HIT, x: TX },
-]);
+export function create(o: typeof meta.options & { palette?: (string | number)[] }) {
+  const classic = o.choreography === "classic";
+  return chain([
+    // Shift the gathered energy with the throwing hand, then crossfade it into the
+    // projectile for two frames. Fades affect this cue's color AND light only.
+    { fx: charge, t: 0.08, until: THROW + (classic ? 0 : HANDOFF), palette: o.palette ?? PAL.fire,
+      x: classic ? 0 : (t) => 13 * smooth(THROW - 0.06, THROW, t),
+      fadeIn: classic ? 0 : 0.14, fadeOut: classic ? 0 : HANDOFF, light: classic ? 1 : 0.78 },
+    { fx: fireball, t: THROW, until: HIT, x: (t) => LAUNCH_X + (t - THROW) * SPEED, y: -22,
+      fadeIn: classic ? 0 : HANDOFF, light: classic ? 1 : 0.86 },
+    { fx: blast, t: HIT, x: TX, light: classic ? 1 : 0.82 },
+  ])(o);
+}

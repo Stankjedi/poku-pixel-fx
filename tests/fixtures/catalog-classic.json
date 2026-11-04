@@ -1,0 +1,78 @@
+{
+  "melee/sword-slash": {
+    "hash": "24264ebdf8dd643d3f2782aa3ac2ecd0a968519736bd493faa537474f3e8ec18",
+    "frames": 24,
+    "classicMatches": false,
+    "refinedChanged": true,
+    "original": {
+      "size": [
+        136,
+        104
+      ],
+      "origin": [
+        44,
+        92
+      ],
+      "frames": 24,
+      "hash": "60f19bb91691d52ebd12f4fe99a7765039a054e3de5260b950e3eef8f4905f6b",
+      "reason": "Canvas enlarged to retain upward and outward motes; original crop is unchanged."
+    }
+  },
+  "impacts/hit-spark": {
+    "hash": "68bf5c471143e876241cb420273a8cfef2efb9ed65518f2769674b329d34fac1",
+    "frames": 16,
+    "classicMatches": true,
+    "refinedChanged": true
+  },
+  "arcane/mana-burst": {
+    "hash": "9aaeb7720f99d4fb7502fcc197871c37b0fa09bd095cf61bf952fd40eb0f1528",
+    "frames": 55,
+    "classicMatches": true,
+    "refinedChanged": true
+  },
+  "scifi/warp-in": {
+    "hash": "0b1a09b6114c7b6f25b64aa232a57cb0043f02a92915186367d9c62ad14d8eb4",
+    "frames": 91,
+    "classicMatches": false,
+    "refinedChanged": true,
+    "original": {
+      "frames": 65,
+      "hash": "cf5f9830fe597d217d5f710df1c3f94217ecbe86b317eb0089c1dddc53ec9289",
+      "reason": "Late SNAP particles now finish before duration; pre-SNAP frames are unchanged."
+    }
+  },
+  "explosions/big-explosion": {
+    "hash": "c0de7dae524a322afdff1bd08d2ff927f095b2e047d58b7110e859e9ad4ac9c0",
+    "frames": 217,
+    "classicMatches": false,
+    "refinedChanged": true,
+    "original": {
+      "frames": 126,
+      "hash": "92d19aa1d7c80de6b111d17ec03e8c58efc277f1a2e8c495c08a9aa69a0c4e16",
+      "reason": "Late ash now fades before duration; earlier frames are unchanged."
+    }
+  },
+  "scifi/energy-core": {
+    "hash": "fdd6a6425dd3eb76bee523ec6c85c736a8f8a1923059decd517f4aac1897debd",
+    "frames": 72,
+    "classicMatches": true,
+    "refinedChanged": false
+  },
+  "water/splash": {
+    "hash": "3b035b57262c77616b3705e23cf4eda6f9fd3c3ecf830a00dc93dd4ff04d0a68",
+    "frames": 76,
+    "original": {
+      "size": [
+        176,
+        100
+      ],
+      "origin": [
+        88,
+        78
+      ],
+      "frames": 75,
+      "hash": "4f6ecd884dec0e5b47328b76124e82b6395d229548d3d3bbc31f326f49c5f394",
+      "reason": "Canvas includes the opening stone trail; original crop is unchanged."
+    }
+  }
+}

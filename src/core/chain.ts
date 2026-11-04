@@ -1,35 +1,54 @@
-// Moves: several effects played as one. A cue says which effect, when, where and for how long; a projectile is just an
-// effect whose x is a function of time. It's an ordinary effect from the outside: it plays, recolors and exports.
-
-import { createFx } from "./fx.js";
+// Moves: effects composed in parent-local space, each with its own activation window.
+import { createFx, type EffectModule, type EffectOptions, type EffectDrawContext } from "./fx.js";
+import { smooth } from "./math.js";
 import type { Frame, DrawLayer } from "../index.js";
-type Position = number | ((time: number) => number);
-interface Cue { fx: any; t?: number; until?: number; x?: Position; y?: Position; flip?: boolean; [key: string]: unknown }
-interface CueInstance { fx: any; t: number; until: number; x: Position; y: Position; flip: boolean; opts: Record<string, unknown>; inst: ReturnType<typeof createFx> | null; over: boolean }
-export interface ChainPainter { frame: Frame; tx: number; ty: number; fx: number; cs: number; sn: number; fade: number; lightK: number }
+export type CuePosition = number | ((time: number) => number);
+export interface ChainCue extends Omit<EffectOptions, "x" | "y"> {
+  fx: EffectModule; t?: number; until?: number; x?: CuePosition; y?: CuePosition;
+  /** Smooth fade durations in seconds, measured inside the cue's active window. */
+  fadeIn?: number; fadeOut?: number;
+}
+interface CueInstance {
+  fx: EffectModule; t: number; until: number; x: CuePosition; y: CuePosition;
+  fadeIn: number; fadeOut: number; opts: EffectOptions;
+  inst: ReturnType<typeof createFx> | null; over: boolean;
+}
+export interface ChainPainter extends EffectDrawContext { frame: Frame }
 export type PoseKey = [number, Record<string, any>, string?];
 type Hit = { t: number; [key: string]: unknown };
+// Fixed-step subdivision accumulates tiny roundoff. Treat a nanosecond as the boundary,
+// without consuming an animation frame or forwarding time outside the active window.
+const reached = (time: number, boundary: number) => time >= boundary - 1e-9;
 
 /**
- * create(o) for a list of cues: { fx (an effect module), t (when it starts), until (cut it off here), x, y (numbers, or
- * functions of the move's time, local space), flip, ...any of that effect's options }.
+ * Compose cues in the move's local space. Position callbacks use move time, in seconds.
+ * Child light multiplies parent light; parent fades and transforms apply to every layer.
+ * A parent's palette is a fallback; an explicit cue palette or particle style wins.
+ * until is exclusive. fadeOut ends at until, or a one-shot's natural end if earlier.
  */
-export function chain(cues: Cue[]) {
+export function chain(cues: ChainCue[]) {
   return (o: Record<string, any>) => {
-    const list: CueInstance[] = cues.map(({ fx, t, until, x, y, flip, ...opts }, i) => ({ fx, t: t ?? 0, until: until ?? Infinity, x: x ?? 0, y: y ?? 0, flip: !!flip, opts: { ...opts, seed: (o.seed ?? 1) + i }, inst: null, over: false }));
+    const list: CueInstance[] = cues.map(({ fx, t = 0, until = Infinity, x = 0, y = 0, fadeIn = 0, fadeOut = 0, ...opts }, i) => {
+      if (!Number.isFinite(t) || t < 0 || !(until >= t) || (!Number.isFinite(until) && until !== Infinity)
+        || !Number.isFinite(fadeIn) || fadeIn < 0 || !Number.isFinite(fadeOut) || fadeOut < 0)
+        throw new RangeError("Cue times and fades must be non-negative; until must follow t");
+      const end = fx.meta?.loop ? until : Math.min(until, t + (fx.meta?.duration ?? 1));
+      const options = { ...(o.palette === undefined ? {} : { palette: o.palette }), ...opts, seed: opts.seed ?? (o.seed ?? 1) + i };
+      return { fx, t, until: end, x, y, fadeIn, fadeOut, opts: options,
+        inst: t === 0 && end > 0 ? createFx(fx, options) : null, over: end <= t };
+    });
     let t = 0;
-    const at = (v: Position) => (typeof v === "function" ? v(t) : v);
+    const at = (v: CuePosition) => typeof v === "function" ? v(t) : v;
     const each = (p: ChainPainter, layer: DrawLayer) => {
-      const { frame, tx, ty, fx: sign, cs, sn, fade, lightK } = p;
       for (const c of list) {
         if (!c.inst || c.over) continue;
-        c.inst.options.x = tx + sign * at(c.x);
-        c.inst.options.y = ty + at(c.y);
-        c.inst.options.flip = sign < 0 !== c.flip;
-        c.inst.draw(frame, layer);
+        c.inst.options.x = at(c.x);
+        c.inst.options.y = at(c.y);
+        const enter = c.fadeIn > 0 ? smooth(0, c.fadeIn, t - c.t) : 1;
+        const leave = c.fadeOut > 0 ? smooth(0, c.fadeOut, c.until - t) : 1;
+        c.inst.draw(p.frame, layer, { tx: p.tx, ty: p.ty, fx: p.fx, cs: p.cs, sn: p.sn,
+          fade: p.fade * enter * leave, lightK: p.lightK, particleStyle: p.particleStyle });
       }
-      // each one places the painter for itself: put it back for whoever draws next
-      Object.assign(p, { tx, ty, fx: sign, cs, sn, fade, lightK });
     };
     return {
       update(dt: number) {
@@ -37,14 +56,11 @@ export function chain(cues: Cue[]) {
         const previous = t;
         t += dt;
         for (const c of list) {
-          if (c.over || t < c.t) continue;
+          if (c.over || !reached(t, c.t)) continue;
           if (!c.inst) c.inst = createFx(c.fx, c.opts);
-          // Each sub-effect advances only within its activation window.
-          // Crossing a cue boundary in a single update must not lose time.
-          const start = Math.max(previous, c.t);
-          const end = Math.min(t, c.until);
+          const start = Math.max(previous, c.t), end = Math.min(t, c.until);
           if (end > start) c.inst.update(end - start);
-          if (t >= c.until || (c.inst.done() && !c.fx.meta?.loop)) c.over = true;
+          if (reached(t, c.until) || (c.inst.done() && !c.fx.meta?.loop)) c.over = true;
         }
       },
       drawBack: (p: ChainPainter) => each(p, "back"),

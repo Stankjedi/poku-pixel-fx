@@ -1,0 +1,229 @@
+{
+  "description": "Unoptimized thermal plume baseline. Exact color/light/depth/HDR hashes at 192x144; protects material, motion, palette, orbit and scene occlusion while optimizing.",
+  "dimensions": [
+    192,
+    144
+  ],
+  "camera": {
+    "yaw": 0.68,
+    "elevation": 0.49,
+    "zoom": 1.65,
+    "target": [
+      0,
+      1.95,
+      0
+    ]
+  },
+  "frames": [
+    {
+      "name": "default",
+      "options": {},
+      "camera": {},
+      "t": 2,
+      "hashes": {
+        "color": "210ccd28db8028bfaea40815c8aa7511b63fbb3891c9705721cc5b4edcb24b0d",
+        "light": "f235b578c8fb7db5d4793500e5712edd9fb0405fd6c0aa59fa295d261667683b",
+        "depth": "6d8dc1e8043e0ff3fa1ea8362a63245b95115883288fa80e54a4fda8583779bd"
+      }
+    },
+    {
+      "name": "default",
+      "options": {},
+      "camera": {},
+      "t": 4.6,
+      "hashes": {
+        "color": "9303a6a793c632aceb4401c6f0cead1d30be49d44800c8833a9a030d9cabe761",
+        "light": "7c438c8148467f1adc8eb7e51c3ce72d04d42ada8d5fc5bc949389bfd81927ed",
+        "depth": "0c296f63a203054a18280d89f1e437083dac787a5fffb4405bfcf1c702494c38"
+      }
+    },
+    {
+      "name": "negative-wind",
+      "options": {
+        "seed": 42,
+        "wind": -0.8
+      },
+      "camera": {
+        "yaw": -1.1
+      },
+      "t": 2,
+      "hashes": {
+        "color": "5025633e1cd612ecc403319c59353135a8b1ae306444222e919c1afe5de238ce",
+        "light": "02bfe8edaa0e88e7cf84a63e37c5f9790141e2f7134549858a639f89d4d988ed",
+        "depth": "ad863d80b09aaa7c011e48edbc722bef35bb2215beb87a5cf43d8197965c861c"
+      }
+    },
+    {
+      "name": "negative-wind",
+      "options": {
+        "seed": 42,
+        "wind": -0.8
+      },
+      "camera": {
+        "yaw": -1.1
+      },
+      "t": 4.6,
+      "hashes": {
+        "color": "a6f20f490bb4d4d7c5768cfebc4b43bc6d3390789cf17f4485ddb1afe5fa7516",
+        "light": "6c788f159c113237cca5691c831d0a0c9491cb7bf29b93bc94bd0c1deac298e1",
+        "depth": "e41a4d7bd0a59923b897a90633e21a1a4ea2a9b12dc0b3cd0cec07be5ef03173"
+      }
+    },
+    {
+      "name": "small-no-smoke",
+      "options": {
+        "seed": 0,
+        "size": 0.4,
+        "smoke": 0
+      },
+      "camera": {
+        "yaw": 1.5707963267948966
+      },
+      "t": 2,
+      "hashes": {
+        "color": "fcd174968463e7dc4b524e06c94b8e1328356baddc9dd5ae4dabbbbbb87018ce",
+        "light": "8aa6ceacb85826241b0fac420ed3edf09b03c1971f06bec4cef553cf18fea97c",
+        "depth": "e476415a64dc31aed8b60fd2c241768bab38dec818da5afbea5903243ac1e02a"
+      }
+    },
+    {
+      "name": "small-no-smoke",
+      "options": {
+        "seed": 0,
+        "size": 0.4,
+        "smoke": 0
+      },
+      "camera": {
+        "yaw": 1.5707963267948966
+      },
+      "t": 4.6,
+      "hashes": {
+        "color": "18441452a89efac7542a52daff8aebf4bb410c143f7dfa1e3c009d52e4fe8cd7",
+        "light": "73427b3a2118c19f5cfa3d75d18e0d4a7d747a1dc863855dbb0077b8ba0725b3",
+        "depth": "bb3f2adeaf9b1b83aea22531b31eac277201d9f645ac0894ff7bad0e4ff14e22"
+      }
+    },
+    {
+      "name": "large-heavy-smoke",
+      "options": {
+        "seed": 7,
+        "size": 1.5,
+        "smoke": 1.5
+      },
+      "camera": {
+        "elevation": 0.8,
+        "zoom": 1.1
+      },
+      "t": 2,
+      "hashes": {
+        "color": "eef6f3b7925e4dfd6e56298889a10c55026af15b60b047603c94f88eb0915f2c",
+        "light": "f441f5db2c661448e5afa3f03275a46213173187a46488edb0d61f6140cfcd2d",
+        "depth": "c25727bf9f7eb5c8707c0ec63829e1fd5f24aa056c4a989735ffe4c118cb996f"
+      }
+    },
+    {
+      "name": "large-heavy-smoke",
+      "options": {
+        "seed": 7,
+        "size": 1.5,
+        "smoke": 1.5
+      },
+      "camera": {
+        "elevation": 0.8,
+        "zoom": 1.1
+      },
+      "t": 4.6,
+      "hashes": {
+        "color": "8332b6c16cb5c0ec835ba823e3f6664cf879fc4e30b0fd4c22403bdda8f8036d",
+        "light": "f29f70eb1c6b2b383fcd40ace8a022c655a0d669e64883ba3646a31ef9efa58d",
+        "depth": "2db0e42e95a99c62380134d962f9a19780ea1f7d2f6e5e185e0f87824d45e4da"
+      }
+    },
+    {
+      "name": "cool-palette-hdr",
+      "options": {
+        "seed": 23,
+        "palette": [
+          "#123",
+          "#6af",
+          "#fff"
+        ]
+      },
+      "camera": {
+        "projection": "perspective",
+        "perspective": 0.04
+      },
+      "hdr": true,
+      "t": 2,
+      "hashes": {
+        "color": "2e11e4bb2524bec945fd9da97eb3cd758a426f6301600e93a82a0357398b4972",
+        "light": "9027097d2907a143b620a367a1ea76b3165038beaeb5d92998d46daa8b033c7a",
+        "depth": "8ecf794cbf68633062ae3d3d2b1f8b8e208b9bc4d9776197b0129bea17de9fae",
+        "hdrLight": "d68d160b2d73530fbf11a490fe7523460bf528323e53c3d463ca2e3c1c8aeae4"
+      }
+    },
+    {
+      "name": "cool-palette-hdr",
+      "options": {
+        "seed": 23,
+        "palette": [
+          "#123",
+          "#6af",
+          "#fff"
+        ]
+      },
+      "camera": {
+        "projection": "perspective",
+        "perspective": 0.04
+      },
+      "hdr": true,
+      "t": 4.6,
+      "hashes": {
+        "color": "c6e09376bfead9c0ba8f64246f933001c33624c88bcae8dfd67ae8456d58caa3",
+        "light": "05390e26cf757120b8c752d5acf3d6af3ed8c34bf938f1cc2ba406eccf197ed0",
+        "depth": "e45690874c8339c39baf6b6da20166a0eb996e3ddf427043d1f25695dfeb03aa",
+        "hdrLight": "a251c7b271e711604c800658cf80ad17ef32328ab9b24fca54438b214224c3d9"
+      }
+    },
+    {
+      "name": "scene-depth-dither",
+      "options": {
+        "seed": 8
+      },
+      "camera": {
+        "projection": "perspective",
+        "perspective": -0.025
+      },
+      "hdr": true,
+      "alphaMode": "dither",
+      "depth": true,
+      "t": 2,
+      "hashes": {
+        "color": "7ab10f62d85081c25a1858272b4e8eb34d3733a3a866ed8cef5aad038369e5fd",
+        "light": "9507c5a8207e817075e0ab37c24aef8f97025facddf9d784a63d16d6c5bfb2a5",
+        "depth": "b2fa7882ea0679a07fda45b9d8fb99edca6e7b0d6d06da52b766ea3a3bcf022e",
+        "hdrLight": "2dfd2220cee810f0ccd623a28fd8536083494abb93ee96eea01546c903ff60fe"
+      }
+    },
+    {
+      "name": "scene-depth-dither",
+      "options": {
+        "seed": 8
+      },
+      "camera": {
+        "projection": "perspective",
+        "perspective": -0.025
+      },
+      "hdr": true,
+      "alphaMode": "dither",
+      "depth": true,
+      "t": 4.6,
+      "hashes": {
+        "color": "44bc285d61fbb574e1828892795c4974b2f509879b63b1e4e3f20b88792ee00b",
+        "light": "c0b649648fef91803c473a5c0ef15d9a772138bcb5631351a1ab1799c178d8f0",
+        "depth": "fcf1afe67cb846cf78b3b3742e76a9a5e6d4859103fb5dd2909cb49a0dd4946c",
+        "hdrLight": "6015c7b09f31ae8fdb9837d5eea69a25933cba7788a46dab510519d9897ae930"
+      }
+    }
+  ]
+}

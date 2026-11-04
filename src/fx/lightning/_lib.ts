@@ -1,4 +1,4 @@
-import type { Painter } from "../../core/painter.js";
+import type { Painter, Point as PaintPoint } from "../../core/painter.js";
 // The bolt shape and the way a bolt is inked (a deep halo, a pale body, a white core, light along it) are
 // adapted from Sprite Fusion's open-source lightning (https://www.spritefusion.com/pixel-art-vfx/lightning),
 // MIT License, Copyright (c) 2026 Hugo Duprez.
@@ -81,7 +81,7 @@ function stamp(x: number, y: number, r: number, lvl: number) {
     }
   }
 }
-/** Draw what was gathered: level n in cols[n - 1] at alpha alphas[n - 1] (dithered below 1). */
+/** Draw what was gathered: level n in cols[n - 1] at alpha alphas[n - 1] (continuous coverage below 1). */
 function flush(p: Painter, cols: number[], alphas?: number[]) {
   for (const i of HIT) {
     const v = GRID[i];
@@ -99,14 +99,41 @@ const walk = (pts: Point[], fn: (x: number, y: number, index: number) => void) =
   }
 };
 
+// Emit each connected section once, rather than stacking radial lights at control points.
+// A denser tessellation or a retraced bend must not make the same electric channel brighter.
+// minY clips the source centerline, preserving the original soft falloff past that boundary.
+function pathLight(p: Painter, pts: Point[], radius: number, color: number, strength: number, minY?: number) {
+  if (!(strength > 0) || pts.length < 2) return;
+  if (minY === undefined) {
+    p.glowPath(pts as PaintPoint[], radius, color, strength);
+    return;
+  }
+  let section: PaintPoint[] = [];
+  const flushLight = () => {
+    if (section.length > 1) p.glowPath(section, radius, color, strength);
+    section = [];
+  };
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i];
+    if (ay <= minY && by <= minY) { flushLight(); continue; }
+    const crosses = (ay <= minY) !== (by <= minY);
+    const cross: PaintPoint = crosses ? [ax + (bx - ax) * (minY - ay) / (by - ay), minY] : [ax, ay];
+    if (!section.length) section.push(ay <= minY ? cross : [ax, ay]);
+    section.push(by <= minY ? cross : [bx, by]);
+    if (by <= minY) flushLight();
+  }
+  flushLight();
+}
+
 /**
- * A bolt at full power: a deep halo, a pale body, a white core on the trunk, light every few points. k is the
+ * A bolt at full power: a deep halo, a pale body, a white core on the trunk, continuous path light. k is the
  * stroke's brightness (forks drop out below 0.5, the trunk thins below 0.6), s scales the thickness.
  * o: { hero (a white frame: the body goes white), light (glow strength), a (alpha), upTo (draw the trunk only
- * to this share of its length), core (radius of a thicker white core), minY (no glow above this y) }.
+ * to this share of its length), core (radius of a thicker white core), minY (light sources only below this local y) }.
  */
 export function stroke(p: Painter, b: Bolt, k: number, C: number[], s = 1, o: StrokeOptions = {}) {
-  if (k <= 0.02) return;
+  const a = clamp(o.a ?? 1);
+  if (k <= 0.02 || a <= 0) return;
   const lk = o.light ?? 0.5;
   for (const q of b.paths) {
     const trunk = q.w >= 1;
@@ -118,18 +145,18 @@ export function stroke(p: Painter, b: Bolt, k: number, C: number[], s = 1, o: St
       stamp(x, y, rb, trunk ? 3 : 2);
       if (trunk && k > 0.3) o.core ? stamp(x, y, o.core, 4) : mark(x, y, 4);
     });
-    for (let i = 0; i < pts.length - 1; i += 3) if (o.minY === undefined || pts[i][1] > o.minY) p.glow(pts[i][0], pts[i][1], (trunk ? 14 : 7) * s, C[4], lk * k * q.w);
+    pathLight(p, pts, (trunk ? 14 : 7) * s, C[4], lk * k * q.w * a, o.minY);
   }
-  const a = o.a ?? 1;
   flush(p, o.hero ? [C[3], C[6], C[7], C[7]] : [C[2], C[4], C[5], C[7]], [a, a, a, a]);
 }
 
 /**
- * A thin crackle: a 1 px core (white on the trunk while bright), a 2 px pale body, a dithered halo while k is
+ * A thin crackle: a 1 px core (white on the trunk while bright), a 2 px pale body, a translucent halo while k is
  * high, light along it. For short arcs that live a frame or two.
  */
 export function crackle(p: Painter, b: Bolt, k: number, C: number[], glowK = 0.5, a = 1) {
-  if (k <= 0.02) return;
+  a = clamp(a);
+  if (k <= 0.02 || a <= 0) return;
   for (const q of b.paths) {
     const thick = q.w >= 1;
     walk(q.pts, (x, y) => {
@@ -137,7 +164,7 @@ export function crackle(p: Painter, b: Bolt, k: number, C: number[], glowK = 0.5
       if (k > 0.25 && (thick || q.w > 0.4)) (mark(x + 1, y, 2), mark(x, y + 1, 2));
       mark(x, y, thick && k > 0.3 ? 4 : 3);
     });
-    for (let i = 0; i < q.pts.length - 1; i += 3) p.glow(q.pts[i][0], q.pts[i][1], (thick ? 9 : 5) * (0.5 + k * 0.5), C[4], glowK * k * q.w);
+    pathLight(p, q.pts, (thick ? 9 : 5) * (0.5 + k * 0.5), C[4], glowK * k * q.w * a);
   }
   flush(p, [C[3], C[5], C[5], C[7]], [Math.min(1, (k - 0.45) * 1.6) * a, a, a, a]);
 }

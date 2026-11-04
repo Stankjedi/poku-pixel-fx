@@ -10,6 +10,32 @@ next to his at the same size on screen: as much detail, as much light, as much l
 from his code; read the three references written to that bar first: `src/fx/melee/sword-slash.ts`,
 `src/fx/ice/frost-nova.ts`, `src/fx/explosions/small-explosion.ts`.
 
+## Shared quality baseline
+
+Read [QUALITY.md](QUALITY.md) before drafting. `shadow/spatial-severance` is the clean-curve and refined-particle
+reference: adaptive pointed ribbons, controlled trails, a short focal flash, and restrained glow. Use
+`pointedRibbon`, `motionTrail`, `drawTrail`, and `Painter.glowPath` rather than reimplementing dotted curves
+or stacking glow at every sample. Keep each effect's own identity. Passing automated checks is necessary,
+but does not guarantee the reference's subjective artistic quality.
+
+## Contact and material response
+
+For an effect that hits something, read [IMPACT_INTERACTIONS.md](IMPACT_INTERACTIONS.md). Define its
+contact time, local point, surface normal and material once; derive projectile termination, debris,
+ground response and optional camera feedback from that contact. Choose reactions from the effect's
+shape and the struck material, not a universal explosion preset. Keep mineral, metal, water and energy
+colors/motion distinct. Review contact, delayed secondary collisions and recovery, not only a hero
+frame. Camera motion belongs to the whole scene and must have a reduced-motion path; never bake it
+into a transparent sheet. Effects without contact do not need these components.
+
+For an acid or corrosion effect, see [SURFACE_CORROSION.md](SURFACE_CORROSION.md). Keep wet film, attached bubbles, runoff and persistent surface change distinct from hot sparks, fire or mineral explosions. The shared masked response is a seekable fantasy-VFX schedule, not a chemistry or damage simulator.
+
+## Restorative target responses
+
+For healing, cleansing and restorative buffs, see [RESTORATION.md](RESTORATION.md). Use target-bound
+anatomy and an upward soft response with one shared application beat. Do not borrow damage contacts,
+recoil, hit-stop or impact debris just to make the spell readable. Preserve the character's shading.
+
 ## Two kinds of effect
 
 **Simulated** (most one-shots: impacts, explosions, spells, anything with debris, sparks, smoke or fire). Export
@@ -112,6 +138,8 @@ export const act = {
 
 **Moves** (`src/fx/moves/`) are effects made of effects. `chain` plays other effects as cues; a projectile is an effect whose `x`
 is a function of time; `shiftKeys` reuses other effects' acts.
+Cues support `fadeIn`/`fadeOut` durations and inherit parent transforms, stop fades, light and particle style.
+See [COMPOSITION.md](COMPOSITION.md) for local-light crossfades, nested transforms and compatibility.
 
 ```js
 export const create = chain([
@@ -215,3 +243,32 @@ your eyes, feed your references.
 ### Registration time
 
 `meta.addedAt` is an optional ISO 8601 UTC timestamp recording when an effect was first registered in this library. The new-effect tool initially records the local scaffold creation time, which may precede publication; verify and update it to the first actual registration time when registering the finished effect. Keep it unchanged during later edits. Existing effects with an unknown registration time leave it absent rather than guessing. The catalog exporter includes it when present.
+
+### Smoke volumes and rolling folds
+
+For connected smoke, prefer `smokeVolume` and `smokeCurl` to stacking opaque circles. Merge density
+before shading, keep smoke non-emissive, carry folds upward, widen them, and lose density before
+recycling. See [SMOKE_MOTION.md](SMOKE_MOTION.md) and `weather/rising-smoke`. The simpler particle
+smoke remains useful for small incidental puffs; not every effect needs a full density field.
+
+### Wind transport and depth-aware tracers
+
+Use `helicalAirflow`, `airflowTrail`, and `drawAirflow` for transported wind paths. Carry material up and
+out through the same shape as its tracers, split front/back crossings without false connecting chords,
+and leave ordinary air non-emissive. See [AIR_FLOW.md](AIR_FLOW.md) for the authoring contract, compatibility
+options, and the Crosswind Gust, Tornado, and Leaf Storm examples.
+
+## Dry stone and rubble
+
+Use `fractureStone` for fitted, area-preserving convex fractures and `rubblePath` for seekable polygon-aware floor contact. Spawn low dust from real `impacts` events rather than borrowing buoyant smoke. See [STONE_FRACTURE.md](STONE_FRACTURE.md) and `nature/rock-fracture` for material-specific authoring.
+
+## Engraved magic seals
+
+Use `sigilArc` and `projectSigilPath` for perspective rune circles and lifted script. Keep physical depth
+separate from screen y, preserve stroke continuity across layers, and make the geometry genuinely
+symmetric before using a partial-turn loop. See [SIGIL_GEOMETRY.md](SIGIL_GEOMETRY.md) and
+`arcane/rune-circle`; `runeStyle: "classic"` preserves its original appearance.
+
+## Contact-bound frost
+
+Use `frostAccretion2D` for seeded ice growth attached to a receiving line. Gate child growth by parent reach, stop deposition when exposure ends, and reuse the grown polygons for brittle release. See [FROST_ACCRETION.md](FROST_ACCRETION.md) and `ice/frost-beam`. Cold flakes should reflect light rather than keep emitting after the beam.

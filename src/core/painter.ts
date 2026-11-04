@@ -15,6 +15,7 @@ const OUT = { c: 0, a: 1, l: 0, k: 0 };
 export interface PaintFrame { w: number; h: number; ox: number; oy: number; color: Uint32Array; light: Uint32Array; hdrLight?: Float32Array; alphaMode?: AlphaMode }
 export type PaintValue = number | ((...args: number[]) => number | null | undefined);
 export type Point = [number, number];
+export interface PathOptions { /** When samples share a cell, keep the later head instead of the tail. */ preferHead?: boolean }
 export interface ShaderOutput { c: number; a: number; l: number; k: number }
 export interface SpriteOptions { scale?: number; a?: number; flip?: boolean; flipY?: boolean; tint?: number }
 export interface TextOptions { font?: keyof typeof FONTS; scale?: number; align?: "left" | "center" | "right"; outline?: number; shadow?: number; a?: number }
@@ -28,6 +29,7 @@ export class Painter {
   declare w: number; declare h: number; declare ox: number; declare oy: number;
   declare C: Uint32Array; declare L: Uint32Array;
   declare tx: number; declare ty: number; declare fx: number; declare cs: number; declare sn: number;
+  declare particleStyle: "refined" | "classic";
   declare fade: number; declare lightK: number; declare layer: "front" | "back";
   private strokeStamp?: Uint32Array;
   private strokeDistance?: Float32Array;
@@ -48,6 +50,7 @@ export class Painter {
     const f = this.frame;
     this.w = f.w; this.h = f.h; this.ox = f.ox | 0; this.oy = f.oy | 0; this.C = f.color; this.L = f.light;
     this.tx = 0; this.ty = 0; this.fx = 1; this.cs = 1; this.sn = 0;
+    this.particleStyle = "refined";
     this.fade = 1; this.lightK = 1; this.layer = "front";
     return this;
   }
@@ -203,8 +206,8 @@ export class Painter {
     this.stroke(pts, c, a, 1, false);
   }
   /** A connected round-ended path, composited once per cell. Callbacks use global arc-length u and across-width v. */
-  path(pts: readonly Point[], c: PaintValue, a: PaintValue = 1, width = 1) {
-    this.stroke(pts, c, a, width, true);
+  path(pts: readonly Point[], c: PaintValue, a: PaintValue = 1, width = 1, options: PathOptions = {}) {
+    this.stroke(pts, c, a, width, true, false, options.preferHead ?? false);
   }
   /** Adaptive curves with a quarter-pixel geometric error; snapping happens only during rasterization. */
   quadratic(p0: Point, p1: Point, p2: Point, c: PaintValue, a: PaintValue = 1, width = 1) {
@@ -216,11 +219,12 @@ export class Painter {
   spline(pts: readonly Point[], c: PaintValue, a: PaintValue = 1, width = 1, options: CurveOptions = {}) {
     this.path(catmullRom(pts, options), c, a, width);
   }
-  private stroke(pts: readonly Point[], c: PaintValue, a: PaintValue, width: number, globalU: boolean) {
+  private stroke(pts: readonly Point[], c: PaintValue, a: PaintValue, width: number, globalU: boolean, light = false, preferHead = false) {
     if (!pts.length || !(width > 0)) return;
+    if (pts.length === 1 && light) pts = [pts[0], pts[0]];
     if (pts.length === 1) { this.circle(pts[0][0], pts[0][1], width / 2, c, a); return; }
-    const thin = width < Math.SQRT2;
-    if (pts.length === 2 && thin) {
+    const thin = !light && width < Math.SQRT2;
+    if (pts.length === 2 && thin && !preferHead) {
       const [a0, a1] = pts;
       this.lineCells(globalU ? Math.floor(this.toX(...a0)) : this.cellX(...a0), globalU ? Math.floor(this.toY(...a0)) : this.cellY(...a0),
         globalU ? Math.floor(this.toX(...a1)) : this.cellX(...a1), globalU ? Math.floor(this.toY(...a1)) : this.cellY(...a1), c, a, Math.min(1, width));
@@ -236,15 +240,22 @@ export class Painter {
     this.strokeId = (this.strokeId + 1) >>> 0;
     if (!this.strokeId) { this.strokeStamp.fill(0); this.strokeId = 1; }
     const stamp = this.strokeStamp, distance = this.strokeDistance!, us = this.strokeU!, pixels = this.strokePixels!;
-    const id = this.strokeId, lengths = globalU ? pathLengths(pts) : null, total = lengths?.[pts.length - 1] || 1;
-    const r = width / 2, r2 = r * r;
+    const id = this.strokeId, lengths = globalU ? pathLengths(pts) : null;
+    const totalLength = lengths?.[pts.length - 1] || 0, total = totalLength || 1;
+    const r = width / 2;
+    // Constant lights cannot survive add()'s cutoff beyond this radius. Keep a tiny margin
+    // for the Float32 distance buffer; final falloff still uses r, so pixels stay identical.
+    const strength = light && typeof a === "number" ? a * this.fade * this.lightK : null;
+    if (strength !== null && strength <= 0.004) return;
+    const reach = strength !== null && Number.isFinite(strength) ? r * (1 - Math.sqrt(0.004 / strength) + 1e-6) : r;
+    const r2 = reach * reach;
     let count = 0;
     const visit = (sx: number, sy: number, d2: number, u: number) => {
       const x = sx - this.ox, y = sy - this.oy;
       if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
       const i = y * this.w + x;
       if (stamp[i] !== id) { stamp[i] = id; pixels[count++] = i; distance[i] = d2; us[i] = u; }
-      else if (d2 < distance[i]) { distance[i] = d2; us[i] = u; }
+      else if (d2 < distance[i] || (preferHead && d2 === distance[i] && u > us[i])) { distance[i] = d2; us[i] = u; }
     };
     for (let j = 1; j < pts.length; j++) {
       const [ax, ay] = pts[j - 1], [bx, by] = pts[j];
@@ -256,7 +267,8 @@ export class Painter {
         const n = Math.max(dx, -dy) || 1;
         let error = dx + dy, step = 0;
         for (;;) {
-          visit(sx, sy, 0, start + span * step++ / n);
+          visit(sx, sy, 0, preferHead && dx === 0 && dy === 0 ? start + span : start + span * step / n);
+          step++;
           if (sx === ex && sy === ey) break;
           const e2 = error * 2;
           if (e2 >= dy) { error += dy; sx += stepX; }
@@ -265,8 +277,8 @@ export class Painter {
       } else {
         const x0 = this.toX(ax, ay), y0 = this.toY(ax, ay), x1 = this.toX(bx, by), y1 = this.toY(bx, by);
         const dx = x1 - x0, dy = y1 - y0, length2 = dx * dx + dy * dy;
-        const left = Math.max(this.ox, Math.floor(Math.min(x0, x1) - r)), right = Math.min(this.ox + this.w - 1, Math.ceil(Math.max(x0, x1) + r));
-        const top = Math.max(this.oy, Math.floor(Math.min(y0, y1) - r)), bottom = Math.min(this.oy + this.h - 1, Math.ceil(Math.max(y0, y1) + r));
+        const left = Math.max(this.ox, Math.floor(Math.min(x0, x1) - reach)), right = Math.min(this.ox + this.w - 1, Math.ceil(Math.max(x0, x1) + reach));
+        const top = Math.max(this.oy, Math.floor(Math.min(y0, y1) - reach)), bottom = Math.min(this.oy + this.h - 1, Math.ceil(Math.max(y0, y1) + reach));
         for (let sy = top; sy <= bottom; sy++) for (let sx = left; sx <= right; sx++) {
           const u = length2 ? clamp(((sx + 0.5 - x0) * dx + (sy + 0.5 - y0) * dy) / length2) : 0;
           const ex = sx + 0.5 - x0 - u * dx, ey = sy + 0.5 - y0 - u * dy, d2 = ex * ex + ey * ey;
@@ -275,8 +287,10 @@ export class Painter {
       }
     }
     for (let j = 0; j < count; j++) {
-      const i = pixels[j], u = us[i], v = thin ? 0 : Math.sqrt(distance[i]) / r;
-      this.put(this.ox + i % this.w, this.oy + Math.floor(i / this.w), call(c, u, v), call(a, u, v) * Math.min(1, width));
+      const i = pixels[j], u = preferHead && totalLength === 0 ? 1 : us[i], v = thin ? 0 : Math.sqrt(distance[i]) / r;
+      const sx = this.ox + i % this.w, sy = this.oy + Math.floor(i / this.w);
+      if (light) this.add(sx, sy, call(c, u, v), call(a, u, v) * (1 - v) ** 2);
+      else this.put(sx, sy, call(c, u, v), call(a, u, v) * Math.min(1, width));
     }
   }
   /** Thick segment with round ends. c and a may be functions of (u along, v across: 0 center, 1 edge). */
@@ -419,6 +433,15 @@ export class Painter {
         const f = 1 - d;
         this.add(sx, sy, c, f * f * k);
       }
+  }
+  /**
+   * Glow along a connected path. A cell receives light once, from its nearest segment, so adding
+   * samples or retracing a curve cannot overexpose joins. c/k may use global arc-length u and radius v.
+   * Use separate calls only for genuinely separate light sources; this never blurs the color buffer.
+   */
+  glowPath(pts: readonly Point[], radius: number, c: PaintValue, k: PaintValue = 0.5) {
+    if (!(radius >= 1)) return;
+    this.stroke(pts, c, k, radius * 2, true, true);
   }
   /** Glow hugging a circle of radius R (a shockwave's light), falling off over width r. */
   glowRing(x: number, y: number, R: number, r: number, c: number, k = 0.5) {

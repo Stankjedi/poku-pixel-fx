@@ -114,7 +114,8 @@ export function create(o: typeof meta.options) {
         const a = R.range(0, TAU);
         ps.spawn(P.EMBER, S.x + Math.cos(a) * (S.ring + S.tube), S.y + Math.sin(a) * S.tube * 0.5, Math.cos(a) * R.range(40, 90), -R.range(10, 60), R.range(1.2, 2.4), F[3]);
       }
-      if (t > 1.4 && t < 4.6 && R.chance(7 * dt)) ps.spawn(P.FLAKE, S.x + R.range(-1, 1) * (S.ring + S.tube), S.y + S.tube * 0.6, R.range(-6, 6), R.range(0, 10), R.range(2, 3), R.pick([SM[1], SM[2], F[2]]), R.range(0.6, 1.2));
+      // Late ash must finish its own fade before the one-shot ends, not remain as a terminal pixel.
+      if (t > 1.4 && t < 4.6 && R.chance(7 * dt)) ps.spawn(P.FLAKE, S.x + R.range(-1, 1) * (S.ring + S.tube), S.y + S.tube * 0.6, R.range(-6, 6), R.range(0, 10), Math.min(R.range(2, 3), meta.duration - t), R.pick([SM[1], SM[2], F[2]]), R.range(0.6, 1.2));
       column.update(dt, top(), t > 0.22 && t < 2.5 ? 1 : 0);
       draft(ps, dt, { x: 0, top: S.y + S.tube * 0.4, w: 9 + 7 * Math.min(1, t), up: 170, pull: 130, low: 12, reach: 130, k: 1 - smooth(2.5, 3.8, t) });
       for (const a of [flashes, rings]) for (let i = a.length - 1; i >= 0; i--) if ((a[i].life -= dt) <= 0) a.splice(i, 1);

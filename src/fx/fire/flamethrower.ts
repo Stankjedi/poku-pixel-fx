@@ -1,7 +1,7 @@
 import type { Painter } from "../../core/painter.js";
 // The flame-puff, smoke and spark recipe is adapted from Sprite Fusion's open-source explosion
 // (https://www.spritefusion.com/pixel-art-vfx/explosion), MIT License, Copyright (c) 2026 Hugo Duprez.
-import { fit, mix, hex, clamp, smooth, WHITE } from "../../core/index.js";
+import { fit, mix, hex, clamp, smooth, WHITE, flowMotion } from "../../core/index.js";
 import { noiseFor, pnoise, hotFirst, flameTongue, firePuff, smokePuff, spark, drift, looped, solid, LAYERS } from "./_lib.js";
 
 export const meta = {
@@ -20,6 +20,7 @@ export const meta = {
     reach: 112,
     speed: 280,
     seed: 3,
+    flowStyle: "continuous" as "continuous" | "classic",
   },
 };
 
@@ -46,10 +47,24 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     const tb = t - age, k = flow(tb - L / V);
     if (k < 0.4) return;
     // round a curl: forward, up and back over the top, rising as it goes
-    const x0 = L + q.dx, y0 = cy(L), a = Math.min(age, q.fl) * q.w + q.a0;
-    const x = x0 + q.R * Math.sin(a), y = y0 - q.R * (1 - Math.cos(a)) - q.up * age;
+    if (o.flowStyle === "classic") {
+      const x0 = L + q.dx, y0 = cy(L), a = Math.min(age, q.fl) * q.w + q.a0;
+      const x = x0 + q.R * Math.sin(a), y = y0 - q.R * (1 - Math.cos(a)) - q.up * age;
+      if (age < q.fl) return fire.push([age / q.fl, x, y, q, k]);
+      if (age - q.fl < q.sl) smoke.push([(age - q.fl) / q.sl, x - (age - q.fl) * 6, y - (age - q.fl) * 16, q]);
+      return;
+    }
+    // Fuel rolls up before it cools. Freeze the emission point at birth, then inherit
+    // the curl tangent into smoke rather than abruptly replacing it with (-6, -16).
+    const x0 = L + q.dx, y0 = 5 + NL(tb, 1.2, S + 9, L * 0.02) * 2.2;
+    const w = Math.min(q.w, (Math.PI * 0.9 - q.a0) / q.fl), a = Math.min(age, q.fl) * w + q.a0;
+    const x = x0 + q.R * Math.sin(a), y = y0 - q.R * (1 - Math.cos(a)) - q.up * Math.min(age, q.fl);
     if (age < q.fl) return fire.push([age / q.fl, x, y, q, k]);
-    if (age - q.fl < q.sl) smoke.push([(age - q.fl) / q.sl, x - (age - q.fl) * 6, y - (age - q.fl) * 16, q]);
+    if (age - q.fl < q.sl) {
+      const q1 = flowMotion({ x, y, vx: q.R * w * Math.cos(a), vy: -q.R * w * Math.sin(a) - q.up }, age - q.fl,
+        [{ duration: Infinity, ax: -13.2, ay: -57.6, drag: 2.2, dragY: 3.6 }]);
+      smoke.push([(age - q.fl) / q.sl, q1.x, q1.y, q]);
+    }
   });
   for (const [u, x, y, q] of smoke) smokePuff(p, x, y, 1 - u, q.s * 1.2, SMOKE, true, 0.85);
   fire.sort((a, b) => b[0] - a[0]);

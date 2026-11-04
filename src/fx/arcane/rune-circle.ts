@@ -1,15 +1,15 @@
-import type { Painter } from "../../core/painter.js";
+import type { Painter, Point } from "../../core/painter.js";
 // The floor glow and the specks rising off it follow Sprite Fusion's open-source mana heal
 // (https://www.spritefusion.com/pixel-art-vfx/heal), MIT License, Copyright (c) 2026 Hugo Duprez.
-import { PAL, fit, cycle, smooth, ease, sparkle, TAU, WHITE } from "../../core/index.js";
-import { floorRing, glyph, mote } from "./_lib.js";
+import { PAL, fit, cycle, smooth, ease, sparkle, TAU, WHITE, rng, projectSigilPath, sigilArc } from "../../core/index.js";
+import { floorRing, glyph, mote, sigil } from "./_lib.js";
 
 // turning a quarter a loop keeps every part seamless: 16 ticks, a square, and 12 runes in a pattern of three
 const D = 4, R = 46, RR = 39, RI = 23, RC = 7, SY = 0.3, NR = 12;
 
 export const meta = {
   name: "Rune circle",
-  desc: "A rune circle turns on the floor in perspective: a carousel of runes lit by chasing light, a turning square, ticks, motes rising off it.",
+  desc: "An engraved seal turns in perspective: raised runes stand on twin rails, counter-rotating compass seals frame a hollow center, and reading lights release script and curved motes.",
   tags: ["arcane", "rune", "circle", "magic", "aura", "ground", "loop"],
   size: [136, 100],
   origin: [68, 80],
@@ -17,7 +17,7 @@ export const meta = {
   loop: true,
   fps: 30,
   bg: "ground",
-  options: { palette: PAL.arcane, seed: 8 },
+  options: { palette: PAL.arcane, runeStyle: "engraved", seed: 8 },
 };
 
 const at = (g: number, r: number): [number, number] => [Math.cos(g) * r, Math.sin(g) * r * SY];
@@ -78,7 +78,7 @@ function motes(p: Painter, C: number[], t: number, S: number, far: boolean) {
   });
 }
 
-export function drawBack(p: Painter, t: number, o: typeof meta.options) {
+function classicBack(p: Painter, t: number, o: typeof meta.options) {
   const C = fit(o.palette, 8), pulse = 0.85 + 0.15 * Math.sin((t / D) * TAU * 4);
   // the floor glows under the circle, and a soft light stands over it
   p.glow(0, 0, R * 1.4, C[4], 0.24 * pulse);
@@ -89,7 +89,7 @@ export function drawBack(p: Painter, t: number, o: typeof meta.options) {
   motes(p, C, t, o.seed, true);
 }
 
-export function draw(p: Painter, t: number, o: typeof meta.options) {
+function classicFront(p: Painter, t: number, o: typeof meta.options) {
   const C = fit(o.palette, 8), chase = (t / D) * TAU * 2;
   circle(p, C, t, false);
   motes(p, C, t, o.seed, false);
@@ -99,4 +99,125 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
     sparkle(p, x, y, 2.5 + Math.sin(t * 30) * 0.8, C[6], C[5], 0.5);
     p.glow(x, y, 14, C[5], 0.4);
   }
+}
+
+// Art direction: an engraved ritual seal. Crisp violet rails and upright ivory runes, a quiet hollow
+// center, two opposite reading lights, and only a few rising traces. No smoke or plasma volume.
+const SEAL_R = 51, PERSPECTIVE = .31, RUNE_R = 39;
+const planePoint = (a: number, r: number): Point => [Math.cos(a) * r, Math.sin(a) * r];
+const phaseTime = (t: number) => ((t % D) + D) % D;
+
+function seal(p: Painter, C: number[], t: number, far: boolean) {
+  const phase = t / D, spin = phase * TAU / 4, chase = phase * TAU * 2;
+  const ink = (points: Point[], color: number, { height = 0, rotation = 0, alpha = 1, width = 1, glow = 0 } = {}) => {
+    for (const run of projectSigilPath(points, { perspective: PERSPECTIVE, rotation, height })) {
+      if (run.back !== far) continue;
+      // A dark one-pixel ledge keeps the lit stroke distinct over light/checkerboard scenes.
+      p.path(run.points.map(([x, y]) => [x, y + 1]), C[1], alpha * .65, width + .3);
+      p.path(run.points, color, alpha, width);
+      if (glow > 0) p.glowPath(run.points, 3.5, C[4], glow);
+    }
+  };
+  // Twin rails frame an annular writing band. They are not a filled luminous disc.
+  for (const [radius, color] of [[SEAL_R, far ? C[4] : C[6]], [47, far ? C[3] : C[4]], [30, far ? C[3] : C[5]]])
+    ink(sigilArc(radius), color, { glow: radius === SEAL_R ? .06 : 0 });
+  // Thirty-two radial notches form ordered strokes, not random texture.
+  for (let j = 0; j < 32; j++) {
+    const a = spin + (j + .5) * TAU / 32;
+    ink([planePoint(a, j % 4 ? 48.5 : 46), planePoint(a, j % 4 ? 50 : 53)], far ? C[3] : j % 4 ? C[4] : C[6]);
+  }
+  // Four short compass seals leave a quiet central opening; the reverse square preserves the original motif.
+  for (let j = 0; j < 4; j++) {
+    const a = spin + j * TAU / 4;
+    ink([[28, 0], [20, -4], [22, 0], [20, 4], [28, 0]], far ? C[3] : C[4], { rotation: a });
+  }
+  const square = [0, 1, 2, 3, 0].map(j => planePoint(j * TAU / 4 + Math.PI / 4, 25));
+  ink(square, far ? C[3] : C[4], { rotation: -spin });
+  ink(sigilArc(12), far ? C[4] : C[5]);
+  ink([[0, -7], [7, 0], [0, 7], [-7, 0], [0, -7]], far ? C[5] : C[6], { rotation: spin });
+  // Bright readers travel on the rail with connected, curved wake geometry.
+  for (const head of [chase, chase + Math.PI]) {
+    const arc = sigilArc(SEAL_R, head - .55, head, .08);
+    for (const run of projectSigilPath(arc, { perspective: PERSPECTIVE })) {
+      if (run.back !== far) continue;
+      const u = (v: number) => run.from + (run.to - run.from) * v;
+      p.path(run.points, v => u(v) > .82 ? C[7] : C[6], v => .18 + .82 * u(v), 1.5);
+      p.glowPath(run.points, 5, C[5], v => .04 + .14 * u(v));
+    }
+    if ((Math.sin(head) < 0) === far) {
+      const [x, z] = planePoint(head, SEAL_R), y = z * PERSPECTIVE;
+      sparkle(p, x, y, 1.9 + .4 * Math.cos(phase * TAU * 8), C[7], C[5], .48);
+    }
+  }
+}
+
+function runes(p: Painter, C: number[], t: number, seed: number, far: boolean) {
+  const phase = t / D, spin = phase * TAU / 4, chase = phase * TAU * 2;
+  // A fourfold repeating alphabet keeps a quarter-turn loop seamless, including glyph identity.
+  const order = [0, 4];
+  const sites = Array.from({ length: 8 }, (_, i) => ({ i, a: spin + (i + .5) * TAU / 8 }))
+    .filter(s => (Math.sin(s.a) < 0) === far).sort((a, b) => Math.sin(a.a) - Math.sin(b.a));
+  for (const { i, a } of sites) {
+    const [x, z] = planePoint(a, RUNE_R), y = z * PERSPECTIVE;
+    const hot = Math.max(0, 1 - gap(a, chase) / .4, 1 - gap(a, chase + Math.PI) / .4);
+    const bob = .6 * Math.sin(phase * TAU * 4 + a * 4), top = y - 7 - bob;
+    // The rune stands above a small base, so perspective does not squash its written strokes.
+    p.line(x - 2, y, x + 2, y, far ? C[3] : C[5]);
+    p.path([[x, y - 1], [x, top + 4]], far ? C[3] : C[4], .55);
+    sigil(p, order[i % 2], x, top, hot > .5 ? C[7] : far ? C[5] : C[6], 1, C[1]);
+    if (hot > 0) {
+      p.glow(x, top, 7, C[5], .3 * hot);
+      // Side brackets briefly illuminate, leaving the rune's counters open.
+      p.path([[x - 4, top - 2], [x - 5, top - 2], [x - 5, top + 2], [x - 4, top + 2]], C[5], hot);
+      p.path([[x + 4, top - 2], [x + 5, top - 2], [x + 5, top + 2], [x + 4, top + 2]], C[5], hot);
+    }
+  }
+  // Two readers meet four matching rune sites seven times per loop. Emission starts at those actual
+  // contacts, not at unrelated random points. The 1/7 + j*4/7 schedule follows their relative rotation.
+  for (let j = 0; j < 7; j++) for (let side = 0; side < 2; side++) {
+    const born = (1 + j * 4) / 7, age = ((t - born) % D + D) % D;
+    const r = rng(seed, j * 2 + side + 170), life = r.range(1.4, 1.85);
+    if (age >= life) continue;
+    const q = age / life, a = Math.PI * born + side * Math.PI + q * .25;
+    if ((Math.sin(a) < 0) !== far) continue;
+    const rr = RUNE_R * (1 - q * .22), x = Math.cos(a) * rr;
+    const y = Math.sin(a) * rr * PERSPECTIVE - 5 - q * r.range(37, 48);
+    const alpha = smooth(0, .12, q) * (1 - smooth(.5, 1, q));
+    glyph(p, 0, x, y, far ? C[4] : q < .2 ? C[6] : C[5], alpha, C[1]);
+    if (alpha > 0) p.glow(x, y - 2, 4, C[4], alpha * .07);
+  }
+}
+
+function sealMotes(p: Painter, C: number[], t: number, seed: number, far: boolean) {
+  cycle(t, D, 32, seed * 17 + 11, r => r.range(1.2, 1.8), (age, life, r) => {
+    const a = r.range(0, TAU), radius = r.range(26, 44), height = r.range(35, 58), spin = r.range(.3, .9);
+    const path = (s: number): [number, number, number] => {
+      const u = s / life, th = a + spin * u, rr = radius * (1 - .25 * u);
+      return [Math.cos(th) * rr, Math.sin(th) * rr, 5 + height * ease.outQuad(u)];
+    };
+    const q = age / life, alpha = smooth(0, .12, q) * (1 - smooth(.55, 1, q));
+    const start = Math.max(0, age - .075), points = Array.from({ length: 6 }, (_, i) => path(start + (age - start) * i / 5));
+    for (const run of projectSigilPath(points, { perspective: PERSPECTIVE })) {
+      if (run.back !== far) continue;
+      const u = (v: number) => run.from + (run.to - run.from) * v;
+      p.path(run.points, v => u(v) > .6 ? far ? C[5] : C[6] : far ? C[3] : C[4],
+        v => alpha * (.2 + .8 * u(v) ** 1.5), .8);
+    }
+    const [x, z, lift] = path(age);
+    if ((z < 0) === far) p.glow(x, z * PERSPECTIVE - lift, 3, C[4], alpha * .08);
+  });
+}
+
+export function drawBack(p: Painter, t: number, o: typeof meta.options) {
+  if (o.runeStyle === 'classic') return classicBack(p, t, o);
+  t = phaseTime(t); const C = fit(o.palette, 8);
+  // Local floor spill only. A broad vertical haze would erase the negative space between the script.
+  p.glow(0, 1, 40, C[4], .08);
+  seal(p, C, t, true); runes(p, C, t, o.seed, true); sealMotes(p, C, t, o.seed, true);
+}
+
+export function draw(p: Painter, t: number, o: typeof meta.options) {
+  if (o.runeStyle === 'classic') return classicFront(p, t, o);
+  t = phaseTime(t); const C = fit(o.palette, 8);
+  seal(p, C, t, false); runes(p, C, t, o.seed, false); sealMotes(p, C, t, o.seed, false);
 }

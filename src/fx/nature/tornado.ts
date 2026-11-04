@@ -1,10 +1,10 @@
 import type { Painter } from "../../core/painter.js";
-import { cycle, fit, rand, rng, smooth, clamp, lerp, TAU, WHITE, mix, tileNoise, bolt } from "../../core/index.js";
+import { cycle, fit, rand, rng, smooth, clamp, lerp, TAU, WHITE, mix, tileNoise, bolt, helicalAirflow, airflowTrail, drawAirflow, wrap } from "../../core/index.js";
 import { drawRock, stoneShape, drawLeaf } from "./_lib.js";
 
 export const meta = {
   name: "Tornado",
-  desc: "A snaking funnel of spinning wind bands under a flared, churning top that flickers with lightning; leaves and debris whirl round it front and back, dust boils at its foot.",
+  desc: "A snaking funnel lifts dust through rising helical streaks into a soft, rolling crown. Leaves and debris pass in front and behind; lightning briefly lights the cloud.",
   tags: ["nature", "wind", "tornado", "storm", "hazard", "ground", "loop"],
   size: [196, 168],
   origin: [98, 152],
@@ -17,6 +17,7 @@ export const meta = {
     dust: ["#2a2018", "#4e3e2e", "#76624a", "#a08a6a", "#cbb894"],
     leaves: ["#4a200c", "#a8541c", "#e8962e", "#ffd27a", "#123818", "#2f7a2a", "#6cb83a", "#c8f070"],
     height: 112,
+    airStyle: "flow",
     seed: 4,
   },
 };
@@ -36,7 +37,7 @@ function geo(o: typeof meta.options, t: number) {
 
 // the body: a translucent column, thicker through its middle, lit from the left, with streaks of dust that
 // shear past each other as rows spin at different speeds
-function body(p: Painter, C: number[], Dst: number[], g: ReturnType<typeof geo>, t: number, seed: number) {
+function body(p: Painter, C: number[], Dst: number[], g: ReturnType<typeof geo>, t: number, seed: number, classic: boolean) {
   const { FH, ax, rad } = g;
   for (let y = -Math.ceil(FH) + 2; y <= 0; y++) {
     const u = -y / FH, cx = ax(u), r = rad(u), K = 2 + (rand(y, seed) < 0.35 ? 1 : 0), rot = (TAU * K * t) / meta.duration;
@@ -44,7 +45,9 @@ function body(p: Painter, C: number[], Dst: number[], g: ReturnType<typeof geo>,
     for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
       const c = (x + 0.5 - cx) / r;
       if (Math.abs(c) > 1) continue;
-      const n = tileNoise(((Math.acos(c) + rot) * 6) / TAU, y * 0.34, 6, 0, seed), v = -c * 0.55 + 0.15 + n * 0.55;
+      const n = classic ? tileNoise(((Math.acos(c) + rot) * 6) / TAU, y * 0.34, 6, 0, seed)
+        : tileNoise(((Math.acos(c) + g.ph * 3 - u * 7) * 6) / TAU, u * 9 - 4 * t / meta.duration, 6, 4, seed);
+      const v = -c * 0.55 + 0.15 + n * 0.55;
       let col = v > 0.6 ? C[6] : v > 0.28 ? C[5] : v > -0.05 ? C[4] : v > -0.4 ? C[3] : C[2];
       if (u < 0.3) col = mix(col, Dst[v > 0.3 ? 3 : v > -0.2 ? 2 : 1], 0.7 * (1 - u / 0.3));
       p.blend(x, y, col, (0.14 + 0.36 * Math.sqrt(1 - c * c)) * fade);
@@ -54,7 +57,7 @@ function body(p: Painter, C: number[], Dst: number[], g: ReturnType<typeof geo>,
 
 // wind bands: 1 px streaks wrapped round the funnel, bright at the head, fading along the tail; the far half
 // goes behind, dimmer
-function bands(p: Painter, C: number[], g: ReturnType<typeof geo>, t: number, seed: number, back: boolean) {
+function classicBands(p: Painter, C: number[], g: ReturnType<typeof geo>, t: number, seed: number, back: boolean) {
   const { FH, ax, rad } = g;
   for (let j = 0; j < 58; j++) {
     const R = rng(seed, j), u = (j + R.range(0.1, 0.9)) / 58, K = R.int(2, 4), span = R.range(0.7, 2.1), lvl = R.next();
@@ -77,6 +80,20 @@ function bands(p: Painter, C: number[], g: ReturnType<typeof geo>, t: number, se
   }
 }
 
+// Filaments rise along the funnel and flare into the crown. A tail is a single transported path;
+// foreground/background pieces retain their taper instead of each crossing becoming a bright head.
+function bands(p: Painter, C: number[], g: ReturnType<typeof geo>, t: number, seed: number, back: boolean, classic: boolean) {
+  if (classic) return classicBands(p, C, g, t, seed, back);
+  cycle(t, meta.duration, 38, seed, R => R.range(1.25, 1.95), (age, life, R) => {
+    const turns = R.range(2.1, 3.1), phase = R.range(0, TAU), spread = R.range(0.98, 1.10);
+    const position = (a: number) => helicalAirflow(a / life, {
+      height: g.FH, radius: u => g.rad(u) * spread, axis: g.ax, turns, phase, shear: 0.22, perspective: SY });
+    const k = age / life, a = smooth(0, 0.08, k) * (1 - smooth(0.83, 1, k));
+    drawAirflow(p, airflowTrail(position, age, R.range(0.12, 0.21), 32), {
+      back, color: C[back ? 2 : 4], head: C[back ? 4 : 6], alpha: a * (back ? 0.4 : 0.8), width: 1.05 });
+  });
+}
+
 // a soft flattened puff: rx wide, ry tall, blended
 function blob(p: Painter, cx: number, cy: number, rx: number, ry: number, c: number, a: number) {
   for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++)
@@ -88,7 +105,7 @@ function blob(p: Painter, cx: number, cy: number, rx: number, ry: number, c: num
 
 // the flared top: a lid of cloud sheared into flat bands that ride round with the funnel, each thick in the
 // middle and drawn out to a thin tail behind, lit along its upper rim, dark beneath; a dark mass at its core
-function crown(p: Painter, C: number[], g: ReturnType<typeof geo>, t: number, seed: number, back: boolean, flash: number) {
+function classicCrown(p: Painter, C: number[], g: ReturnType<typeof geo>, t: number, seed: number, back: boolean, flash: number) {
   const { FH, ax, rad } = g, cx = ax(1), r = rad(1), L = (c: number) => mix(c, C[7], flash * 0.6), y0 = -FH - 3;
   if (back) {
     blob(p, cx, y0 + 1, r * 0.85, 6, C[1], 0.6);
@@ -107,6 +124,26 @@ function crown(p: Painter, C: number[], g: ReturnType<typeof geo>, t: number, se
         p.blend(x, y - T / 2 + i, c, (0.55 + 0.35 * (1 - k)) * (back ? 0.75 : 1));
       }
     }
+  }
+}
+
+// A loose condensation crown: broad shadowed rolls, with short pale rims rather than a stack of tubes.
+function crown(p: Painter, C: number[], g: ReturnType<typeof geo>, t: number, seed: number, back: boolean, flash: number, classic: boolean) {
+  if (classic) return classicCrown(p, C, g, t, seed, back, flash);
+  const cx = g.ax(1), y0 = -g.FH - 3, rad = g.rad(1);
+  if (back) { blob(p, cx, y0 + 1, rad * 0.91, 5.8, C[1], 0.55); blob(p, cx - 4, y0 - 2, rad * 0.7, 4, C[3], 0.24); }
+  for (let i = 0; i < 11; i++) {
+    const R = rng(seed, i), rr = rad * R.range(0.48, 1.1), span = R.range(1.5, 3.0), phase = R.range(0, TAU);
+    const lift = R.range(-5, 2), head = phase + TAU * R.int(1, 2) * t / meta.duration, width = R.range(2.8, 5.2);
+    const path = airflowTrail(a => {
+      const angle = head - span * (1 - a), r = rr * (0.96 + 0.04 * Math.sin(angle * 2 + phase));
+      const depth = r * Math.sin(angle);
+      return { x: cx + r * Math.cos(angle), y: y0 + lift + SY * depth - a * 1.7, depth };
+    }, 1, 1, 36);
+    const base = mix(C[back ? 2 : 3], C[6], flash * 0.45), rim = mix(C[back ? 3 : 5], C[7], flash * 0.55);
+    drawAirflow(p, path, { back, color: base, alpha: back ? 0.34 : 0.64, width });
+    drawAirflow(p, path.map(run => ({ ...run, points: run.points.map(([x, y]) => [x, y - width * 0.35]) })),
+      { back, color: C[back ? 2 : 4], head: rim, alpha: back ? 0.30 : 0.72, width: 1 });
   }
 }
 
@@ -164,23 +201,27 @@ function flashAt(t: number) {
 }
 
 export function drawBack(p: Painter, t: number, o: typeof meta.options) {
+  if (o.airStyle !== "classic") t = wrap(t, meta.duration);
   const C = fit(o.palette, 8), D = fit(o.dust, 5), g = geo(o, t), f = flashAt(t);
   skirt(p, D, g, t, o.seed * 5 + 1, true);
-  crown(p, C, g, t, o.seed * 7 + 2, true, f);
-  bands(p, C, g, t, o.seed * 3 + 5, true);
+  crown(p, C, g, t, o.seed * 7 + 2, true, f, o.airStyle === "classic");
+  bands(p, C, g, t, o.seed * 3 + 5, true, o.airStyle === "classic");
   debris(p, C, fit(o.leaves, 8), g, t, o.seed * 11 + 3, true, C);
-  body(p, C, D, g, t, o.seed);
+  body(p, C, D, g, t, o.seed, o.airStyle === "classic");
 }
 
 export function draw(p: Painter, t: number, o: typeof meta.options) {
+  if (o.airStyle !== "classic") t = wrap(t, meta.duration);
   const C = fit(o.palette, 8), D = fit(o.dust, 5), g = geo(o, t), f = flashAt(t), cx = g.ax(1);
-  bands(p, C, g, t, o.seed * 3 + 5, false);
-  crown(p, C, g, t, o.seed * 7 + 2, false, f);
+  bands(p, C, g, t, o.seed * 3 + 5, false, o.airStyle === "classic");
+  crown(p, C, g, t, o.seed * 7 + 2, false, f, o.airStyle === "classic");
   skirt(p, D, g, t, o.seed * 5 + 1, false);
   debris(p, C, fit(o.leaves, 8), g, t, o.seed * 11 + 3, false, C);
   // light: a soft pale column, a cold pool at its foot, the crown's lightning
-  p.glowLine(g.ax(0.1), -g.FH * 0.1, cx, -g.FH * 0.9, 26, C[5], 0.08);
-  p.glow(g.ax(0), -2, 30, D[3], 0.12);
+  if (o.airStyle === "classic") {
+    p.glowLine(g.ax(0.1), -g.FH * 0.1, cx, -g.FH * 0.9, 26, C[5], 0.08);
+    p.glow(g.ax(0), -2, 30, D[3], 0.12);
+  }
   if (f > 0.05) {
     const R = rng(o.seed, 99, Math.floor(t / meta.duration * 7)), path = bolt(R, cx - 18, -g.FH - 6, cx + 16, -g.FH + 2, { jag: 0.3, depth: 3 });
     p.polyline(path, f > 0.6 ? WHITE : C[7], Math.min(1, f * 1.5));

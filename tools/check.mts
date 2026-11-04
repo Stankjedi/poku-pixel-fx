@@ -186,7 +186,8 @@ for (const id of ids) {
           shots.push(frame.color.slice());
           maxPx = Math.max(maxPx, count(frame.color, (c, j) => c >>> 24 && inside(j)), count(frame.light, (c, j) => (c & 0xffffff) && inside(j)));
           const sp = count(frame.color, (c, j) => c >>> 24 && !inside(j));
-          if (sp > spill) (spill = sp), bounds();
+          spill = Math.max(spill, sp);
+          bounds(); // Report the full animation extent, not only the frame with the most spilled pixels.
           spillLight = Math.max(spillLight, count(frame.light, (c, j) => (c & 255) + ((c >>> 8) & 255) + ((c >>> 16) & 255) > 90 && !inside(j)));
         }
         return shots;

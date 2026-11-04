@@ -1,0 +1,77 @@
+{
+  "description": "Reviewed Crown Splash 3D captures, 220x160 pixels",
+  "samples": [
+    {
+      "time": 0.3,
+      "seed": 24017,
+      "yaw": 0.68,
+      "color": "2caa613997e5ef7f6aacae9ebaf8053ca863e025875dbc148148d0e5a8ca7712",
+      "depth": "4f2e032eb30bef53197608e81c6808681ff9f1bb2115dcf34ab3bf0097fd6289",
+      "light": "bba4463319d17dafd261b99651ecef74f1041be91d6b6cc86bb61a938e0e1818",
+      "hdrLight": "7b4332edaa843c6987e4fa11619818048615ecd648c3f420820f2f2205e934ab"
+    },
+    {
+      "time": 0.75,
+      "seed": 24017,
+      "yaw": 0.68,
+      "color": "fede7432a22bb491a3f2828df30bd33b5f3c16825bbda5e5153220531f847afb",
+      "depth": "2b8200192b05b76531c0d27df0f493a2d196db24e08ae190d74f68d220aa320b",
+      "light": "bba4463319d17dafd261b99651ecef74f1041be91d6b6cc86bb61a938e0e1818",
+      "hdrLight": "7b4332edaa843c6987e4fa11619818048615ecd648c3f420820f2f2205e934ab"
+    },
+    {
+      "time": 1.1,
+      "seed": 24017,
+      "yaw": 0.68,
+      "color": "cfea56c8465911274640e7094adb4ccf2b94a77e47f8b81eda0418ddc347478c",
+      "depth": "cafe41c5472880aa5e5ff1428e269cde9844b601f8794d04f556d806af927479",
+      "light": "bba4463319d17dafd261b99651ecef74f1041be91d6b6cc86bb61a938e0e1818",
+      "hdrLight": "7b4332edaa843c6987e4fa11619818048615ecd648c3f420820f2f2205e934ab"
+    },
+    {
+      "time": 1.45,
+      "seed": 24017,
+      "yaw": 0.68,
+      "color": "31e2e1c41a771dcad8c0204ac931176ab26cfe4ef13c0a4393354e1026923309",
+      "depth": "e305ecd1e53dcf135262d4830b5c690f27ba915eaa813ec52de7aed778129804",
+      "light": "bba4463319d17dafd261b99651ecef74f1041be91d6b6cc86bb61a938e0e1818",
+      "hdrLight": "7b4332edaa843c6987e4fa11619818048615ecd648c3f420820f2f2205e934ab"
+    },
+    {
+      "time": 1.8,
+      "seed": 24017,
+      "yaw": 0.68,
+      "color": "da8201e74f046978f70dab82ff61e88b74293f5730b99223d8c626bbed4c3c31",
+      "depth": "a808926ce496969a91fa3f936d480d5f38cc52a30873dd34d5596c314687032b",
+      "light": "bba4463319d17dafd261b99651ecef74f1041be91d6b6cc86bb61a938e0e1818",
+      "hdrLight": "7b4332edaa843c6987e4fa11619818048615ecd648c3f420820f2f2205e934ab"
+    },
+    {
+      "time": 2.5,
+      "seed": 24017,
+      "yaw": 0.68,
+      "color": "e910207ef0a830907f5cd5caf4bcf9d007827830c544de9f1da818c61ebb6cdd",
+      "depth": "30257d46ab557e59dad42d447c9c8b659a2c3af57e6d363fb397e08a0837e489",
+      "light": "bba4463319d17dafd261b99651ecef74f1041be91d6b6cc86bb61a938e0e1818",
+      "hdrLight": "7b4332edaa843c6987e4fa11619818048615ecd648c3f420820f2f2205e934ab"
+    },
+    {
+      "time": 0.9,
+      "seed": 0,
+      "yaw": 1.7,
+      "color": "09fdd9dac96f486bed10a0e9ce7c482f35d57e42f16394e3275ddc8ab198c9c6",
+      "depth": "46fec78bc807f7a9355fec86a5555af65d273a54c2bbf78c8d52dbf531c22268",
+      "light": "bba4463319d17dafd261b99651ecef74f1041be91d6b6cc86bb61a938e0e1818",
+      "hdrLight": "7b4332edaa843c6987e4fa11619818048615ecd648c3f420820f2f2205e934ab"
+    },
+    {
+      "time": 1.7,
+      "seed": 42,
+      "yaw": 0.1,
+      "color": "654de6e1403aa7566ee205d861ead35165f192e552e23464c2e59321eb217fea",
+      "depth": "daf245348f13984f42f231463ca76be84346a8b96deb21a14fd1f31684d6083f",
+      "light": "bba4463319d17dafd261b99651ecef74f1041be91d6b6cc86bb61a938e0e1818",
+      "hdrLight": "7b4332edaa843c6987e4fa11619818048615ecd648c3f420820f2f2205e934ab"
+    }
+  ]
+}

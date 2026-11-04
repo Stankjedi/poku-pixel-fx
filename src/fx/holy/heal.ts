@@ -1,195 +1,128 @@
-import type { stockActor } from "../../core/actor.js";
-import type { Painter } from "../../core/painter.js";
-import { Particles, Lights, P, Rng, fit, sparkle, clamp, smooth, seg, lerp, ease, TAU, WHITE, mix, luma, rgb, READY } from "../../core/index.js";
-import { shapeOf, recolor, oval } from "./_lib.js";
+import type { Painter, Point } from '../../core/painter.js';
+import type { stockActor } from '../../core/actor.js';
+import { fit, Rng, mix, smooth, lerp, TAU, READY, restorationField2D, defineRestorationTiming2D, type RestorationTiming2D } from '../../core/index.js';
+import { oval } from './_lib.js';
 
+/** A restorative beat, deliberately independent from damage contacts and hit-stop. */
+export const restoration: Readonly<RestorationTiming2D> = defineRestorationTiming2D({ startsAt: .14, pulseAt: .70, liftedAt: 1.16, endsAt: 1.94 });
 export const meta = {
-  name: "Heal",
-  desc: "Petals of light bloom under the feet, a hoop of light rises up the body restoring its colour and leaving sparkles, and motes spiral up and pop into tiny hearts.",
-  tags: ["holy", "heal", "restore", "buff", "petals", "hearts", "character", "one-shot"],
-  size: [80, 104],
-  origin: [40, 92],
-  duration: 1.9,
-  loop: false,
-  fps: 30,
-  bg: "ground",
-  actor: 2,
-  options: { palette: ["#3d2027", "#7d3f35", "#c97a4a", "#f2b46a", "#ffd994", "#fff0cf", "#fffaf2", "#ffffff"], seed: 2 },
+  name: 'Heal',
+  desc: 'A small jade lotus gathers at the feet. Two soft ribbons climb around the target, a mint response restores its silhouette on one chest beat, and three ivory leaves rise away.',
+  tags: ['holy', 'heal', 'restore', 'buff', 'lotus', 'target-bound', 'character', 'one-shot'],
+  size: [96, 104], origin: [48, 92], duration: 2.1, loop: false, fps: 30, bg: 'ground', actor: 2,
+  options: { palette: ['#102e2b', '#1e5144', '#38725a', '#65a578', '#94d7a0', '#c0efc0', '#e5f8da', '#fff9e4'], seed: 2 },
 };
-
-const HURT = { turn: 0.8, crouch: 5, lean: 3, hy: 1, fx: 1, fy: -21, bx: 7, by: -15, ffx: 4, fbx: -3 };
-const UP = { turn: 1.15, crouch: -1, fx: -13, fy: -36, bx: 14, by: -36, hy: -1, ffx: -3, fbx: 4 };
+const HURT = { turn: .8, crouch: 4, lean: 2, hy: 1, fx: 1, fy: -21, bx: 7, by: -15, ffx: 4, fbx: -3 };
+const OPEN = { turn: 1.05, crouch: 0, lean: 0, hy: -1, fx: -10, fy: -26, bx: 12, by: -26, ffx: 1, fbx: -2 };
 export const act = {
   onBody: true,
-  poses: [
-    [-0.3, HURT],
-    [0.16, { ...HURT, crouch: 6 }],
-    [0.5, { ...HURT, crouch: 3, lean: 1, hy: 0 }],
-    [0.78, UP],
-    [1.2, { ...UP, crouch: 0, fy: -30, by: -30, hy: 0 }],
-    [1.9, READY],
-  ],
+  poses: [[-.25, HURT], [.14, HURT], [restoration.pulseAt, OPEN], [1.05, { ...OPEN, hy: 0 }], [1.75, READY], [2.1, READY]],
 };
+type Options = typeof meta.options & { actor: ReturnType<typeof stockActor> };
 
-const SY = 0.3, NP = 8, PR = 16, LIFT0 = 0.16, LIFT1 = 0.74, TOPY = -43;
-const HEART = [".#.#.", "#####", ".###.", "..#.."];
+export function create(o: Options) {
+  const C = fit(o.palette, 8), field = restorationField2D(o.actor, restoration), R = new Rng(o.seed);
+  const motes = Array.from({ length: 7 }, (_, i) => ({ start: .12 + i * .095, phase: i * TAU / 7 + R.range(-.2, .2), lift: R.range(30, 43), life: R.range(.7, 1.0) }));
+  const cx = field.centerX, foot = field.bottom + 1, chest = field.chest, h = foot - field.top;
+  const radius = Math.max(12, (field.spanAt(chest[1])[1] - field.spanAt(chest[1])[0]) * .5 + 8);
+  const activity = (t: number) => smooth(0, .24, t) * (1 - smooth(1.25, 1.86, t));
 
-// a tiny heart of light: cream body, a white glint, a warm rim
-function heart(p: Painter, x: number, y: number, C: number[], a: number) {
-  const X = Math.round(x) - 2, Y = Math.round(y) - 2, at = (i: number, j: number) => j >= 0 && j < 4 && i >= 0 && i < 5 && HEART[j][i] === "#";
-  for (let j = -1; j <= 4; j++)
-    for (let i = -1; i <= 5; i++) {
-      if (at(i, j)) p.dot(X + i, Y + j, i === 1 && j === 1 ? WHITE : j >= 2 ? C[5] : C[6], a);
-      else if (at(i - 1, j) || at(i + 1, j) || at(i, j - 1) || at(i, j + 1)) p.dot(X + i, Y + j, C[3], a * 0.9);
+  function lotus(p: Painter, t: number, back: boolean) {
+    const a = activity(t); if (a <= 0) return;
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * TAU + .22, near = Math.sin(angle) >= 0;
+      if (near === back) continue;
+      const grow = smooth(i * .015, .34 + i * .015, t), k = grow * (1 - smooth(1.28 + i * .04, 1.72 + i * .025, t));
+      if (k < .02) continue;
+      const dx = Math.cos(angle), dy = Math.sin(angle), root: Point = [cx + dx * 3, foot + dy],
+        tip: Point = [cx + dx * (12 + k * 4), foot + dy * 3 - 7 * k],
+        mid: Point = [lerp(root[0], tip[0], .55), lerp(root[1], tip[1], .55)], width = 2.6 * k;
+      const length = Math.hypot(tip[0] - root[0], tip[1] - root[1]), nx = -(tip[1] - root[1]) / length, ny = (tip[0] - root[0]) / length;
+      const shape: Point[] = [root, [mid[0] + nx * width, mid[1] + ny * width], tip, [mid[0] - nx * width, mid[1] - ny * width]];
+      p.poly(shape, back ? C[2] : C[3], a);
+      p.path([root, shape[1], tip], back ? C[3] : C[5], a * .85, 1);
+      p.path([root, [mid[0], mid[1] - .5], tip], back ? C[3] : C[4], a, 1);
+      p.dot(tip[0], tip[1], C[5], a * .9);
     }
-  p.glow(x, y, 6, C[5], 0.4 * a);
-}
-
-export function create(o: typeof meta.options & { actor: ReturnType<typeof stockActor> }) {
-  const C = fit(o.palette, 8), A = o.actor, S = shapeOf(A), R = new Rng(o.seed);
-  const ps = new Particles({ rng: R, ground: () => 0, sparks: [WHITE, C[6], C[5], C[4]] });
-  const lights = new Lights();
-  const rows = new Map<number, number[]>();
-  for (const [x, y] of S.edge) {
-    const row = rows.get(y) ?? [];
-    row.push(x);
-    rows.set(y, row);
-  }
-  // petals, each blooming on its own beat round the ring
-  const petals = Array.from({ length: NP }, (_, k) => ({ a: (k / NP) * TAU + 0.2, t0: 0.02 + ((k * 3) % NP) * 0.035, w: R.range(4.2, 5.2) }));
-  // motes riding a spiral up round the body: from the petal tips as they open, and from the hoop when it bursts
-  const motes: { t0: number; th0: number; r0: number; y0: number; w: number; v: number; life: number; kind: number }[] = [];
-  for (let k = 0; k < NP; k++) motes.push({ t0: 0.2 + k * 0.05, th0: petals[k].a, r0: PR * 0.9, y0: -1, w: 4.2 * (k % 2 ? 1 : -1), v: R.range(46, 58), life: R.range(0.75, 0.95), kind: k % 2 });
-  for (let k = 0; k < 8; k++) motes.push({ t0: LIFT1 + R.range(0, 0.06), th0: (k / 8) * TAU, r0: R.range(12, 18), y0: TOPY + R.range(-2, 4), w: 3.6 * (k % 2 ? 1 : -1), v: R.range(14, 34), life: R.range(0.35, 0.6), kind: (k + 1) % 2 });
-  let t = 0, burst = false, lastRow = 1;
-
-  const hoopY = (tt: number) => lerp(0, TOPY, ease.inOutSine(seg(tt, LIFT0, LIFT1)));
-  const hoopR = (tt: number) => lerp(PR, 12, seg(tt, LIFT0, LIFT1));
-
-  function bloom(k: number, tt: number) {
-    const pe = petals[k];
-    return ease.outBack(seg(tt, pe.t0, pe.t0 + 0.3), 1.8) * (1 - ease.inBack(seg(tt, 1.25 + k * 0.02, 1.6 + k * 0.02), 1.4));
+    oval(p, cx, foot, radius * .68, 2.7, back ? C[2] : C[3], a * .7, g => (Math.sin(g) < 0) === back);
+    if (back) p.glow(cx, foot - 2, 12, C[3], a * .11);
   }
 
-  // a petal of a lotus of light round the feet: rooted on a ring on the floor, leaning out as it opens,
-  // foreshortened as it turns away; a lit rim, a white vein, a translucent warm body, a white tip
-  function petal(p: Painter, k: number, back: boolean) {
-    const pe = petals[k], g = pe.a + t * 0.4, near = Math.sin(g) >= 0, b = bloom(k, t);
-    if (near === back || b <= 0.02) return;
-    const ca = Math.cos(g), sa = Math.sin(g), rb = 6, rt = rb + 9 * Math.min(1.2, b), h = (k % 2 ? 7 : 9) * b;
-    const bx = ca * rb, by = sa * rb * SY, tx = ca * rt, ty = sa * rt * SY - h, L = Math.hypot(tx - bx, ty - by);
-    if (L < 1.5) return;
-    const ux = (tx - bx) / L, uy = (ty - by) / L, W = pe.w * Math.min(1, b) * (0.35 + 0.65 * Math.abs(sa)), pad = W + 1;
-    p.each(Math.min(bx, tx) - pad, Math.min(by, ty) - pad, Math.max(bx, tx) + pad, Math.max(by, ty) + pad, (x: number, y: number, sx: number, sy: number) => {
-      const dx = x - bx, dy = y - by, u = (dx * ux + dy * uy) / L;
-      if (u < 0 || u > 1) return;
-      const hw = W * Math.pow(Math.sin(Math.PI * Math.pow(u, 0.6)), 0.7) + 0.2, v = Math.abs(-dx * uy + dy * ux) / hw;
-      if (v > 1) return;
-      if (u > 0.9) return p.put(sx, sy, WHITE, 1);
-      if (v > 0.7) return p.put(sx, sy, u < 0.3 ? C[3] : u < 0.7 ? C[5] : C[6], 1);
-      if (v < 0.2 && u > 0.15 && u < 0.85) return p.put(sx, sy, u < 0.55 ? C[5] : C[6], back ? 0.75 : 0.85);
-      p.blendPx(sx, sy, u < 0.45 ? C[3] : C[4], back ? 0.6 : 0.45);
-    });
-    p.glow(tx, ty, 5, C[5], 0.35 * Math.min(1, b));
+  function ribbons(p: Painter, t: number, back: boolean) {
+    const state = field.sample(t); if (!state.active) return;
+    const growth = smooth(restoration.startsAt, restoration.pulseAt + .1, t) * (1 - smooth(restoration.liftedAt - .05, restoration.liftedAt + .16, t));
+    for (let arm = 0; arm < 2; arm++) {
+      const points: Point[] = [], phase = arm * Math.PI + .3;
+      // Trace only the trailing quarter of a turn. Depth splitting protects the target's face.
+      for (let j = 0; j <= 36; j++) {
+        const u = j / 36, y = state.sweepY + (1 - u) * h * .46, angle = phase + (foot - y) / h * 5.4 - t * .6;
+        const r = radius * (1 - .12 * smooth(foot, field.top, y)), x = cx + Math.cos(angle) * r;
+        const face = !back && y < field.top + h * .24 && Math.abs(x - chest[0]) < 8;
+        const visible = !face && (Math.sin(angle) < 0) === back && y <= foot && y >= field.top - 1;
+        if (!visible) { paint(); continue; }
+        points.push([x, y + Math.sin(angle) * 2]);
+      }
+      paint();
+      function paint() {
+        if (points.length > 1) {
+          p.path(points, C[1], state.coverage * growth * .8, back ? 1.6 : 2.6);
+          p.path(points, u => u > .7 ? C[6] : C[4], u => state.coverage * growth * (.3 + .65 * u), back ? 1 : 1.5);
+          p.glowPath(points, 4, C[4], state.coverage * growth * (back ? .06 : .10));
+        }
+        points.length = 0;
+      }
+    }
   }
 
-  // the hoop of light rising up the body: far half behind, near half in front, a soft glow round it
-  function hoop(p: Painter, back: boolean) {
-    if (t < LIFT0 || t > LIFT1 + 0.12) return;
-    const y = hoopY(t), r = hoopR(t) * (t > LIFT1 ? 1 - (t - LIFT1) / 0.12 : 1), keep = back ? (g: number) => Math.sin(g) < 0 : (g: number) => Math.sin(g) >= 0;
-    oval(p, 0, y, r, r * SY, (g) => (Math.sin(g) > 0.5 ? WHITE : C[6]), back ? 0.8 : 1, keep);
-    if (!back) {
-      oval(p, 0, y + 1, r - 0.5, r * SY, C[4], 1, keep);
-      for (let i = -2; i <= 2; i++) p.glow(i * r * 0.45, y, 8, C[5], 0.32);
+  function upward(p: Painter, t: number, back: boolean) {
+    for (const m of motes) {
+      const age = t - m.start, u = age / m.life;
+      if (u <= 0 || u >= 1) continue;
+      const phase = m.phase + age * 1.15, z = Math.sin(phase);
+      if ((z < 0) !== back) continue;
+      const alpha = smooth(0, .14, u) * (1 - smooth(.48, 1, u));
+      const x = cx + Math.cos(phase) * radius, y = foot - 2 - m.lift * u + z * 2;
+      // A coherent upward teardrop, never gravity-bound sparks or radial impact debris.
+      p.path([[x, y + 3], [x - .4, y + 1.2], [x, y]], back ? C[3] : C[5], v => alpha * (.18 + .65 * v), 1);
+      p.glow(x, y, 3, C[4], alpha * .12);
+    }
+    if (back) return;
+    for (let i = 0; i < 3; i++) {
+      const start = restoration.pulseAt + .12 + i * .15, u = (t - start) / .75;
+      if (u <= 0 || u >= 1) continue;
+      const a = smooth(0, .15, u) * (1 - smooth(.48, 1, u)), side = i === 1 ? -1 : 1;
+      const x = cx + side * (8 + i * 4) + Math.sin(u * 2.6 + i) * 2, y = field.top - 3 - 15 * u - i * 3;
+      p.poly([[x - side * 3, y + 3], [x - side * 2, y - 1], [x + side * 3, y - 3], [x + side * 2, y + 1]], C[3], a);
+      p.path([[x - side * 2, y + 2], [x + side * 2, y - 2]], C[6], a, 1);
+      p.dot(x + side * 3, y - 3, C[5], a);
+      p.glow(x, y, 4, C[4], a * .12);
     }
   }
 
   return {
-    update(dt: number) {
-      t += dt;
-      // the hoop leaves sparkles on the body as it passes each row
-      if (t > LIFT0 && t < LIFT1) {
-        const Y = Math.round(hoopY(t));
-        for (let y = lastRow; y > Y; y--) {
-          const xs = rows.get(y);
-          if (!xs || !R.chance(0.45)) continue;
-          ps.spawn(P.STAR, R.pick(xs) + R.range(-1, 1) * 2, y, R.range(-4, 4), -R.range(4, 12), R.range(0.3, 0.55), R.chance(0.5) ? WHITE : C[6], R.range(0.6, 1.6));
-        }
-        lastRow = Math.min(lastRow, Y);
+    drawBack(p: Painter, t: number) { t = Math.round(t * 1e9) / 1e9; if (t >= meta.duration) return; lotus(p, t, true); ribbons(p, t, true); upward(p, t, true); },
+    draw(p: Painter, t: number) {
+      // Ignore sub-nanosecond host accumulation differences at pixel-cell boundaries.
+      t = Math.round(t * 1e9) / 1e9;
+      if (t >= meta.duration) return;
+      const state = field.sample(t);
+      const responseByRow = new Map<number, number>();
+      for (const cell of field.cells) {
+        let response = responseByRow.get(cell.y);
+        if (response === undefined) { response = field.responseAt(cell.y, t); responseByRow.set(cell.y, response); }
+        // Preserve original shading and face detail. Never drain the actor before healing.
+        if (response > .08 && cell.color) p.px(cell.x, cell.y, mix(cell.color, C[4], response * (cell.edge ? .40 : .15)));
+        if (cell.edge && response > .12) p.glow(cell.x, cell.y, 1.8, C[4], response * .018);
       }
-      if (!burst && t >= LIFT1) {
-        burst = true;
-        lights.add(0, TOPY, 26, C[5], 0.55, 0.3);
-        lights.add(0, TOPY, 10, WHITE, 0.45, 0.08);
+      lotus(p, t, false); ribbons(p, t, false); upward(p, t, false);
+      // The single application beat is offset beside the chest, keeping facial/body anatomy visible.
+      if (state.pulse > 0) {
+        const x = chest[0] - 9, y = chest[1] - 1, a = state.pulse;
+        p.path([[x - 2, y], [x + 2, y]], C[6], a * .9, 1);
+        p.path([[x, y - 2], [x, y + 2]], C[6], a * .9, 1);
+        p.dot(x, y, C[7], a);
+        p.glow(x, y, 6, C[4], a * .22);
       }
-      ps.update(dt);
-      lights.update(dt);
-    },
-    drawBack(p: Painter) {
-      // a warm pool under the flower
-      const pool = smooth(0, 0.2, t) * (1 - smooth(1.3, 1.75, t));
-      if (pool > 0) p.glow(0, -2, 30, C[4], 0.3 * pool);
-      for (let k = 0; k < NP; k++) petal(p, k, true);
-      hoop(p, true);
-      ps.draw(p, "back");
-      riders(p, true);
-    },
-    draw(p: Painter) {
-      // drained of colour above the hoop, restored below it with a warm glow at the line
-      const drain = smooth(0, 0.08, t);
-      if (t < LIFT1 + 0.35) {
-        const Y = t < LIFT0 ? 1 : hoopY(t), done = t >= LIFT1;
-        recolor(p, A, (c, x, y) => {
-          const d = y - Y;
-          if (!done && d < -0.5) {
-            const l = luma(c) * 0.88;
-            return mix(c, rgb(l * 236, l * 226, l * 222), 0.68 * drain);
-          }
-          if (!done && d < 1) return WHITE;
-          if (!done && d < 2.5) return C[6];
-          const k = (done ? 0.45 * (1 - seg(t, LIFT1, LIFT1 + 0.35)) : 0.5 * Math.exp(-(d - 2.5) / 5));
-          return k > 0.05 ? mix(c, C[5], k) : 0;
-        });
-        if (t > LIFT0 && !done) p.glow(0, Y, 18, C[5], 0.35);
-      }
-      for (let k = 0; k < NP; k++) petal(p, k, false);
-      hoop(p, false);
-      if (t >= LIFT1 && t < LIFT1 + 0.25) sparkle(p, 0, TOPY, 8 * (1 - (t - LIFT1) / 0.25), WHITE, C[5], 0.6);
-      riders(p, false);
-      ps.draw(p, "front");
-      lights.draw(p);
     },
   };
-
-  // the spiralling motes, each popping into a heart or a sparkle at the end of its ride
-  function riders(p: Painter, back: boolean) {
-    for (const m of motes) {
-      const a = t - m.t0;
-      if (a < 0) continue;
-      const at = (aa: number) => {
-        const th = m.th0 + m.w * aa, r = m.r0 * (1 - 0.45 * (aa / m.life));
-        return [Math.cos(th) * r, m.y0 - m.v * aa, Math.sin(th)];
-      };
-      if (a < m.life) {
-        const [x, y, z] = at(a);
-        if (z < 0 !== back) continue;
-        for (let j = 0; j < 7; j++) {
-          const aj = a - j * 0.03;
-          if (aj < 0) break;
-          const [tx, ty, tz] = at(aj);
-          if (tz < 0 !== back) continue;
-          p.dot(tx, ty, j === 0 ? WHITE : j < 3 ? C[6] : C[5], (1 - j / 7) * (back ? 0.6 : 1));
-        }
-        p.glow(x, y, 4, C[5], back ? 0.2 : 0.4);
-        continue;
-      }
-      // the pop: a quick sparkle, then a heart (or a star) that floats up and fades
-      const u = (a - m.life) / 0.36;
-      if (u >= 1 || back) continue;
-      const [x, y] = at(m.life), k = 1 - smooth(0.5, 1, u);
-      if (u < 0.12) sparkle(p, x, y, 3, WHITE, C[6], 0.5);
-      else if (m.kind) heart(p, x, y - u * 6, C, k);
-      else sparkle(p, x, y - u * 5, 1 + 2 * k * (0.7 + 0.3 * Math.sin(a * 30)), WHITE, C[5], 0.45 * k);
-    }
-  }
 }

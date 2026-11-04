@@ -283,6 +283,67 @@ export class Painter3D {
     }
   }
 
+  /** Expanding air-pressure shell. Refracts existing pixels, including HDR and depth,
+   * with a compression/rarefaction pair; clips against the floor and nearer surfaces.
+   * Radius/width/displacement are world units. No persistent opaque ring is painted. */
+  pressureWarp(center:Vec3,radius:number,width:number,displacement:number,air?:{tint:Color3D;opacity:number}) {
+    if(!center.every(Number.isFinite)||![radius,width,displacement].every(Number.isFinite)||radius<=0||width<=0||displacement<=0)return;
+    const at=this.project(center),w=this.frame.w,h=this.frame.h,scale=at.scale;
+    const tint=air?color3D(air.tint):0,airOpacity=air&&Number.isFinite(air.opacity)?clamp3(air.opacity):0;
+    if(!(Number.isFinite(scale)&&scale>0)||![at.x,at.y,at.depth,radius*radius].every(Number.isFinite))return;
+    const reach=radius*scale,band=Math.min(width,radius)*scale,amount=Math.min(displacement*scale,6);
+    if(![reach,band,amount].every(Number.isFinite)||band<=0)return;
+    const perspective=this.camera.projection==="perspective"?this.camera.perspective??0.025:0;
+    let minX=at.x-reach,maxX=at.x+reach,minY=at.y-reach,maxY=at.y+reach;
+    if(perspective!==0) {
+      minX=minY=Infinity;maxX=maxY=-Infinity;
+      for(let i=0;i<8;i++) {const q=this.project([center[0]+(i&1?radius:-radius),center[1]+(i&2?radius:-radius),center[2]+(i&4?radius:-radius)]);minX=Math.min(minX,q.x);maxX=Math.max(maxX,q.x);minY=Math.min(minY,q.y);maxY=Math.max(maxY,q.y);}
+    }
+    if(![minX,maxX,minY,maxY].every(Number.isFinite))return;
+    const x0=Math.max(0,Math.floor(minX)),x1=Math.min(w-1,Math.ceil(maxX));
+    const y0=Math.max(0,Math.floor(minY)),y1=Math.min(h-1,Math.ceil(maxY));
+    if(x0>x1||y0>y1)return;
+    const n=w*h;
+    if(!this.warpColor||this.warpColor.length!==n) {this.warpColor=new Uint32Array(n);this.warpLight=new Uint32Array(n);this.warpDepth=new Float32Array(n);}
+    const color=this.warpColor,light=this.warpLight!,depth=this.warpDepth!,hdr=this.frame.hdrLight;
+    color.set(this.frame.color);light.set(this.frame.light);depth.set(this.frame.depth);
+    if(hdr) {if(!this.warpHDR||this.warpHDR.length!==hdr.length)this.warpHDR=new Float32Array(hdr.length);this.warpHDR.set(hdr);}
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++) {
+      const dx=x+0.5-at.x,dy=y+0.5-at.y,r=Math.hypot(dx,dy);
+      let q=(reach-r)/band,front=Math.sqrt(Math.max(0,radius*radius-(r/scale)**2));
+      let surface=at.depth+front,worldY=center[1]-dy/scale*this.ce+front*this.se;
+      if(perspective!==0) {
+        // Reconstruct the same ray/depth coordinate as Painter3D and the volume integrator.
+        const u=(x+0.5-w*0.5)/this.scale,v=(h*0.61-y-0.5)/this.scale;
+        const ox=this.cy*u-this.sy*this.se*v,oy=this.ce*v,oz=-this.sy*u-this.cy*this.se*v;
+        const rx=this.sy*this.ce-ox*perspective,ry=this.se-oy*perspective,rz=this.cy*this.ce-oz*perspective;
+        const bx=this.origin[0]+ox-center[0],by=this.origin[1]+oy-center[1],bz=this.origin[2]+oz-center[2];
+        const a=rx*rx+ry*ry+rz*rz,b=bx*rx+by*ry+bz*rz,c=bx*bx+by*by+bz*bz;
+        const perpendicular=Math.max(0,c-b*b/a),disc=radius*radius-perpendicular;
+        if(disc<0||!Number.isFinite(disc))continue;
+        q=(radius-Math.sqrt(perpendicular))/Math.min(width,radius);
+        surface=-b/a+Math.sqrt(disc/a);worldY=this.origin[1]+oy+ry*surface;
+        if(1-surface*perspective<0.3)continue;
+      }
+      if(!Number.isFinite(q)||q<=0||q>=1||r<0.5||worldY<0.02)continue;
+      const i=y*w+x;
+      if(depth[i]>surface)continue;
+      const profile=Math.sin(q*Math.PI*2)*Math.sin(q*Math.PI);
+      const shift=profile*amount,sx=Math.floor(x+0.5+dx/r*shift),sy=Math.floor(y+0.5+dy/r*shift);
+      if(sx<0||sx>=w||sy<0||sy>=h)continue;
+      const j=sy*w+sx;
+      if(depth[j]>surface)continue;
+      this.frame.color[i]=color[j];this.frame.light[i]=light[j];this.frame.depth[i]=depth[j];
+      // Optional faint grazing-angle condensation, concentrated above the floor.
+      // It does not write depth or light, so air never becomes an opaque ring.
+      if(airOpacity>0) {
+        const grazing=Math.sin(q*Math.PI)**3*clamp3(-dy/reach*1.1+0.2);
+        this.frame.color[i]=blendOver(this.frame.color[i],tint,airOpacity*grazing);
+      }
+      if(hdr&&this.warpHDR) {hdr[i*3]=this.warpHDR[j*3];hdr[i*3+1]=this.warpHDR[j*3+1];hdr[i*3+2]=this.warpHDR[j*3+2];}
+    }
+  }
+
   grid(extent = 8, step = 1) {
     if (!Number.isFinite(extent) || extent < 0 || !Number.isFinite(step) || step <= 0)
       throw new RangeError("grid extent must be non-negative and step must be positive");

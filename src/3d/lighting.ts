@@ -24,7 +24,11 @@ export interface PointLight3D {
   rim?: number;
 }
 export interface ScreenSpaceAO3D {
+  /** Neighborhood radius in render-target pixels. */
   radius?: number;
+  /** Maximum world-space distance at which nearby geometry can occlude (default 2). */
+  range?: number;
+  /** Minimum distance above the reconstructed surface, in world units. */
   bias?: number;
   intensity?: number;
 }
@@ -42,6 +46,7 @@ const clamp = (x: number) => Math.max(0, Math.min(1, x));
 /** Reuses the same buffers across frames to minimize garbage collection. */
 export class CinematicLighting3D {
   private positions = new Float32Array(0);
+  private normals = new Float32Array(0);
   private radiance = new Float32Array(0);
   private occlusion = new Float32Array(0);
   private cacheW = 0;
@@ -51,6 +56,7 @@ export class CinematicLighting3D {
     if (w === this.cacheW && h === this.cacheH) return;
     this.cacheW = w; this.cacheH = h;
     this.positions = new Float32Array(w * h * 3);
+    this.normals = new Float32Array(w * h * 3);
     this.radiance = new Float32Array(w * h * 3);
     this.occlusion = new Float32Array(w * h);
   }
@@ -63,7 +69,7 @@ export class CinematicLighting3D {
   evaluate(frame: Frame3D, camera: Camera3D, lights: readonly PointLight3D[], options: LightingOptions3D = {}): LightingResult3D {
     const { w, h, depth, color } = frame, n = w * h;
     this.prepare(w, h);
-    const pos = this.positions, rad = this.radiance, ao = this.occlusion;
+    const pos = this.positions, normals = this.normals, rad = this.radiance, ao = this.occlusion;
     rad.fill(0); ao.fill(1);
 
     // Mirrors Painter3D.project() exactly, including its perspective adjustment.
@@ -100,31 +106,46 @@ export class CinematicLighting3D {
       if (!Number.isFinite(z)) continue;
       const j = i * 3, px = pos[j], py = pos[j + 1], pz = pos[j + 2];
 
-      // Estimate a normal from nearby depth samples. At silhouette boundaries
-      // use camera-aligned tangents instead of bridging two unrelated surfaces.
+      // Pick the nearest-depth neighbor on each axis. A missing forward sample
+      // must fall back to the opposite side, not a camera-facing normal: the latter
+      // produces bright one-pixel seams on otherwise continuous tilted facets.
       const s = scale * (perspective ? 1 / Math.max(0.3, 1 - z * lens) : 1);
       let rx = cy / s, ry = 0, rz = -sy / s;
       let dx = sy * se / s, dy = -ce / s, dz = cy * se / s;
-      const right = x + 1 < w ? i + 1 : i - 1;
-      const down = y + 1 < h ? i + w : i - w;
-      if (x + 1 < w && Number.isFinite(depth[right]) && Math.abs(z - depth[right]) < threshold) {
-        const q = right * 3; rx = pos[q] - px; ry = pos[q + 1] - py; rz = pos[q + 2] - pz;
-      } else if (x > 0 && Number.isFinite(depth[right]) && Math.abs(z - depth[right]) < threshold) {
-        const q = right * 3; rx = px - pos[q]; ry = py - pos[q + 1]; rz = pz - pos[q + 2];
+      const rightDelta = x + 1 < w ? Math.abs(z - depth[i + 1]) : Infinity;
+      const leftDelta = x > 0 ? Math.abs(z - depth[i - 1]) : Infinity;
+      const downDelta = y + 1 < h ? Math.abs(z - depth[i + w]) : Infinity;
+      const upDelta = y > 0 ? Math.abs(z - depth[i - w]) : Infinity;
+      const horizontal = rightDelta < threshold && rightDelta <= leftDelta ? i + 1 : leftDelta < threshold ? i - 1 : -1;
+      const vertical = downDelta < threshold && downDelta <= upDelta ? i + w : upDelta < threshold ? i - w : -1;
+      if (horizontal >= 0) {
+        const q = horizontal * 3, direction = horizontal > i ? 1 : -1;
+        rx = (pos[q] - px) * direction; ry = (pos[q + 1] - py) * direction; rz = (pos[q + 2] - pz) * direction;
       }
-      if (y + 1 < h && Number.isFinite(depth[down]) && Math.abs(z - depth[down]) < threshold) {
-        const q = down * 3; dx = pos[q] - px; dy = pos[q + 1] - py; dz = pos[q + 2] - pz;
-      } else if (y > 0 && Number.isFinite(depth[down]) && Math.abs(z - depth[down]) < threshold) {
-        const q = down * 3; dx = px - pos[q]; dy = py - pos[q + 1]; dz = pz - pos[q + 2];
+      if (vertical >= 0) {
+        const q = vertical * 3, direction = vertical > i ? 1 : -1;
+        dx = (pos[q] - px) * direction; dy = (pos[q + 1] - py) * direction; dz = (pos[q + 2] - pz) * direction;
       }
       let nx = dy * rz - dz * ry, ny = dz * rx - dx * rz, nz = dx * ry - dy * rx;
       const nl = Math.hypot(nx, ny, nz) || 1;
       nx /= nl; ny /= nl; nz /= nl;
-      // Reverse accidentally backfacing screen-space derivatives.
-      if (nx * cameraForwardX + ny * cameraForwardY + nz * cameraForwardZ < 0) {
+      // Perspective rays converge on the eye, so highlights and rim response need
+      // a per-pixel view direction. The painter clamps its near projection to an
+      // orthographic scale; mirror that behavior rather than inventing a new lens.
+      let viewX = cameraForwardX, viewY = cameraForwardY, viewZ = cameraForwardZ;
+      if (perspective && 1 - z * lens > 0.3) {
+        viewX -= (px - target[0]) * lens;
+        viewY -= (py - target[1]) * lens;
+        viewZ -= (pz - target[2]) * lens;
+        const length = Math.hypot(viewX, viewY, viewZ) || 1;
+        viewX /= length; viewY /= length; viewZ /= length;
+      }
+      // Derivative winding must face the actual eye, including off-axis pixels.
+      if (nx * viewX + ny * viewY + nz * viewZ < 0) {
         nx = -nx; ny = -ny; nz = -nz;
       }
-      const facing = clamp(nx * cameraForwardX + ny * cameraForwardY + nz * cameraForwardZ);
+      normals[j] = nx; normals[j + 1] = ny; normals[j + 2] = nz;
+      const facing = clamp(nx * viewX + ny * viewY + nz * viewZ);
       const material = color[i];
       const ar = LINEAR[material & 255], ag = LINEAR[(material >>> 8) & 255], ab = LINEAR[(material >>> 16) & 255];
       for (const l of descriptors) {
@@ -134,9 +155,9 @@ export class CinematicLighting3D {
         const dist = Math.sqrt(distance2) || 1e-5;
         vx /= dist; vy /= dist; vz /= dist;
         const diffuse = Math.max(0, nx * vx + ny * vy + nz * vz);
-        const hx = vx + cameraForwardX, hy = vy + cameraForwardY, hz = vz + cameraForwardZ;
+        const hx = vx + viewX, hy = vy + viewY, hz = vz + viewZ;
         const hl = Math.hypot(hx, hy, hz) || 1;
-        const spec = Math.max(0, (nx * hx + ny * hy + nz * hz) / hl) ** 24 * l.specular;
+        const spec = diffuse > 0 ? Math.max(0, (nx * hx + ny * hy + nz * hz) / hl) ** 24 * l.specular : 0;
         const rim = (1 - facing) ** 3 * l.rim;
         const t = 1 - distance2 / l.r2;
         const attenuation = t * t / (1 + distance2 * 0.06) * l.intensity;
@@ -151,18 +172,28 @@ export class CinematicLighting3D {
       const settings = options.ambientOcclusion ?? {};
       const radius = Math.max(1, Math.min(8, Math.floor(settings.radius ?? 3)));
       const intensity = Math.max(0, settings.intensity ?? 0.4);
-      const bias = Math.max(0, settings.bias ?? 0.09);
-      // Depth discontinuity occlusion. Never darken pixels lacking geometry.
+      const bias = Math.max(1e-5, settings.bias ?? 0.09);
+      const range = Math.max(1e-5, settings.range ?? 2), range2 = range * range;
+      // Only geometry above the local surface may occlude it. Comparing raw
+      // camera depth falsely shadows every tilted plane and distant overlaps.
+      // Never darken pixels lacking geometry, and fade smoothly at the range limit.
       const offsets = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]];
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         const i = y * w + x;
         if (!Number.isFinite(depth[i])) continue;
+        const j = i * 3;
         let occluded = 0;
         for (const [dx,dy] of offsets) {
           const xx = x + dx * radius, yy = y + dy * radius;
           if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
-          const delta = depth[yy * w + xx] - depth[i] - bias;
-          if (delta > 0 && Number.isFinite(delta)) occluded += clamp(delta / (radius * 0.4 + 0.2));
+          const neighbor = yy * w + xx;
+          if (!Number.isFinite(depth[neighbor])) continue;
+          const q = neighbor * 3;
+          const vx = pos[q] - pos[j], vy = pos[q + 1] - pos[j + 1], vz = pos[q + 2] - pos[j + 2];
+          const distance2 = vx * vx + vy * vy + vz * vz;
+          if (distance2 >= range2) continue;
+          const height = vx * normals[j] + vy * normals[j + 1] + vz * normals[j + 2] - bias;
+          if (height > 0) occluded += clamp(height / (radius * 0.4 + 0.2)) * (1 - distance2 / range2) ** 2;
         }
         ao[i] = Math.max(0.2, 1 - intensity * occluded / offsets.length);
       }

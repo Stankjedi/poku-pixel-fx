@@ -5,15 +5,24 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { encodePNG } from "./lib/png.mjs";
+import { exportCamera3D } from "./lib/camera3d.mjs";
 const { createFrame3D, compositeFrame3D, Painter3D, createFx3D, enableHDRLight, CinematicLighting3D, CinematicCompositor } = await import(new URL("../../build/3d/index.js", import.meta.url).href);
+const shield = await import(new URL("../../build/3d/effects/energy-shield.js", import.meta.url).href);
+const voidrift = await import(new URL("../../build/3d/effects/void-rift.js", import.meta.url).href);
+const laser = await import(new URL("../../build/3d/effects/coherent-laser.js", import.meta.url).href);
+const meteor = await import(new URL("../../build/3d/effects/meteor-impact.js", import.meta.url).href);
+const water = await import(new URL("../../build/3d/effects/crown-splash.js", import.meta.url).href);
+const lightning = await import(new URL("../../build/3d/effects/forked-lightning.js", import.meta.url).href);
 const frost = await import(new URL("../../build/3d/effects/frost-nova.js", import.meta.url).href);
 const slash = await import(new URL("../../build/3d/effects/arc-slash.js", import.meta.url).href);
 const blackhole = await import(new URL("../../build/3d/effects/black-hole.js", import.meta.url).href);
 const wind = await import(new URL("../../build/3d/effects/wind-rasenshuriken.js", import.meta.url).href);
+const flame = await import(new URL("../../build/3d/effects/thermal-plume.js", import.meta.url).href);
+const shatter = await import(new URL("../../build/3d/effects/ice-shatter.js", import.meta.url).href);
 const windOriginal = await import(new URL("../../build/3d/effects/wind-rasenshuriken-legacy.js", import.meta.url).href);
-const mods = { frost, slash, blackhole, wind, windOriginal };
+const mods = { frost, slash, blackhole, wind, windOriginal, shatter, flame, lightning, water, voidrift, meteor, laser, shield };
 const args = process.argv.slice(2), name = args[0] ?? "wind";
-if (!Object.prototype.hasOwnProperty.call(mods, name)) throw new Error("Usage: render-3d-gif wind|windOriginal|frost|slash|blackhole [--fps 20 --width 260 --height 180 --seed 308 --out output.gif --cinematic true]");
+if (!Object.prototype.hasOwnProperty.call(mods, name)) throw new Error("Usage: render-3d-gif wind|windOriginal|frost|slash|blackhole|shatter|flame|lightning|water|voidrift|meteor|laser|shield [--fps 20 --width 260 --height 180 --seed 308 --out output.gif --cinematic true --yaw 39 --elevation 28 --zoom 1.28 --target-y 1.05 --camera-motion false]");
 const flags: Record<string, string> = {};
 for (let i = 1; i < args.length; i += 2) {
   if (!args[i].startsWith("--") || args[i + 1] === undefined) throw new Error("Expected --option value");
@@ -32,13 +41,14 @@ const fx = createFx3D(mod, { seed });
 const isWind = name === "wind" || name === "windOriginal";
 const frame = createFrame3D(w, h);
 if (cinematicMode && name !== "blackhole") enableHDRLight(frame);
-const painter = new Painter3D(frame, {
+const baseCamera = exportCamera3D(flags, {
   yaw: isWind ? 0.32 : 0.68, elevation: isWind ? 0.22 : 28 * Math.PI / 180,
-  zoom: name === "blackhole" ? 1.36 : isWind ? 1.18 : 1,
-  target: [0, name === "slash" ? 1.4 : name === "blackhole" ? 1.12 : isWind ? 2.35 : 0.75, 0],
+  zoom: name === "shield" ? 1.45 : name === "laser" ? 1.45 : name === "meteor" ? 0.98 : name === "voidrift" ? 1.3 : name === "blackhole" ? 1.36 : isWind ? 1.18 : name === "shatter" ? 1.2 : name === "flame" ? 1.65 : name === "lightning" ? 1.35 : name === "water" ? 1.28 : 1,
+  target: [0, name === "shield" ? 2.1 : name === "laser" ? 1.2 : name === "meteor" ? 2.3 : name === "voidrift" ? 2.5 : name === "water" ? 1.05 : name === "lightning" ? 2.6 : name === "flame" ? 1.95 : name === "shatter" ? 1.1 : name === "slash" ? 1.4 : name === "blackhole" ? 1.12 : isWind ? 2.35 : 0.75, 0],
 });
+const painter = new Painter3D(frame, baseCamera);
 const lighting = new CinematicLighting3D(), film = new CinematicCompositor();
-const rig = [
+const rig = name === "voidrift" ? [] : [
   { position: [-2.3, 3.2, 1.6] as const, radius: 7, color: "#88dfff", intensity: 1.75, specular: 0.5, rim: 0.2 },
   { position: [2.4, 2.1, -1.7] as const, radius: 6, color: "#ff9dce", intensity: 1.3, specular: 0.38, rim: 0.22 },
 ];
@@ -56,11 +66,11 @@ try {
   for (let i = 0; i < frames; i++) {
     // Sequential export uses the same fixed-step timeline without replaying from t=0 per frame.
     if (i > 0) fx.update(1 / fps);
-    painter.begin(name === "blackhole" ? "#05030d" : isWind ? "#061222" : "#0a1525");
-    if (name !== "blackhole" && !isWind) painter.grid();
+    painter.setCamera(flags["camera-motion"] === "false" ? baseCamera : fx.camera(baseCamera)).begin(name === "blackhole" ? "#05030d" : isWind ? "#061222" : "#0a1525");
+    if (name !== "blackhole" && !isWind && flags.grid !== "false") painter.grid();
     fx.draw(painter);
     if (cinematicMode) {
-      const shade = lighting.evaluate(frame, painter.camera, rig, {
+      const shade = lighting.evaluate(frame, painter.camera, name === "meteor" || name === "laser" || name === "shield" || name === "wind" ? [] : rig, {
         ambientOcclusion: { radius: 3, bias: 0.1, intensity: 0.36 },
       });
       film.render(frame, rgba, {

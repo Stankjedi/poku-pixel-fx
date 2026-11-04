@@ -22,7 +22,7 @@ Node.js 18 이상과 로컬 개발 의존성을 준비한 뒤 `npm run build`를
 GIF·MP4 미리보기에는 로컬 ffmpeg가 필요합니다. 갤러리의 한글은 시스템 글꼴 대체를 사용하며 Poku Pixel 글꼴은 영문·숫자·기본 기호를 제공합니다. 이펙트 식별자와 코드 API, 내보낸 원본 메타데이터는 호환성을 위해 그대로 유지합니다.
 
 
-**<!-- count -->257<!-- /count --> pixel art effects and animations, every one a small piece of code.** Fire,
+**<!-- count -->266<!-- /count --> pixel art effects and animations, every one a small piece of code.** Fire,
 explosions, magic, weather, UI, pickups, critters and more. Play them live, recolor and mirror them, drop them into
 a browser game, or export sprite sheets for any engine. Plus a Claude Code skill that makes new ones the way a
 picky pixel artist would: draft, render, look, refine.
@@ -45,22 +45,22 @@ the idea at library scale, with a skill to keep going.
 | category | effects | some of them |
 |---|---|---|
 | **moves** | 12 | arrow shot, dash strike, earth stomp, fireball throw, ground pound, holy smite… |
-| **fire** | 14 | brazier, campfire, candle, fire breath, fire ring, fire tornado… |
+| **fire** | 15 | brazier, campfire, candle, convection plume, fire breath, fire ring… |
 | **explosions** | 12 | barrel explosion, big explosion, cartoon pow, dirt explosion, firework burst, firework rocket… |
-| **water** | 13 | bubbles, drip, fountain, geyser, rain splash, ripples… |
-| **ice** | 10 | blizzard vortex, freeze, frost breath, frost nova, ice crystal, ice lance… |
-| **lightning** | 12 | ball lightning, chain lightning, charge up, electrified, lightning strike, plasma ball… |
+| **water** | 14 | abyssal maelstrom, bubbles, capillary crown, drip, fountain, geyser… |
+| **ice** | 11 | blizzard vortex, freeze, frost beam, frost breath, frost nova, ice crystal… |
+| **lightning** | 12 | ball lightning, chain lightning, charge up, electrified, ion stormburst, lightning strike… |
 | **sci-fi** | 12 | emp blast, energy core, force field, glitch, hologram, jetpack… |
 | **melee** | 12 | claw swipe, dagger flurry, double slash, hammer smash, heavy cleave, scythe reap… |
-| **impacts** | 11 | blunt hit, bullet impact, critical hit, ground slam, heavy landing, hit flash… |
-| **projectiles** | 13 | arrow, bullet tracer, cannon shot, energy disc, signal flare, homing missile… |
+| **impacts** | 12 | blunt hit, bullet impact, critical hit, glass shatter, ground slam, heavy landing… |
+| **projectiles** | 14 | arrow, bullet tracer, cannon shot, energy disc, signal flare, homing missile… |
 | **spawn & death** | 10 | coin drop, disintegrate, dissolve burn, egg hatch, poof, respawn beam… |
-| **arcane** | 16 | arcane beam, arcane missiles, arcane orb, blink in, blink out, magic circle cast… |
+| **arcane** | 16 | arcane beam, arcane missiles, arcane orb, blink in, blink out, celestial supernova… |
 | **holy** | 11 | blessing, divine shield, feather burst, halo, heal, healing ring… |
-| **shadow** | 13 | black hole, curse, dark explosion, eclipse, grasping hands, hex sigil… |
+| **shadow** | 15 | abyssal fracture, black dragon slash, black hole, curse, dark explosion, eclipse… |
 | **status** | 13 | bleeding, burning, charmed, confused, cursed, frozen… |
-| **nature** | 15 | acid splash, boulder, earth spike, healing bloom, leaf storm, poison cloud… |
-| **weather** | 12 | aurora, blizzard, cherry blossoms, clouds, falling leaves, fireflies… |
+| **nature** | 16 | acid splash, boulder, earth spike, emerald fireflies, healing bloom, leaf storm… |
+| **weather** | 14 | aurora, blizzard, cherry blossoms, clouds, crosswind gust, falling leaves… |
 | **ui** | 12 | achievement, coin collect, combo counter, confetti, countdown, crit number… |
 | **pickups** | 11 | chest open, coin spin, collect burst, crystal shard, gem spin, heart pickup… |
 | **transitions** | 10 | blinds, burn away, crt off, diamond wipe, glitch wipe, iris… |
@@ -75,6 +75,8 @@ The optional **3D VFX engine** lives in `src/3d/` without changing the existing 
 
 - Run `npm run build && npm run gallery` and open [the 3D preview](gallery/3d.html) (live URL: `http://127.0.0.1:8080/gallery/3d.html`). Orbit the camera, adjust pixel size/glow and download a PNG snapshot.
 - Export contact sheets with `npm run render:3d -- frost --frames 24` or `npm run render:3d -- slash --frames 24`, or `npm run render:3d -- blackhole --frames 32`.
+- **Energy Shield 3D** adds a curved energy membrane, three local impacts and traveling geodesic ripples. Run `npm run render:3d:gif -- shield`, or see [the shield surface toolkit](docs/ENERGY_SHIELD_3D.md).
+- **Crown Splash 3D** adds non-emissive liquid sheets, rim-attached droplets and impact ripples. Run `npm run render:3d:gif -- water`, or see [the liquid toolkit](docs/LIQUID_3D.md).
 - Use `import { createFx3D, Painter3D, createFrame3D, compositeFrame3D } from "poku-pixel-fx/3d"`, and read [3D authoring and API docs](docs/3D_VFX.md).
 - Validate with `npm run test:3d` after building.
 
@@ -225,6 +227,8 @@ Made by [Patch](https://patch.gg).
 
 Use Node 18 or newer and run `npm run build` first. Run `node build-tools/tools/render.mjs fire/torch --sheet` to export locally, or `node build-tools/tools/serve.mjs` for the gallery on 127.0.0.1. GIF/MP4 export requires a locally installed ffmpeg. Building the TypeScript sources and gallery requires the local development dependencies, including TypeScript and esbuild; the compiled effect runtime has no package dependencies. The Poku Pixel font supports ASCII letters, digits and common punctuation; other characters use system fallback fonts.
 
+The 2D GIF/MP4 exporter stages one native-size RGBA sequence in the system temporary directory and lets ffmpeg scale and repeat it. Temporary disk use is `width × height × 4 × frame count` bytes, plus a small GIF palette, regardless of export scale or loop count; staged files are removed after success or failure. It avoids keeping enlarged, repeated raw frames in memory. After building, run `npm run test:export` to check export behavior; real GIF/MP4 checks require both ffmpeg and ffprobe.
+
 | Status | Item |
 |---|---|
 | DONE | Local effect library, locally served gallery, and original pixel font |
@@ -264,3 +268,22 @@ Codex에서 저장소의 `skills/poku-pixel-fx`를 설치하고, 이 저장소�
 ## 이펙트 카탈로그
 
 에이전트나 도구는 빌드 후 `npm run catalog -- --output catalog.json`을 실행해 등록된 기본 이펙트의 식별자, 한글·영어 이름과 설명, 태그, 재생 및 프레임 정보를 JSON으로 얻을 수 있습니다. 이 정적 카탈로그에는 공유 갤러리 게시물이 포함되지 않습니다.
+
+### Shared rendering quality
+
+See [the quality standard](docs/QUALITY.md) for the Spatial Severance reference, connected particle trails,
+pointed ribbon geometry, and once-per-pixel path lighting. New effect starters use these building blocks.
+Existing simulated sparks use refined rendering by default; `createFx(effect, { particleStyle: "classic" })`
+retains their previous appearance. Technical checks and visual review are both required; no automatic
+setting guarantees that every effect reaches the same artistic quality.
+
+### Dry stone fracture
+
+`nature/rock-fracture` adds fitted sandstone breakup, heavy bouncing rubble, and low landing dust without magical glow. The reusable `fractureStone` and `rubblePath` helpers preserve geometry and support deterministic, frame-rate-independent debris. See [STONE_FRACTURE.md](docs/STONE_FRACTURE.md).
+
+### Target-bound healing
+
+`holy/heal` now keeps the target readable with a jade lotus, upward ribbons and one soft chest beat.
+The reusable restoration field follows custom target anatomy; exported sheets retain the non-damage
+application timing. See [Restoration authoring](docs/RESTORATION.md) and run
+`node tools/preview-restoration.mjs` after building to review moving-target, no-glow and recolor cases.

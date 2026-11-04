@@ -6,12 +6,15 @@
 
 import { Rng, clamp, TAU } from "./math.js";
 import { integrateMotion2D } from "./particles.js";
+import { drawTrail, motionTrail, type TrailPainter } from "./quality.js";
 import type { Painter } from "./painter.js";
 import { hex, scale, mix, rgb, WHITE } from "./color.js";
 
 type Color = string | number;
 type Layer = "back" | "front";
 interface SimPainter {
+  path?: TrailPainter["path"];
+  particleStyle?: "refined" | "classic";
   line(x0: number, y0: number, x1: number, y1: number, color: number, alpha?: number): void;
   dot(x: number, y: number, color: number, alpha?: number): void;
   px(x: number, y: number, color: number): void;
@@ -22,10 +25,12 @@ interface SimPainter {
 interface ParticleOptions {
   rng?: Rng; seed?: number; ground?: (x: number) => number;
   sparks?: Color[]; haze?: Color; onLand?: (x: number, y: number) => void;
+  /** Refined connected trails by default; classic preserves the original sparkle drawing. */
+  renderStyle?: "refined" | "classic";
 }
 interface Particle {
   k: number; x: number; y: number; vx: number; vy: number; life: number; max: number;
-  col: number; size: number; seed: number; delay: number; flag: number;
+  col: number; size: number; seed: number; delay: number; flag: number; trailAge?: number;
 }
 interface Blaze { x: number; y: number; life: number; max: number; acc: number; power: number }
 export interface BitInput {
@@ -61,8 +66,10 @@ const SOFT = new Set([P.VAPOUR, P.DUST, P.SMOKE]);
 export class Particles {
   R: Rng; list: Particle[]; t: number; ground: (x: number) => number;
   sparks: number[]; haze: number | null; onLand: ((x: number, y: number) => void) | null;
+  renderStyle: "refined" | "classic";
   constructor(opts: ParticleOptions = {}) {
     this.R = opts.rng ?? new Rng(opts.seed ?? 1);
+    this.renderStyle = opts.renderStyle ?? "refined";
     this.list = [];
     this.t = 0;
     this.ground = opts.ground ?? (() => Infinity);
@@ -72,7 +79,7 @@ export class Particles {
   }
   /** delay: seconds before it appears; flag: PF bits. col 0 lets FIRE and SMOKE use their own ramps. */
   spawn(k: number, x: number, y: number, vx: number, vy: number, life: number, col: Color = WHITE, size = 1, delay = 0, flag = 0) {
-    this.list.push({ k, x, y, vx, vy, life, max: life, col: col ? hex(col) : 0, size, seed: this.R.next() * 100, delay, flag });
+    this.list.push({ k, x, y, vx, vy, life, max: life, col: col ? hex(col) : 0, size, seed: this.R.next() * 100, delay, flag, trailAge: 0 });
   }
   get count() {
     return this.list.length;
@@ -97,6 +104,7 @@ export class Particles {
         }
         continue;
       }
+      p.trailAge = (p.trailAge ?? Math.max(0, p.max - p.life - dt)) + dt;
       switch (p.k) {
         case P.FIRE:
           integrateMotion2D(p, dt, Math.sin(t * 17 + p.seed) * 30, -95, 5, 3.2);
@@ -124,7 +132,9 @@ export class Particles {
         case P.SPARK: {
           const g = this.ground(p.x), y0 = p.y;
           integrateMotion2D(p, dt, 0, GRAVITY * 0.45, 2.2);
-          if (p.vy > 0 && y0 <= g && p.y >= g) (p.vy = -p.vy * 0.45), (p.vx *= 0.7), (p.y = g - 0.25);
+          if (p.vy > 0 && y0 <= g && p.y >= g) {
+            p.vy = -p.vy * 0.45; p.vx *= 0.7; p.y = g - 0.25; p.trailAge = 0;
+          }
           break;
         }
         case P.STREAK:
@@ -159,6 +169,27 @@ export class Particles {
       if (q.delay > 0) continue;
       if (layer && (SOFT.has(q.k) || q.flag & PF.BACK ? "back" : "front") !== layer) continue;
       const k = q.life / q.max, x = q.x, y = q.y, sp = Math.hypot(q.vx, q.vy) || 1, ux = q.vx / sp, uy = q.vy / sp;
+      // Reconstruct the exact recent path from current velocity. No RNG or simulation mutation
+      // during drawing; a bounce resets trailAge so a tail cannot rewind through the floor.
+      if (this.renderStyle === "refined" && p.particleStyle !== "classic" && p.path && q.trailAge !== undefined && (q.k === P.SPARK || q.k === P.MOTE || q.k === P.STREAK)) {
+        const spark = q.k === P.SPARK, mote = q.k === P.MOTE;
+        const drag = spark ? 2.2 : mote ? 0.6 : -3, gravity = spark ? GRAVITY * 0.45 : 0;
+        const trailAge = q.trailAge;
+        const length = spark ? Math.min(9, 1 + sp * 0.022) : mote ? Math.min(16, 0.5 + sp * 0.026) * q.size : clamp(sp / 30, 1, 7);
+        const seconds = Math.min(trailAge, length / sp);
+        const points = motionTrail(time => {
+          const previous = { x, y, vx: q.vx, vy: q.vy };
+          integrateMotion2D(previous, time - trailAge, 0, gravity, drag);
+          return [previous.x, previous.y];
+        }, trailAge, seconds, 5);
+        const S = this.sparks, head = spark ? (k > 0.6 ? S[0] : k > 0.3 ? S[1] : S[2]) : mote ? q.col : WHITE;
+        drawTrail(p as TrailPainter, points, {
+          color: spark ? (k > 0.5 ? head : S[S.length - 1]) : mote ? scale(q.col, 0.65) : q.col,
+          head, alpha: Math.min(1, k / 0.22), width: 1,
+          light: (spark ? 0.28 : 0.22) * k, lightRadius: mote ? 2.5 + q.size : spark ? 3 : 4,
+        });
+        continue;
+      }
       switch (q.k) {
         case P.SPARK: {
           const S = this.sparks, head = k > 0.6 ? S[0] : k > 0.3 ? S[1] : S[2], len = Math.min(9, 1 + sp * 0.022);

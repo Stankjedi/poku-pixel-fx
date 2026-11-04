@@ -1,0 +1,95 @@
+{
+  "description": "Decoded final GIFs and alternate-orbit contact sheet: connected ground ripple, brief refractive pressure hemisphere and deterministic scene-camera jolt.",
+  "samples": [
+    {
+      "time": 0.7,
+      "seed": 60217,
+      "yaw": 0.68,
+      "color": "6f8b1c4b71cc77fe63bb2a3fe0f5777933b1071f8e87156165d228eaec55ed6f",
+      "light": "2ce537591bae514911ba7e4e6a35f68fadda5986c864c458af98ba22e04eae18",
+      "depth": "2655446ff5e09cf5e34b358499dd66c37ff14eae8c795936db33645c676c5f5a",
+      "hdrLight": "6d524d8a58c7f6bcb2b4c979aac39e579d0d52e8553397062148fbe20df5f3f6"
+    },
+    {
+      "time": 1.5,
+      "seed": 60217,
+      "yaw": 0.68,
+      "color": "e04f4782d8302c535f12a51f1b082fa549fee1b2247282c2e1bbfdfe270baed5",
+      "light": "1fbf577c7fd85f9c3f54595344180d689ecea881c7e029439803024c2072fbfa",
+      "depth": "ec6199e573d39c6d06d41d31828ba73b4158a8058202e962741d29598af9ef4f",
+      "hdrLight": "4b625aa1f9d2890a616814b2c600f802b90733dd1c477f6bd20d4091623a9a4e"
+    },
+    {
+      "time": 1.675,
+      "seed": 60217,
+      "yaw": 0.68,
+      "color": "9ef4453a28cb87208257d7245c07307de63c0697d018fb301f53f78757bd7c2a",
+      "light": "88d99bbb53f2cca9c65f284e0c2fae31f18e5f5a719d876d76beffda584f1ac6",
+      "depth": "d2f884d112f50caba53dfe71834ca03e9ecb7a6c4797dbb95eb95c55712242be",
+      "hdrLight": "94228d46175a4653c96aa49e2fad3e67995e04af5f2a7641cab971ab7704f5c4"
+    },
+    {
+      "time": 2.1,
+      "seed": 60217,
+      "yaw": 0.68,
+      "color": "4630f2be08d6b9bc7afe024422699545d628f6230de2f5d9f78809f9fec51503",
+      "light": "af84f40162bc3b55c9ac8e38c5877205ac2e9d4a19ebdf49d2889f2e56558279",
+      "depth": "3feba767ae43d8f4a9cd72bc286da5576695b8737b5aa04f33bcc09871cdf786",
+      "hdrLight": "a5e980e6bda5f976e88df960e36593934867ba1649112a702bd7c1230f299cc6"
+    },
+    {
+      "time": 2.8,
+      "seed": 0,
+      "yaw": -0.7,
+      "color": "43fa493749e32455f0c348f96cbf651162f72697d3b162794d1c96a1d1eb3324",
+      "light": "48850822f1197d21016c9ec0b71c6f600e153455c2c24fe501f56d47530ccadf",
+      "depth": "541e83f9c7250bf4d5222d2891bc09e62d16cb0d59980166da9ffe46710ee687",
+      "hdrLight": "1dc1daffb76ee7bb592fe588c46a9c002917b193f7a43690b9976e0be1cea8c9"
+    },
+    {
+      "time": 3.7,
+      "seed": 42,
+      "yaw": 1.8,
+      "color": "084431e751d2da0eb06a4be54cf9d7922077f3031ad2b66d62ac2e9573de1a72",
+      "light": "80ee55a526827a09365122d28f0388ae5c6528170bdf7529ef4d5658963954ae",
+      "depth": "fac3fd78047591603d18e73f4fbe954589f3f1fd03bf67014b7c52834cfd9a0a",
+      "hdrLight": "d1bb4daef3d17430c83d5a6311ca4ac861f1234bab2add2cda54a30284c5dbce"
+    },
+    {
+      "time": 1.9,
+      "seed": 60217,
+      "yaw": 0.68,
+      "color": "472396f77516dedac1de140a83ee88af28e22c941cf4dd435005a77484f08ef3",
+      "light": "d7b2b3d8a401e8e19deca033087862fe5bd3fc7bd1fd120c0655f3d99f8ca18c",
+      "depth": "e1da1ec6a7be616bee92f9249f76f8c9d7aa49a9a1a87422f99766dc8f62715b",
+      "hdrLight": "8912b97820000bfb9b87a964be57b674f06f5b7acf34252504a831f45e279ead"
+    },
+    {
+      "time": 2.4,
+      "seed": 60217,
+      "yaw": 0.68,
+      "color": "98537215906e2e998b2d87e66c4072a63daa1132bc67c660e901c09241ca5b6e",
+      "light": "d63ed22e6fe78b0b5eb0b034a84a0a2f00d6f99c42f68328fceb483914a8fd33",
+      "depth": "6706d3e62acf448ee80e8bacb4812d58331bf96cdfe87afe37ddf63d2b7dedc6",
+      "hdrLight": "c3f2306884295a5ad97b35a8a274ed67f1e3a71a19dcf6a9845865e77aa04fdc"
+    },
+    {
+      "time": 2.2,
+      "seed": 60217,
+      "yaw": -0.7,
+      "color": "6836c8256882a885abdba70db5fe361a388d65fae2a06ddc78649c51a9cc87b9",
+      "light": "52367270eae0c0f05d27af068fb895489e7ffd600da9d7b39d689d79a36770e5",
+      "depth": "d1b83f43cadbf54118e80b8f6e4d4b8f324b41498be63dfeeae0551d91c3019e",
+      "hdrLight": "cf868d4d566855d53b71b615379c086e2ba0eaefd460469bb486732aa3847ceb"
+    },
+    {
+      "time": 3.1,
+      "seed": 60217,
+      "yaw": 1.8,
+      "color": "2327189f4e51df48e6ec2868e55419f0fd3a673f91220f86cd69b1dd415962ad",
+      "light": "64d03067481ed1a0eb0b21b4680055c510807e7bab2f49d3aca4ab88f57455fc",
+      "depth": "2faa921c42d64bec6b8ff15f5ad6887beb80cd2483c1180c7e074db05e680e0d",
+      "hdrLight": "d1bb4daef3d17430c83d5a6311ca4ac861f1234bab2add2cda54a30284c5dbce"
+    }
+  ]
+}

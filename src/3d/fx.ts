@@ -1,4 +1,4 @@
-import { Painter3D } from "./painter.js";
+import { type Camera3D, Painter3D } from "./painter.js";
 
 export interface Cue3D { at: number; type: "hit" | "flash" | "shake" | "sound"; value?: number }
 export interface Stage3D { at: number; label: string }
@@ -15,6 +15,8 @@ export interface EffectMeta3D<O> {
 export interface Effect3D {
   update(dt: number): void;
   draw(painter: Painter3D): void;
+  /** Derive a frame camera from the unchanged user camera before drawing any geometry. */
+  camera?(base: Camera3D): Camera3D;
 }
 export interface EffectModule3D<O extends object> {
   meta: EffectMeta3D<O>;
@@ -26,8 +28,10 @@ export interface FxInstance3D<O extends object> {
   readonly options: O;
   update(dt: number): void;
   draw(painter: Painter3D): void;
+  camera(base: Camera3D): Camera3D;
   restart(options?: Partial<O>): void;
   seek(seconds: number): void;
+  /** Cues crossed by fixed steps, including t=0 on the first step of each playback. Seek is silent. */
   drainCues(): Cue3D[];
   stage(): string;
   done(): boolean;
@@ -37,21 +41,23 @@ export interface FxInstance3D<O extends object> {
 export function createFx3D<O extends object>(mod: EffectModule3D<O>, options: Partial<O> = {}): FxInstance3D<O> {
   const opts: O = { ...mod.meta.options, ...options };
   const hz = 120, tick = 1 / hz;
-  let impl = mod.create(opts), steps = 0, accumulator = 0;
+  let impl = mod.create(opts), steps = 0, accumulator = 0, nextCue = 0;
+  // A cursor, rather than overlapping float intervals, makes every cue single-fire.
+  // Sorting a copy keeps author metadata intact and preserves simultaneous cue order.
+  const cues = [...(mod.meta.cues ?? [])].filter(cue => cue.at >= 0).sort((a, b) => a.at - b.at);
   const pending: Cue3D[] = [];
   const durationSteps = Math.max(1, Math.ceil(mod.meta.duration * hz));
   const advance = () => {
     if (mod.meta.loop && steps >= durationSteps) {
-      impl = mod.create(opts); steps = 0;
+      impl = mod.create(opts); steps = 0; nextCue = 0;
     }
     if (!mod.meta.loop && steps >= durationSteps) return;
-    const from = steps / hz;
     impl.update(tick);
     steps++;
     const to = steps / hz;
-    for (const cue of mod.meta.cues ?? []) if (cue.at > from && cue.at <= to + 1e-9) pending.push(cue);
+    while (nextCue < cues.length && cues[nextCue].at <= to + 1e-9) pending.push(cues[nextCue++]);
   };
-  const reset = () => { impl = mod.create(opts); steps = 0; accumulator = 0; pending.length = 0; };
+  const reset = () => { impl = mod.create(opts); steps = 0; accumulator = 0; nextCue = 0; pending.length = 0; };
   return {
     meta: mod.meta,
     options: opts,
@@ -70,6 +76,7 @@ export function createFx3D<O extends object>(mod: EffectModule3D<O>, options: Pa
       while (n-- > 0) advance();
     },
     draw(painter) { impl.draw(painter); },
+    camera(base) { return impl.camera?.(base) ?? base; },
     restart(next) { if (next) Object.assign(opts, next); reset(); },
     seek(seconds) {
       if (!Number.isFinite(seconds) || seconds < 0) throw new RangeError("Invalid seek position");
@@ -77,6 +84,9 @@ export function createFx3D<O extends object>(mod: EffectModule3D<O>, options: Pa
       const ticks = Math.floor(Math.min(seconds, mod.meta.duration) * hz + 1e-10);
       for (let i = 0; i < ticks; i++) advance();
       accumulator = Math.max(0, Math.min(seconds, mod.meta.duration) - ticks / hz);
+      // A seek consumes cues through the requested position, even seek(0) or a
+      // fractional tick, so resuming cannot dispatch impacts behind the playhead.
+      while (nextCue < cues.length && cues[nextCue].at <= Math.min(seconds, mod.meta.duration) + 1e-9) nextCue++;
       pending.length = 0; // Scrubbing does not dispatch game-impact cues.
     },
     drainCues() { return pending.splice(0, pending.length); },

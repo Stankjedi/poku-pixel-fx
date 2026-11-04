@@ -2,7 +2,7 @@
 // opens one effect with its options, a sprite sheet and the code to use it.
 
 import { effects, categories as catalogCategories } from "../src/fx/index.js";
-import { createFrame, clearFrame, createFx, createAct, actBounds, composite, backdrop, drawActor, painterFor, stockActor, actorAlphaOf, PAL, BACKDROPS } from "../src/core/index.js";
+import { createFrame, clearFrame, createFx, createAct, actBounds, composite, backdrop, drawActor, painterFor, stockActor, actorAlphaOf, sceneCameraOffset, PAL, BACKDROPS } from "../src/core/index.js";
 import { effectsKo, tagsKo } from "../src/i18n/ko/index.js";
 import { encodeAnimatedWebP } from "./animated-webp.js";
 
@@ -45,7 +45,14 @@ const FX: GalleryEffect[] = (Object.entries(effects) as [string, any][]).filter(
     ...meta.tags, ...meta.tags.map(tagLabel)].join(" "));
   return { id, cat, name: meta.name, originalName, originalDesc, searchIndex, mod: { ...mod, meta }, meta };
 });
-const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const motionPreference = matchMedia("(prefers-reduced-motion: reduce)");
+let reduced = motionPreference.matches;
+motionPreference.addEventListener("change", event => {
+  reduced = event.matches;
+  if (detail) { detail.dirty = true; detail.render(); }
+  // A reduced-motion tile may now stop ticking, so clear its last offset immediately.
+  for (const tile of tiles) if (tile.player) { tile.player.dirty = true; tile.player.render(); }
+});
 // full-screen effects (transitions, weather, impact frames) fill a 16:9 stage edge to edge instead of floating in it
 const isScreen = (fx: GalleryEffect) => fx.meta.size[0] >= 320 && Math.abs(fx.meta.size[0] / fx.meta.size[1] - 16 / 9) < 0.05;
 function $(s: "#detail"): HTMLDialogElement;
@@ -133,7 +140,7 @@ class Player {
     if (this.acted) {
       this.inst.draw(f);
       composite(f, this.img.data, this.bgBuf);
-      const [sx, sy] = this.inst.shake;
+      const [sx, sy] = sceneCameraOffset(this.inst.shake, reduced, this.bg === "none");
       if (sx || sy) this.ctx.clearRect(0, 0, this.W, this.H);
       this.ctx.putImageData(this.img, sx, sy);
       this.dirty = false;
@@ -144,7 +151,9 @@ class Player {
     if (m.actor && this.actor) drawActor(painterFor(f).place(this.x, this.y, this.flip), this.inst.options.actor ?? stockActor(), actorAlphaOf(this.fx.mod, tt, this.inst.options));
     this.inst.draw(f, "front");
     composite(f, this.img.data, this.bgBuf);
-    this.ctx.putImageData(this.img, 0, 0);
+    const [sx, sy] = sceneCameraOffset(this.inst.shake, reduced, this.bg === "none");
+    if (sx || sy) this.ctx.clearRect(0, 0, this.W, this.H);
+    this.ctx.putImageData(this.img, sx, sy);
     this.dirty = false;
   }
 }

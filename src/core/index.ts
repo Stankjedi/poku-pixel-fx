@@ -3,19 +3,50 @@
 export * from "./math.js";
 export * from "./color.js";
 export * from "./particles.js";
+export * from "./flow.js";
+export * from "./air.js";
+export * from "./liquid.js";
+export * from "./smoke.js";
+export * from "./stone.js";
+export * from "./glass.js";
+export * from "./frost.js";
+export * from "./corrosion.js";
+export * from "./sigil.js";
+export * from "./propulsion.js";
+export * from "./ground-impact.js";
+export * from "./impact-contact.js";
 export * from "./shapes.js";
+export * from "./quality.js";
 export { Particles, Bits, Lights, Blazes, P, PF, B, GRAVITY, FIRE_RAMP, SMOKE_RAMP, sparkle, flare, band, crystal } from "./sim.js";
 export { Painter } from "./painter.js";
+export type { PathOptions } from "./painter.js";
 export type { AlphaMode } from "../render/coverage.js";
 export { FONTS, textWidth } from "./font.js";
-export { createFrame, clearFrame, createFx, composite, painterFor, resolveOptions } from "./fx.js";
+export { createFrame, clearFrame, createFx, composite, painterFor, resolveOptions, sceneCameraOffset } from "./fx.js";
 export { stockActor, drawActor, actorAlphaOf, HERO, HERO2, HERO_PAL, DUMMY_PAL } from "./actor.js";
 export { backdrop, BACKDROPS } from "./scene.js";
 export { createAct, actBounds, actSpan, actTiming, poseAt, lerpPose, Target, STAND, SKINS, posed } from "./act.js";
+export type { ActHit, ActTimingHit } from "./act.js";
 export { skeleton, posedParts } from "./rig.js";
 export { READY } from "./poses.js";
 export { chain, shiftKeys, shiftHits } from "./chain.js";
+export type { ChainCue, ChainPainter, CuePosition } from "./chain.js";
+export type { EffectDrawContext } from "./fx.js";
 export { CinematicCompositor } from "../render/cinematic.js";
 export type { CinematicFrame, CinematicOptions, BloomOptions } from "../render/cinematic.js";
 export { enableHDRLight } from "../render/hdr.js";
 export type { HDRLightFrame } from "../render/hdr.js";
+
+export * from "./restoration.js";
+
+export * from "./human.js";
+
+export * from "./human-action.js";
+
+export * from "./human-combat.js";
+
+export * from "./creature.js";
+
+export * from "./human-weapon.js";
+
+export * from './human-portrait.js';

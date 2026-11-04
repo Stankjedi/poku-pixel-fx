@@ -9,8 +9,9 @@ export const meta = {
   name: "Ice lance throw",
   desc: "Frost gathers into a spear in his hand, he throws it like a javelin, and the target ices over in a burst of snowflakes and shivers.",
   tags: ["move", "ice", "spell", "projectile", "one-shot"],
-  size: [310, 136],
-  origin: [86, 134],
+  // Keep the exact-release tail and the 60/120 Hz burst fringe inside the sheet.
+  size: [324, 136],
+  origin: [96, 134],
   duration: HIT + 3.2,
   loop: false,
   fps: 30,

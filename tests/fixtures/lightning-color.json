@@ -1,0 +1,50 @@
+{
+  "lightning/ball-lightning": {
+    "frames": 120,
+    "colorHash": "6a4d21a95694d743957f488b478c264d6ea78ee077d847bedf7934614e931876"
+  },
+  "lightning/chain-lightning": {
+    "frames": 55,
+    "colorHash": "b164c02569042d504ff426a43c68dea3903f96990a0fd87bac3273b2cda12c11"
+  },
+  "lightning/charge-up": {
+    "frames": 82,
+    "colorHash": "7fbe60b5ac1cd0a95ea767b91cc8e4c5e31d15d47d156b6ddc2ffb7856d32262"
+  },
+  "lightning/electrified": {
+    "frames": 60,
+    "colorHash": "4c3ab13c2df62691fba8600a57dfef0e6938376c12393aa29c94746206076163"
+  },
+  "lightning/ion-stormburst": {
+    "frames": 73,
+    "colorHash": "55e4b71b2ca9d816f02180d3073f8a3cbc1e8739c5f1e6ef40255a29058637b0"
+  },
+  "lightning/lightning-strike": {
+    "frames": 91,
+    "colorHash": "d66e68be00c4faf79798780e259277998c1f3d89df35e3a11a53d814e318f63a"
+  },
+  "lightning/plasma-ball": {
+    "frames": 90,
+    "colorHash": "ee0d81dbadcfff9e1505e1c7b789f0bd2dc5b61f58b9da6b73f7c04cdc402048"
+  },
+  "lightning/spark-arc": {
+    "frames": 60,
+    "colorHash": "242a04f2163a633e7a06b7a152d955573d401db7bada62a8549a55a8a34667c0"
+  },
+  "lightning/storm-cloud": {
+    "frames": 90,
+    "colorHash": "9919e95a1ce174454a46a77ea7599aebfe25a65f2f48b22bca3edc4d9814d3e1"
+  },
+  "lightning/tesla-coil": {
+    "frames": 72,
+    "colorHash": "99422f78231cb1effda5631615556fa94a73f0f475afa346c4042af770ca113e"
+  },
+  "lightning/thunderclap": {
+    "frames": 58,
+    "colorHash": "decc8ee140e5ac9fda2c0de9cf10caf2a68259f285c2137059ccfafe15ee5519"
+  },
+  "lightning/zap-hit": {
+    "frames": 28,
+    "colorHash": "73f0561d556432d10bf67159667f7c0754a0eb55b290d08e0906de7267085d8f"
+  }
+}

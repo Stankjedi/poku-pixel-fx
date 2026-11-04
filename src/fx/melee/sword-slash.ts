@@ -7,8 +7,9 @@ export const meta = {
   name: "Sword slash",
   desc: "A tilted crescent whips round in two frames, cools from white to deep blue as it trails off, glints at the tip and throws sparks.",
   tags: ["melee", "slash", "sword", "combat", "directional", "one-shot"],
-  size: [136, 104],
-  origin: [44, 92],
+  // Include the fastest upward/outward motes, not just the crescent. Local swing geometry is unchanged.
+  size: [144, 120],
+  origin: [44, 108],
   duration: 0.75,
   loop: false,
   fps: 30,

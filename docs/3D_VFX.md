@@ -33,7 +33,7 @@ const image = new ImageData(rgba, frame.w, frame.h);
 
 function tick(dt: number) {
   fx.update(dt); // internally fixed-step 120 Hz
-  painter.setCamera({ yaw: 0.7, elevation: 0.6, zoom: 1 });
+  painter.setCamera(fx.camera({ yaw: 0.7, elevation: 0.6, zoom: 1 }));
   painter.begin("#0a1525"); // clears color, light, depth
   fx.draw(painter); // draw other world-space meshes/particles here too
   compositeFrame3D(frame, rgba, 1);
@@ -57,7 +57,7 @@ This is intentionally a small, CPU-side reference engine. It uses real 3D coordi
 
 3D uses **+Y up**, world-space XYZ and seconds (unlike the 2D pixel-local coordinate system). `Camera3D` supports orthographic rendering by default and optional lightweight perspective, yaw, elevation, zoom and target. The 3D `Frame3D` has `color`, `light`, `depth` arrays; `color` and `light` have the same ABGR packing as the 2D frame so existing sprite/image pipelines can be adapted. `compositeFrame3D` composites over an opaque background for speed.
 
-Effects are deterministic for a given seed and fixed-step timeline. `update(dt)` can be called at arbitrary frame rates, while `seek(seconds)` reconstructs from t=0 for stable frame capture. `drainCues()` exposes hit/flash/shake timing without imposing a specific character or camera controller. `done()` handles one-shots; demos can replay them explicitly.
+Effects are deterministic for a given seed and fixed-step timeline. `update(dt)` can be called at arbitrary frame rates, while `seek(seconds)` reconstructs from t=0 for stable frame capture. `drainCues()` exposes hit/flash/shake timing without imposing a specific character or camera controller. Optional effect-authored response is available through `fx.camera(baseCamera)`, applied once before all scene drawing and lighting; omit it for reduced motion. `done()` handles one-shots; demos can replay them explicitly.
 
 ## Writing a new 3D effect
 
@@ -99,3 +99,41 @@ The default palette has **11 steps**, and overrides with other lengths are resam
 The black-hole implementation is **code-generated on every frame**; it never uses the concept-art PNG as an animated texture or billboard. A view ray intersects a physically inclined XYZ accretion plane, and the polar intersection coordinates drive multiple moving, quantized plasma bands. A horizon depth test suppresses back-facing disk material, while orbiting faceted basalt and sparks provide near/far parallax. Camera-facing photon arcs and background lensing are explicitly **art-directed approximations**, not a scientific general-relativity integrator.
 
 The revised effect adds blue-violet ion filaments, layered spiral gas, larger fractured-rock silhouettes, controlled emission and a small two-pass bloom that preserves the pixel-perfect color buffer. It uses a seeded, 120 Hz deterministic timeline (`createFx3D`) with a 7-second one-shot and a fade-out suitable for seamless repeated playback. `blackhole` is available in the interactive 3D gallery and PNG sheet exporter. Performance is resolution-dependent; the browser preview caps its internal raster size while retaining nearest-neighbor output. For larger production scenes, a WebGL/WebGPU implementation is recommended.
+
+## Ice Shatter 3D — solid material fracture
+
+**ICE SHATTER** in the 3D gallery, or `render:3d -- shatter`, adds a matching-mesh ice fracture rather than an unrelated particle burst. The independent `Fragments3D` helper supplies real rotating mesh pieces, vertex-floor contact and face-supported settling. See [solid debris authoring](ICE_SHATTER_3D.md) for its API, effect timing and deliberately art-directed physics limits.
+
+## Thermal Plume 3D — fire and cooling soot
+
+**THERMAL PLUME** in the 3D gallery, or `render:3d -- flame`, is a true world-space fire volume with rooted tongues, upward material flow, a compact hot core, embers and expanding smoke. `drawVolume3D`, `VolumeGrid3D` and `volumeNoise3D` provide reusable depth-clipped, palette-aware CPU volume rendering. See [thermal-plume authoring and limitations](THERMAL_PLUME_3D.md).
+
+## Forked Lightning 3D — branched electrical discharge
+
+**FORKED LIGHTNING** in the 3D gallery, or `render:3d -- lightning`, grows a seeded stepped leader and illuminates its persistent irregular XYZ branches with three uneven return strokes. Thin forks extinguish before the trunk; upward streamers and ground-contact sparks have separate timing. `createDischarge3D`, `drawDischarge3D` and `dischargePulse3D` provide reusable topology, distance-based growth and pulse tools. See [discharge authoring and scope](DISCHARGE_3D.md).
+
+## Crown Splash 3D — liquid sheets, drops and surface waves
+
+**CROWN SPLASH** in the 3D gallery, or `render:3d -- water`, forms a thin lobed water crown, sheds rounded droplets from its actual rim, collapses, rebounds and leaves local contact ripples. `LiquidDrops3D`, `drawLiquidDrop3D`, `sampleLiquidCrown3D`, `drawLiquidCrown3D` and `drawSurfaceRipple3D` provide reusable non-emissive water tools. See [liquid authoring and limits](LIQUID_3D.md).
+
+Both 3D export commands also accept `--yaw <degrees>`, `--elevation <degrees>`, `--zoom <scale>` and `--target-y <world units>` for reproducible orbit review. Defaults remain unchanged for existing effects.
+
+## Void Rift 3D — folded darkness and inward motion
+
+**VOID RIFT · 공허의 균열** in the gallery, or `render:3d -- voidrift`, opens a jagged vertical cut into a dark concave throat with thick obsidian lips, attached curved hooks and accelerating inward splinters, then seals from its tips. `createSweep3D` and `drawSweep3D` provide reusable capped polygon sweeps with transported frames and elliptical cross sections. See [void-rift choreography and solid sweep authoring](VOID_RIFT_3D.md).
+
+## Meteor Impact 3D — atmospheric entry and heavy debris
+
+**METEOR IMPACT** in the 3D gallery, or `render:3d -- meteor`, adds a tumbling basalt body with an accelerating entry path, leading-surface ablation, a world-space plasma wake and an oblique ground impact. `createRockMesh3D` supplies reusable seeded, watertight low-poly rocks for the existing mesh-fragment simulator. See [meteor choreography, reusable rock geometry and limits](METEOR_3D.md).
+
+## Energy Shield 3D — curved membrane and local hits
+
+**ENERGY SHIELD · 에너지 방벽** in the gallery, or `render:3d -- shield`, catches three oblique amber bolts on a curved cyan membrane. Local dents and geodesic ripples illuminate only nearby cells, then leave the intact boundary. `createShieldSurface3D`, `shieldNormal3D`, `shieldResponse3D` and `shieldRipple3D` provide reusable surface coordinates, damped responses and cap-clipped wave geometry. See [energy-shield authoring and limitations](ENERGY_SHIELD_3D.md).
+
+## Wind Pressure Strike 3D — air force and grounded reaction
+
+The refined **WIND** attack compresses its four airfoils into a fast gust and strikes a wooden prop.
+A shared contact clock drives local pressure, prop rocking/skidding, delayed grass response and
+non-emissive downstream dust/leaves. `gustImpulse3D` and `advectGust3D` provide small seekable force
+and drag tools. See [wind-pressure choreography, host controls and limits](WIND_PRESSURE_3D.md).
+The legacy wind variant remains unchanged.
