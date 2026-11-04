@@ -9,8 +9,9 @@ export const meta = {
   name: "Splash",
   desc: "A stone drops into still water: a white hit, a crown that tears into droplets arcing out to plink down with rings, a jet that bounces back, foam and drifting mist.",
   tags: ["water", "splash", "impact", "drop", "liquid", "one-shot"],
-  size: [176, 100],
-  origin: [88, 78],
+  // Four pixels of headroom retain the opening stone trail, without moving the impact in local space.
+  size: [176, 104],
+  origin: [88, 82],
   duration: 2.5,
   loop: false,
   fps: 30,

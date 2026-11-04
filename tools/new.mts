@@ -36,34 +36,49 @@ const updatedRegistry = registry
   .replace(exportMarker, `${exportMarker}\n  "${id}": ${symbol},`);
 const name = id.split("/")[1].replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
 const body = loop
-  ? `  // a loop: everything is a function of the phase, so t = 0 and t = duration match
-  const C = ramp(o.palette), ph = t / meta.duration;
+  ? `  // Seekable curved trails with soft birth/death; the core remains deliberately pixel-stepped.
+  const C = fit(o.palette, 7), phase = t / meta.duration;
   cycle(t, meta.duration, 12, o.seed, 0.8, (age, life, r) => {
-    const k = age / life, a = r.range(0, TAU) + ph * TAU, rad = 6 + k * 12;
-    p.px(Math.cos(a) * rad, Math.sin(a) * rad - 8, at(C.slice(2), 1 - k));
+    const base = r.range(0, TAU);
+    const position = (dt: number): [number, number] => {
+      const angle = base + (t - age + dt) / meta.duration * TAU, radius = 9 + dt / life * 13;
+      return [Math.cos(angle) * radius, Math.sin(angle) * radius - 12];
+    };
+    drawTrail(p, motionTrail(position, age, 0.07), { color: C[3], head: C[5],
+      alpha: particleEnvelope(age, life, 0.12, 0.4), light: 0.1 });
   });
-  p.circle(0, -8, 4 + Math.sin(ph * TAU) * 1.5, C[5]);
-  p.glow(0, -8, 20, C[4], 0.35);`
-  : `  // a one-shot: a hero frame, then everything falls away and is gone by t = duration
-  const C = ramp(o.palette);
-  if (t < 0.06) p.circle(0, -8, 6, WHITE);
-  burst(14, o.seed, (r) => {
-    const a = r.range(0, TAU), sp = r.range(40, 90), life = r.range(0.3, 0.6);
-    if (t > life) return;
-    const [x, y] = fly(0, -8, Math.cos(a) * sp, Math.sin(a) * sp, t, 120, 2);
-    p.px(x, y, at(C.slice(2), 1 - t / life));
-    p.light(x, y, C[4], 0.5 * (1 - t / life));
+  p.circle(0, -12, 4 + Math.sin(phase * TAU) * 0.7, C[3]);
+  p.circle(-1, -13, 2.2, C[5]);
+  p.glow(0, -12, 14, C[4], 0.22);`
+  : `  // Starter, not a finished effect: compare its silhouette and timing to your chosen reference.
+  if (t >= meta.duration) return;
+  const C = fit(o.palette, 7);
+  const flash = 1 - smooth(0, 0.07, t);
+  if (flash > 0) {
+    const rim = pointedRibbon(-19, 19, 8 * flash, 3 * flash);
+    p.poly(rim.shape, C[4], flash);
+    p.path(rim.top, C[6], flash);
+    sparkle(p, 0, -1, 5 * flash, C[6], C[4], flash);
+  }
+  burst(14, o.seed, (r, i) => {
+    // Stratification avoids accidental clusters; only the hottest head uses the bright ramp step.
+    const angle = (i + 0.5 + r.range(-0.32, 0.32)) / 14 * TAU;
+    const speed = r.range(60, 150), life = r.range(0.22, 0.5);
+    const alpha = particleEnvelope(t, life, 0.035, 0.25);
+    if (alpha <= 0) return;
+    const position = (age: number): [number, number] => fly(0, -1, Math.cos(angle) * speed, Math.sin(angle) * speed, age, 90, 5.5);
+    drawTrail(p, motionTrail(position, t, 0.055), { color: C[3], head: t / life < 0.35 ? C[6] : C[5], alpha, light: 0.12 });
   });
-  p.glow(0, -8, 24, C[4], 0.5 * (1 - seg(t, 0, 0.4)));`;
-const src = `import { PAL, ramp, at, ${loop ? "cycle" : "burst, fly, seg, WHITE"}, TAU } from "../../core/index.js";
+  p.glow(0, -1, 18, C[4], 0.28 * flash);`;
+const src = `import { PAL, fit, ${loop ? "cycle" : "burst, fly, smooth, pointedRibbon, sparkle"}, motionTrail, drawTrail, particleEnvelope, TAU } from "../../core/index.js";
 
 export const meta = {
   addedAt: "${new Date().toISOString()}",
   name: "${name}",
-  desc: "One line: what it is, how it moves.",
+  desc: "${loop ? "Layered pulse with softly tapered orbiting trails." : "A pointed flash releases a sparse fan of bright-headed, fading sparks."}",
   tags: ["${id.split("/")[0]}"],
-  size: [48, 48],
-  origin: [24, 32],
+  size: [96, 80],
+  origin: [48, 48],
   duration: ${loop ? 1.2 : 0.7},
   loop: ${loop},
   fps: 30,
@@ -79,4 +94,4 @@ mkdirSync(dirname(file), { recursive: true });
 writeFileSync(file, src, { flag: "wx" });
 try { writeFileSync(registryFile, updatedRegistry); }
 catch (error) { unlinkSync(file); throw error; }
-console.log(`${file} 생성 완료\n다음: npm run build && node build-tools/tools/render.mjs ${id} 실행 후 records/${id}/contact.png 확인\n캐릭터가 있으면 동작을 추가하세요: docs/AUTHORING.md의 "Acts"를 참고하고 node build-tools/tools/act.mjs ${id} 실행`);
+console.log(`${file} 생성 완료\n다음: npm run build && node build-tools/tools/render.mjs ${id} 실행 후 records/${id}/contact.png 확인\n완성 전 docs/QUALITY.md 기준으로 원본 크기와 실제 속도를 확인하세요.\n캐릭터가 있으면 동작을 추가하세요: docs/AUTHORING.md의 "Acts"를 참고하고 node build-tools/tools/act.mjs ${id} 실행`);

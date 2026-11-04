@@ -1,10 +1,15 @@
 // Frames and live effect instances.
 
+import { defineImpactContact2D, type ImpactContact2D } from "./impact-contact.js";
 import { Painter, type PaintFrame } from "./painter.js";
 
 export type DrawLayer = "back" | "front";
 export interface EffectOptions {
   x?: number; y?: number; flip?: boolean; angle?: number; light?: number; actor?: unknown;
+  /** Refined simulated sparks by default; classic preserves the original catalog particle drawing. */
+  particleStyle?: "refined" | "classic";
+  /** Optional host camera response multiplier. Zero disables camera motion without changing art. */
+  cameraMotion?: number;
   [key: string]: unknown;
 }
 export interface EffectMeta {
@@ -18,15 +23,26 @@ export interface EffectImplementation<O extends EffectOptions = EffectOptions> {
 }
 export interface EffectModule<O extends EffectOptions = any> {
   meta?: EffectMeta;
+  /** Pure native-pixel whole-scene offset. Drawing and sprite sheets remain unshifted. */
+  cameraShake?: (time: number, options: O) => readonly [number, number];
+  /** Contact facts resolved from effect options, in parent-local pixels. No response is automatic. */
+  contacts?: (options: O) => readonly ImpactContact2D[];
   create?: (options: O) => EffectImplementation<O>;
   draw?: EffectImplementation<O>["draw"];
   drawBack?: EffectImplementation<O>["drawBack"];
   update?: EffectImplementation<O>["update"];
 }
 export interface EffectInstance {
-  readonly t: number; meta: EffectMeta; options: EffectOptions;
-  update(dt: number): void; draw(frame: PaintFrame, layer?: DrawLayer): void; stop(): void; done(): boolean;
+  readonly t: number; readonly shake: readonly [number, number]; readonly contacts: readonly ImpactContact2D[]; meta: EffectMeta; options: EffectOptions;
+  update(dt: number): void; draw(frame: PaintFrame, layer?: DrawLayer, parent?: EffectDrawContext): void; stop(): void; done(): boolean;
 }
+/** Parent-local placement and style for a nested effect. A Painter satisfies this interface. */
+export interface EffectDrawContext {
+  tx: number; ty: number; fx: number; cs: number; sn: number;
+  fade: number; lightK: number; particleStyle?: "refined" | "classic";
+}
+const drawState = (p: Painter) => ({ tx: p.tx, ty: p.ty, fx: p.fx, cs: p.cs, sn: p.sn,
+  fade: p.fade, lightK: p.lightK, particleStyle: p.particleStyle, layer: p.layer });
 import { clamp } from "./math.js";
 import { stockActor } from "./actor.js";
 import { fit, toHex } from "./color.js";
@@ -83,13 +99,24 @@ export function createFx<O extends EffectOptions>(mod: EffectModule<O>, o: Effec
   const meta = mod.meta ?? {};
   const opts = resolveOptions(meta, o) as O;
   const impl = (mod.create ? mod.create(opts) : mod) as EffectImplementation<O>;
+  const contacts = Object.freeze((mod.contacts?.(opts) ?? []).map(defineImpactContact2D));
   const D = meta.duration ?? 1;
   let t = 0, stopAt = Infinity;
   return {
     meta,
+    contacts,
     options: opts,
     get t() {
       return t;
+    },
+    get shake(): readonly [number, number] {
+      const strength = opts.cameraMotion ?? 1;
+      if (!Number.isFinite(strength) || strength < 0) throw new RangeError("cameraMotion must be finite and non-negative");
+      if (!mod.cameraShake || strength === 0 || (!meta.loop && t >= D) || t - stopAt >= FADE) return [0, 0];
+      const offset = mod.cameraShake(meta.loop ? t % D : t, opts);
+      if (!Array.isArray(offset) || offset.length !== 2 || !offset.every(Number.isFinite)) throw new RangeError("cameraShake must return two finite pixel offsets");
+      const fade = stopAt === Infinity ? 1 : clamp(1 - (t - stopAt) / FADE);
+      return [Math.round(offset[0] * strength * fade), Math.round(offset[1] * strength * fade)];
     },
     update(dt: number) {
       if (!Number.isFinite(dt) || dt < 0) throw new RangeError("dt must be finite and non-negative");
@@ -100,19 +127,35 @@ export function createFx<O extends EffectOptions>(mod: EffectModule<O>, o: Effec
       const n = Math.max(1, Math.ceil(dt * 120 - 1e-9));
       for (let i = 0; i < n; i++) impl.update(dt / n, opts);
     },
-    draw(frame: PaintFrame, layer?: DrawLayer) {
+    draw(frame: PaintFrame, layer?: DrawLayer, parent?: EffectDrawContext) {
+      // The parent can be the same cached Painter. Capture it before painterFor resets it.
+      const inherited = parent ? { tx: parent.tx, ty: parent.ty, fx: parent.fx, cs: parent.cs, sn: parent.sn,
+        fade: parent.fade, lightK: parent.lightK, particleStyle: parent.particleStyle } : undefined;
+      const previous = inherited ? painters.get(frame) : undefined;
+      const saved = previous ? drawState(previous) : undefined;
       const p = painterFor(frame);
-      p.place(opts.x ?? 0, opts.y ?? 0, !!opts.flip, opts.angle ?? 0);
-      p.fade = stopAt === Infinity ? 1 : clamp(1 - (t - stopAt) / FADE);
-      p.lightK = opts.light ?? 1;
+      const x = opts.x ?? 0, y = opts.y ?? 0, angle = opts.angle ?? 0;
+      if (inherited) {
+        const { tx, ty, fx: sign, cs, sn } = inherited;
+        p.place(tx + sign * x * cs - y * sn, ty + sign * x * sn + y * cs,
+          (sign < 0) !== !!opts.flip, Math.atan2(sn, cs) + sign * angle);
+      } else p.place(x, y, !!opts.flip, angle);
+      p.fade = (inherited?.fade ?? 1) * (stopAt === Infinity ? 1 : clamp(1 - (t - stopAt) / FADE));
+      p.lightK = (inherited?.lightK ?? 1) * (opts.light ?? 1);
+      p.particleStyle = opts.particleStyle ?? inherited?.particleStyle ?? "refined";
       const tt = meta.loop ? t % D : Math.min(t, D);
-      if (layer !== "front" && impl.drawBack) {
-        p.layer = "back";
-        impl.drawBack(p, tt, opts);
-      }
-      if (layer !== "back") {
-        p.layer = "front";
-        impl.draw(p, tt, opts);
+      try {
+        if (layer !== "front" && impl.drawBack) {
+          p.layer = "back";
+          impl.drawBack(p, tt, opts);
+        }
+        if (layer !== "back") {
+          p.layer = "front";
+          impl.draw(p, tt, opts);
+        }
+      } finally {
+        // Nested draws must not change the next sibling or the parent's continuation.
+        if (saved) Object.assign(p, saved);
       }
     },
     /** Let it end: loops fade out, one-shots cut short. */
@@ -159,4 +202,11 @@ export function composite<T extends Uint8Array | Uint8ClampedArray>(f: PaintFram
     out[j] = r; out[j + 1] = g; out[j + 2] = b; out[j + 3] = a;
   }
   return out;
+}
+
+/** Shared preview/host guard. Camera offsets affect the full composited scene only. */
+export function sceneCameraOffset(offset: readonly [number, number], reducedMotion = false, transparent = false): readonly [number, number] {
+  if (reducedMotion || transparent) return [0, 0];
+  if (!Array.isArray(offset) || offset.length !== 2 || !offset.every(Number.isFinite)) throw new RangeError("Scene offset needs two finite pixel coordinates");
+  return [Math.round(offset[0]), Math.round(offset[1])];
 }

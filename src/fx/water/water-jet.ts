@@ -2,12 +2,13 @@ import type { Painter } from "../../core/painter.js";
 // The stream's build (a white core banded out to darker edges, surges running along it, light down its length, a
 // flare where it leaves the source) follows Sprite Fusion's open-source energy beam
 // (https://www.spritefusion.com/pixel-art-vfx/energy), MIT License, Copyright (c) 2026 Hugo Duprez.
-import { fit, cycle, tileNoise, clamp, smooth, TAU, WHITE } from "../../core/index.js";
+import { fit, cycle, tileNoise, clamp, smooth, liquidMotion, TAU, WHITE } from "../../core/index.js";
 import { WATER, bead } from "./_lib.js";
+import { liquidBead } from "./_liquid.js";
 
 export const meta = {
   name: "Water jet",
-  desc: "A pressurised stream blasts right: a tight glassy rod with surges running down it that swells, roughens, bends under its weight and breaks into chunks, spray and mist.",
+  desc: "A pressurised liquid stream bends under gravity, pinches into round beads and sheds a sparse fan of falling spray. Narrow reflected highlights reveal the wet surface.",
   tags: ["water", "jet", "stream", "hose", "spray", "directional", "loop"],
   size: [188, 80],
   origin: [14, 32],
@@ -15,7 +16,7 @@ export const meta = {
   loop: true,
   fps: 30,
   bg: "dark",
-  options: { palette: WATER, length: 118, seed: 3 },
+  options: { palette: WATER, length: 118, seed: 3, flowStyle: "liquid" },
 };
 
 const D = meta.duration, G = 520, SPEED = 260;
@@ -24,7 +25,7 @@ const D = meta.duration, G = 520, SPEED = 260;
 const drop = (x: number, L: number) => (x / L) ** 2 * 9;
 const thick = (x: number, L: number) => 2.6 + 5.4 * Math.pow(x / L, 1.1);
 
-export function draw(p: Painter, t: number, o: typeof meta.options) {
+function drawClassic(p: Painter, t: number, o: typeof meta.options) {
   const C = fit(o.palette, 8), ph = t / D, L = o.length, S = o.seed, T = ph * TAU;
   // the stream, column by column: white down its core, banded out to blue edges, shadowed underneath; streaks race
   // along it and surges bulge through; past halfway it roughens, and its far end tears into chunks with gaps
@@ -77,4 +78,59 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
   // light: down the core, brightest near the nozzle
   for (let x = 0; x < L; x += 10) p.glow(x, drop(x, L), 14 + x * 0.1, C[4], 0.26 * (1 - (x / L) * 0.5));
   p.glow(L * 0.9, drop(L * 0.9, L), 26, C[5], 0.22);
+}
+
+
+/** Liquid rather than an emissive energy beam. The six necks move at the launch speed and
+ * return to exactly the same phase each second. Downstream droplets inherit the tangent. */
+export function draw(p: Painter, t: number, o: typeof meta.options) {
+  if (o.flowStyle === "classic") return drawClassic(p, t, o);
+  const C = fit(o.palette, 8), time = (Math.round((((t % D) + D) % D) * 1e9) / 1e9) % D, L = o.length;
+  const speed = 220, gravity = 132, step = speed / 6;
+  const center = (x: number) => gravity * (x / speed) ** 2 / 2;
+  for (let X = 0; X < L; X++) {
+    const x = X + .5, u = x / L, y = center(x);
+    // Incompressible flow narrows as gravity increases speed. Surface tension grows the necks
+    // into separated beads; it does not turn the stream into widening triangular fire.
+    const velocity = Math.hypot(speed, gravity * x / speed);
+    const radius = 3.9 * Math.sqrt(speed / velocity);
+    const wave = Math.cos(TAU * (x / step - time * 6) + o.seed * .31);
+    const breakup = smooth(.42, .98, u);
+    const width = radius * (1 + breakup * (wave * 1.12 - .20));
+    if (width < .38) continue;
+    for (let Y = Math.floor(y - width); Y <= Math.ceil(y + width); Y++) {
+      const v = (Y + .5 - y) / width;
+      if (Math.abs(v) > 1) continue;
+      // A dark underside, translucent body, narrow Fresnel rim and one reflected streak.
+      const upperRim = v < -.66, reflected = v > -.45 && v < -.12;
+      const c = upperRim ? C[6] : reflected ? C[5] : v > .62 ? C[2] : v > .22 ? C[3] : C[4];
+      p.blend(X, Y, c, upperRim || reflected ? 1 : .82);
+      if (upperRim && wave > .87 && u > .12) p.px(X, Y, C[7]);
+    }
+  }
+  // At the pinch, large drops continue with exactly the stream's local slope and gravity.
+  const birthX = L * .83, birthY = center(birthX), period = D / 6;
+  for (let i = 0; i < 3; i++) {
+    const phase = birthX / speed + o.seed * .31 / (TAU * 6);
+    const age = ((time - phase + i * period) % (period * 3) + period * 3) % (period * 3);
+    const launch = { x: birthX, z: birthY, h: 0, vx: speed, vh: -gravity * birthX / speed };
+    const q = liquidMotion(launch, age, { gravity, drag: .35, depthScale: 1 });
+    const alpha = smooth(0, .04, age) * (1 - smooth(L + 24, L + 47, q.x));
+    if (alpha <= 0) continue;
+    liquidBead(p, launch, age, i % 2 ? 2 : 3, C, alpha, { gravity, drag: .35, depthScale: 1 }, .014);
+  }
+  // Sparse satellite droplets share a ballistic path, rounding at the apex and accelerating down.
+  cycle(time, D, 24, o.seed + 3, r => r.range(.24, .42), (age, life, r) => {
+    const x0 = L * r.range(.48, .96), y0 = center(x0) + r.range(-2.5, 2.5);
+    const launch = { x: x0, z: y0, h: 0, vx: r.range(110, 205), vh: -gravity * x0 / speed + r.range(-42, 42) };
+    const q = liquidMotion(launch, age, { gravity: 210, drag: 1.2, depthScale: 1 });
+    const alpha = smooth(0, .025, age) * (1 - smooth(.65, 1, age / life))
+      * (1 - smooth(L + 31, L + 49, q.x)) * (1 - smooth(35, 44, q.y));
+    if (alpha <= 0) return;
+    liquidBead(p, launch, age, r.next() < .18 ? 2 : 1, C, alpha, { gravity: 210, drag: 1.2, depthScale: 1 });
+  });
+  // A small wet nozzle highlight, no starburst or broad emission down the entire stream.
+  p.ellipse(0, 0, 1.6, 3.6, C[4]);
+  p.line(-1, -2, -1, 1, C[6]);
+  p.glow(0, -1, 7, C[4], .09);
 }

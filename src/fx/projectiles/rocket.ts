@@ -1,6 +1,6 @@
 // The spark and fire-ball recipes are adapted from Sprite Fusion's open-source explosion
 // (https://www.spritefusion.com/pixel-art-vfx/explosion), MIT License, Copyright (c) 2026 Hugo Duprez.
-import { clamp, smooth, rand, mix, fit, TAU, WHITE, hex } from "../../core/index.js";
+import { clamp, smooth, rand, mix, fit, TAU, WHITE, hex, drawRocketJet } from "../../core/index.js";
 import { beat, wake, cloud, spark, pixelShape } from "./_lib.js";
 
 export const meta = {
@@ -48,30 +48,6 @@ const SHIP = pixelShape(-15, -9, 30, 19, (set) => {
   set(-14, -3, "h"), set(-14, 3, "h");
   for (let y = -2; y <= 2; y++) set(-14, y, Math.abs(y) < 2 ? "x" : "h");
 });
-
-// the jet: a cone of flame out of the bell in clean bands (a red rim, orange, a gold core), white-hot at the
-// nozzle, with a chain of shock diamonds down its middle; fr changes every frame so it flickers
-function jet(p: import("../../core/painter.js").Painter, F: number[], x0: number, y0: number, J: number, wob: number, fr: number) {
-  const dia = [0, 1, 2, 3].map((i) => 3.6 + i * 4.3 + (rand(fr, i, 41) - 0.5) * 0.7);
-  p.shade(x0 - J - 2, y0 - 6, x0, y0 + 6, (x: number, y: number) => {
-    const u = x0 - x;
-    if (u < 0) return;
-    const q = u / J;
-    if (q > 1.05) return;
-    const ady = Math.abs(y - y0), qq = Math.min(q, 1), w = (2.6 + 2.4 * Math.pow(qq, 0.7)) * (1 - qq * qq) * wob;
-    const m = w - ady + (rand(Math.floor(x) * 7 + Math.floor(y) * 131, fr) - 0.5) * 0.9 * Math.min(1, 0.25 + q * 2);
-    if (m < -0.5) return;
-    if (m < 0.5) return F[q < 0.45 ? 3 : 2];
-    for (let i = 0; i < dia.length; i++) {
-      if (dia[i] > J * 0.72) break;
-      const d = Math.abs(u - dia[i]) / (1.9 - i * 0.15) + ady / (1.7 - i * 0.25);
-      if (d < 1) return d < 0.55 && i < 3 ? F[8] : F[7];
-    }
-    if (u < 1.6 && ady < 1.6) return F[8];
-    const lvl = (1 - ady / Math.max(0.6, w)) * (1 - Math.pow(qq, 1.5));
-    return lvl > 0.62 ? (u < 3 ? F[7] : F[5]) : lvl > 0.38 ? F[5] : lvl > 0.16 ? F[4] : F[3];
-  });
-}
 
 export function draw(p: import("../../core/painter.js").Painter, t: number, o: typeof meta.options) {
   const F = fit(o.palette, 9), M = fit(o.metal, 7), A = fit(o.paint, 5), SM = fit(o.smoke, 7), S = o.seed, D = meta.duration;
@@ -123,7 +99,7 @@ export function draw(p: import("../../core/painter.js").Painter, t: number, o: t
     if (x > left + 10) spark(p, x, y, vx, vy, 1 - age / life, SP, 0.5);
   });
 
-  jet(p, F, NOZZLE, by + 0.5, J, wob, fr + S * 31);
+  drawRocketJet(p, { x: NOZZLE, y: by + 0.5, length: J, wobble: wob, frame: fr + S * 31, palette: F, profile: "legacy-horizontal" });
   p.sprite(SHIP.rows, { o: OUTLINE, 1: M[1], 2: M[2], 3: M[3], 4: M[4], 5: M[5], 6: M[6], a: A[0], b: A[1], c: A[2], d: A[3], e: A[4], w: WHITE, h: F[5], x: F[8] }, SHIP.x0, SHIP.y0 + by);
 
   // light: a warm pool round the tail that breathes with the jet, the flame's own glow, a white-hot nozzle

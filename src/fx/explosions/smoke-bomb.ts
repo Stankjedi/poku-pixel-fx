@@ -1,4 +1,4 @@
-import { Particles, Lights, P, Rng, fit, flare, clamp, smooth, TAU, WHITE, hex } from "../../core/index.js";
+import { Particles, Lights, P, Rng, fit, flare, clamp, smooth, TAU, WHITE, hex, smokeVolume, smokeCurl, type SmokeCell } from "../../core/index.js";
 import { lobe, cull, fadeEdges, pool, OUTLINE } from "./_lib.js";
 
 export const meta = {
@@ -15,6 +15,7 @@ export const meta = {
     palette: ["#0e0b14", "#1e1828", "#30283e", "#463c58", "#62567a", "#867a9e", "#aea4c4"],
     canister: ["#16121e", "#2a2434", "#443c52", "#686078", "#9c94ac"],
     sparks: ["#fff3a6", "#ffe26b", "#ff8a2a", "#f2561d"],
+    smokeStyle: "volume",
     seed: 3,
   },
 };
@@ -107,7 +108,9 @@ export function create(o: typeof meta.options) {
         b.age += dt;
         b.vx -= b.vx * 2.4 * dt;
         // rollers hug the floor for a while; everything rises as it billows, gently
-        b.vh += [14 * smooth(0.7, 1.6, b.age), 3 + 9 * smooth(0.8, 1.8, b.age), 6 + 12 * smooth(0.3, 1.4, b.age), 10 * smooth(0.8, 1.6, b.age)][b.kind] * dt;
+        b.vh += (o.smokeStyle === "classic"
+          ? [14 * smooth(0.7, 1.6, b.age), 3 + 9 * smooth(0.8, 1.8, b.age), 6 + 12 * smooth(0.3, 1.4, b.age), 10 * smooth(0.8, 1.6, b.age)]
+          : [22 * smooth(0.7, 1.6, b.age), 3 + 17 * smooth(0.8, 1.8, b.age), 6 + 25 * smooth(0.3, 1.4, b.age), 18 * smooth(0.8, 1.6, b.age)])[b.kind] * dt;
         b.vh -= b.vh * 1.6 * dt;
         b.x += (b.vx + wind) * dt;
         b.h = Math.max(0, b.h + b.vh * dt);
@@ -126,7 +129,7 @@ export function create(o: typeof meta.options) {
       lights.update(dt);
     },
     drawBack(p: import("../../core/painter.js").Painter) {
-      ps.draw(p, "back");
+      drawParticles(p, "back");
       clouds(p, true);
     },
     draw(p: import("../../core/painter.js").Painter) {
@@ -139,7 +142,7 @@ export function create(o: typeof meta.options) {
         p.glow(fx, fy, 6, hex(o.sparks[2]), 0.45 + 0.2 * Math.sin(t * 37));
       }
       clouds(p, false);
-      ps.draw(p, "front");
+      drawParticles(p, "front");
       // the flash of the pop
       const u = t - POP;
       if (u >= 0 && u < 0.067) {
@@ -152,21 +155,48 @@ export function create(o: typeof meta.options) {
     },
   };
 
-  // far lobes behind, near ones in front; each a cel-shaded ball: a lit crescent on top, a mid tone, a dark underside.
+  function drawParticles(p: import("../../core/painter.js").Painter, layer: "back" | "front") {
+    if (o.smokeStyle === "classic") return ps.draw(p, layer);
+    const all = ps.list;
+    try { ps.list = all.filter(q => q.k !== P.VAPOUR); ps.draw(p, layer); }
+    finally { ps.list = all; }
+  }
+
+  // The compatibility path keeps each cel-shaded ball: a lit crescent on top, a mid tone, a dark underside.
   // The cloud is lit from above, so lobes low in it sit in its shadow a step darker; anything nearing the top of the
   // canvas thins out
   function clouds(p: import("../../core/painter.js").Painter, back: boolean) {
     const on = lobes.filter((b) => b.on);
-    if (!on.length) return;
+    if (!on.length && o.smokeStyle === "classic") return;
     let top = 0;
     for (const b of on) top = Math.min(top, -(b.h + radius(b) * 1.92));
+    const cells: SmokeCell[] = [];
     for (const b of on.filter((b) => b.d < -0.35 === back).sort((a, b) => a.d - b.d)) {
       const r = radius(b), y = -(b.h + r * 0.92) + b.d * 2.5, k = thin(b);
       const a = Math.min(1, b.age / 0.05) * Math.pow(1 - k, 1.4) * 0.97 * (1 - smooth(-OY + 34, -OY + 6, y - r));
       if (a <= 0.01) continue;
       const shade = (y - top) / Math.max(20, -top) > 0.55 ? 1 : 0;
-      lobe(p, b.x, y, r, SM, SM, 0, 0, a, b.d, Math.min(2, shade + (k > 0.6 ? 1 : 0)), 1);
+      if (o.smokeStyle === "classic") {
+        lobe(p, b.x, y, r, SM, SM, 0, 0, a, b.d, Math.min(2, shade + (k > 0.6 ? 1 : 0)), 1);
+        continue;
+      }
+      // A shared optical volume absorbs overlap rather than painting independent opaque balls.
+      const sway = Math.sin(b.age * 2.3 + b.wob) * r * 0.12;
+      cells.push({ x: b.x + sway, y, rx: r * 1.25, ry: r * (1.06 + k * 0.28), density: a * 0.55 });
+      if (b.kind === 2) {
+        const side = Math.cos(b.wob) > 0 ? 1 : -1;
+        smokeCurl(cells, b.x + side * r * 0.22, y - r * 0.24, r * 0.8,
+          Math.PI * 0.5 + b.wob * 0.12, side * (3.8 + b.age * 0.45), r * 0.43, a * 0.34, 12);
+      }
     }
+    // Shed vapour shares the same density field. It stretches and loses optical thickness,
+    // instead of switching back to round translucent beads during the final dissipation.
+    if (back && o.smokeStyle !== "classic") for (const q of ps.list) {
+      if (q.k !== P.VAPOUR || q.delay > 0) continue;
+      const k = q.life / q.max, r = q.size * (0.6 + (1 - k) * 0.9);
+      cells.push({ x: q.x, y: q.y, rx: r * 1.15, ry: r * 1.5, density: Math.pow(k, 1.3) * 0.50 });
+    }
+    if (cells.length) smokeVolume(p, cells, C.slice(2), { opacity: 1.35 });
   }
 }
 

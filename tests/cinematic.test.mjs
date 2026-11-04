@@ -149,3 +149,82 @@ test("3D horizon occludes native HDR energy and begin resets the optional buffer
   p.begin();
   assert.ok(frame.hdrLight.every(v => v === 0));
 });
+
+const ungraded = { toneMap: "none", exposure: 1, contrast: 1, saturation: 1, vignette: 0, bloom: false, background: color3D("#000") };
+const linear = byte => { const x = byte / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+
+test("lightStrength dims native HDR and its packed mirror together in 2D and 3D", () => {
+  for (const is3D of [false, true]) {
+    const f = enableHDRLight(is3D ? createFrame3D(25, 25) : createFrame(25, 25));
+    if (is3D) { const p = new Painter3D(f); p.begin("#000"); p.glow([0, 0, 0], 2, "#ff8050", 3); }
+    else { painterFor(f).glow(12, 12, 7, color3D("#ff8050"), 3); }
+    const before = [f.color.slice(), f.light.slice(), f.hdrLight.slice()];
+    const film = new CinematicCompositor(), out = () => new Uint8ClampedArray(f.w * f.h * 4);
+    const dark = film.render(f, out(), { ...ungraded, lightStrength: 0, bloom: { threshold: 0.01 } });
+    assert.ok(dark.every((v, i) => i % 4 === 3 ? v === 255 : v === 0), "zero strength also removes indirect bloom");
+    const full = film.render(f, out(), { ...ungraded, lightStrength: 0.15 });
+    const half = film.render(f, out(), { ...ungraded, lightStrength: 0.075 });
+    assert.ok(full.some((v, i) => i % 4 !== 3 && v > 30));
+    full.forEach((v, i) => {
+      if (i % 4 === 3 || v < 30) return;
+      assert.ok(Math.abs(linear(half[i]) / linear(v) - 0.5) < 0.04, `linear dimming at ${i}`);
+    });
+    [f.color, f.light, f.hdrLight].forEach((b, i) => assert.deepEqual(b, before[i]));
+  }
+});
+
+test("emission strength applies after mirror resolution without changing independent world radiance", () => {
+  const f = enableHDRLight(createFrame(2, 1));
+  f.light[0] = color3D("#808080"); f.hdrLight.set([0.04, 0.4, 0.08]);
+  // A manually written legacy pixel with no native HDR still participates.
+  f.light[1] = color3D("#804020");
+  const extra = new Float32Array([0.15, 0.1, 0.05, 0.03, 0.02, 0.01]);
+  const film = new CinematicCompositor();
+  const actual = film.render(f, new Uint8ClampedArray(8), { ...ungraded, lightStrength: 0, radiance: extra });
+  const expected = film.render(createFrame(2, 1), new Uint8ClampedArray(8), { ...ungraded, radiance: extra });
+  assert.deepEqual(actual, expected, "world light is not an emission control");
+  const scaled = film.render(f, new Uint8ClampedArray(8), { ...ungraded, lightStrength: 0.5 });
+  assert.ok(Math.abs(linear(scaled[0]) - linear(128) * 0.5) < 0.004);
+  assert.ok(Math.abs(linear(scaled[1]) - 0.4 * 0.5) < 0.004);
+  assert.ok(scaled[4] > scaled[5] && scaled[5] > scaled[6]);
+});
+
+test("highlightColor retains linear hue ratios in HDR highlights for ACES and Reinhard", () => {
+  const f = createFrame(1, 1), film = new CinematicCompositor();
+  for (const toneMap of ["aces", "reinhard"]) {
+    const radiance = new Float32Array([12, 3, 0.5]);
+    const old = film.render(f, new Uint8ClampedArray(4), { ...ungraded, toneMap, radiance });
+    const kept = film.render(f, new Uint8ClampedArray(4), { ...ungraded, toneMap, radiance, highlightColor: 1 });
+    const error = image => Math.abs(linear(image[1]) / linear(image[0]) - 0.25) + Math.abs(linear(image[2]) / linear(image[0]) - 1 / 24);
+    assert.ok(error(kept) < 0.01, `linear RGB ratio stays within 8-bit quantization: ${error(kept)}`);
+    assert.ok(error(kept) < error(old) * 0.03);
+    assert.equal(kept[0], old[0], "the peak channel keeps the same brightness");
+    assert.equal(kept[3], old[3]);
+  }
+});
+
+test("highlightColor is opt-in, leaves midtones and neutral cores alone, and does not alter toneMap none", () => {
+  const f = createFrame(3, 1), film = new CinematicCompositor();
+  const radiance = new Float32Array([0.8, 0.3, 0.1, 12, 12, 12, 0.2, 0.5, 0.7]);
+  for (const toneMap of ["aces", "reinhard", "none"]) {
+    const args = { ...ungraded, toneMap, radiance };
+    const original = film.render(f, new Uint8ClampedArray(12), args);
+    assert.deepEqual(film.render(f, new Uint8ClampedArray(12), { ...args, highlightColor: 0 }), original);
+    assert.deepEqual(film.render(f, new Uint8ClampedArray(12), { ...args, highlightColor: 1 }), original);
+  }
+});
+
+test("highlightColor preserves source geometry and transparent bloom coverage while remaining deterministic", () => {
+  const f = enableHDRLight(createFrame(33, 21)), p = painterFor(f), film = new CinematicCompositor();
+  p.line(7, 6, 25, 14, color3D("#5080a0"));
+  p.glow(16, 10, 8, color3D("#ff6040"), 18);
+  const saved = [f.color.slice(), f.light.slice(), f.hdrLight.slice()];
+  const opts = { highlightColor: 0.75, bloom: { threshold: 0.1, intensity: 1.1, levels: 3 } };
+  const out = () => new Uint8ClampedArray(f.w * f.h * 4);
+  const original = film.render(f, out(), { ...opts, highlightColor: 0 });
+  const first = film.render(f, out(), opts), second = film.render(f, out(), opts);
+  assert.deepEqual(first, second);
+  for (let i = 3; i < first.length; i += 4) assert.equal(first[i], original[i], "alpha footprint is independent of highlight grading");
+  [f.color, f.light, f.hdrLight].forEach((b, i) => assert.deepEqual(b, saved[i]));
+  assert.ok(first.some((v, i) => i % 4 !== 3 && v !== original[i]));
+});

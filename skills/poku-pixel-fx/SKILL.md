@@ -91,6 +91,15 @@ up, when to freeze, how the target reacts. Use it whichever way the game is buil
 
 Read `docs/AUTHORING.md` first: it is the contract (meta, `draw(p, t, o)` for pure effects or `create(o)` for
 simulated ones, local coordinates, seamless loops, ending empty), the toolkit, the painter API and the quality bar.
+Read `docs/QUALITY.md` too. Treat `shadow/spatial-severance` as the clean-curve, refined-particle reference,
+not a style to impose on all effects. New effects should use the shared ribbon, trajectory trail, envelope,
+and path-lighting helpers where appropriate. Keep the pixel palette and inspect native-size silhouettes,
+impact timing, negative space, and transparency. Automated tests do not guarantee artistic quality.
+For impact-bearing effects, also read `docs/IMPACT_INTERACTIONS.md`: author one contact descriptor
+(time, local point, normal, material), and derive shape-specific response and optional scene feedback
+from it. Review ground/target reaction, secondary collisions and settling. Do not add the same shock
+ring, stone debris or screen shake to every material. Preserve reduced motion and fixed-pivot
+transparent exports.
 Then:
 
 1. **Say it in one line** with art direction: what it is, how it moves, its palette, its timing. "A frost nova:

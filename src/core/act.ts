@@ -10,9 +10,16 @@ import { stockActor, drawActor, actorAlphaOf, HERO2, DUMMY_PAL } from "./actor.j
 import { posed, STAND, type Pose } from "./rig.js";
 import type { EffectModule, EffectOptions, EffectInputOptions } from "./fx.js";
 import type { PaintFrame } from "./painter.js";
+import type { ImpactContact2D } from "./impact-contact.js";
 
 type PoseKey = [number, Pose, ("out" | "in" | "line" | "snap")?];
-interface ActHit { t: number; stop?: number; shake?: number; amp?: number; target?: boolean; at?: number; push?: number; straw?: number; flash?: number; skin?: string | null; shiver?: number; y?: number }
+/** A contact in effect-local seconds. at selects a target index; y is local pixels (+Y down). */
+export interface ActHit { t: number; stop?: number; shake?: number; amp?: number; target?: boolean; at?: number; push?: number; straw?: number; flash?: number; skin?: string | null; shiver?: number; y?: number; contact?: ImpactContact2D }
+/** Engine-independent target response. freeze is the serialized name of ActHit.stop. */
+export interface ActTimingHit {
+  t: number; freeze: number; shake: number; amp: number; target: boolean; at?: number;
+  push: number; straw: number; flash: number; skin?: string | null; shiver: number; y: number; contact?: ImpactContact2D;
+}
 interface ActDust { t: number; x: number; n?: number; dir?: number; c?: string | number }
 interface ActSpec { poses?: PoseKey[]; targets?: {x?:number}[]; target?: {x?:number}; hits?: ActHit[]; dust?: ActDust[]; ghost?: string | number; onBody?: boolean; follow?: number }
 type ActInput = Omit<ActSpec, "poses"> & { poses?: readonly (readonly (number | Pose | string)[])[] };
@@ -127,15 +134,15 @@ export class Target {
   constructor(x: number, seed = 5) {
     Object.assign(this, { x, theta: 0, omega: 0, flashT: 0, skin: null, skinFade: 0, shiver: 0, clock: 0, R: new Rng(seed), straw: [] });
   }
-  hit({ push = 1.2, straw = 8, flash = 0.05, skin, shiver = 0, y = -26 }: Partial<ActHit> = {}) {
+  hit({ push = 1.2, straw = 8, flash = 0.05, skin, shiver = 0, y, contact }: Partial<ActHit> = {}) {
     this.omega += push;
     this.flashT = Math.max(this.flashT, flash);
     if (skin !== undefined) this.skin = skin;
     if (shiver) this.shiver = shiver;
-    const R = this.R;
+    const R = this.R, hitX = contact?.position[0] ?? this.x, hitY = y ?? contact?.position[1] ?? -26;
     for (let k = 0; k < straw; k++) {
       const back = R.next() < 0.3;
-      this.straw.push({ x: this.x + R.range(-3, 3), y: y + R.range(-3, 3), vx: back ? R.range(-60, -5) : R.range(10, 130), vy: R.range(-120, -5), age: 0, life: R.range(1.2, 2.2), big: R.next() < 0.5 });
+      this.straw.push({ x: hitX + R.range(-3, 3), y: hitY + R.range(-3, 3), vx: back ? R.range(-60, -5) : R.range(10, 130), vy: R.range(-120, -5), age: 0, life: R.range(1.2, 2.2), big: R.next() < 0.5 });
     }
   }
   step(dt: number) {
@@ -225,7 +232,10 @@ export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectI
   const fx = createFx(mod, o), track = a.poses ?? [[0, { ...STAND }]], span = actSpan(mod);
   const X = o.x ?? 0, Y = o.y ?? 0;
   const targets = (a.targets ?? (a.target ? [a.target] : [])).map((g, i) => new Target(g.x ?? 66, seed + 4 + i));
-  const hits = (a.hits ?? []).map((h) => ({ ...h })).sort((p, q) => p.t - q.t), dust = (a.dust ?? []).slice();
+  const hits = (a.hits ?? []).map((h) => ({ ...h })).sort((p, q) => p.t - q.t), dust = (a.dust ?? []).slice().sort((p, q) => p.t - q.t);
+  if (meta.loop && (!Number.isFinite(D) || D <= 0)) throw new RangeError("Loop duration must be finite and positive");
+  if (!Number.isFinite(span.from) || hits.some(h => !Number.isFinite(h.t) || !Number.isFinite(h.stop ?? 0) || (h.stop ?? 0) < 0)
+    || dust.some(d => !Number.isFinite(d.t))) throw new RangeError("Act event times and freezes must be finite; freezes must be non-negative");
   const R = new Rng(seed + 9), specks: Speck[] = [];
   // after-images take the effect's own color unless the act names one
   const ramp = o.palette ?? meta.options?.palette, ghosts: {q: Pose; age: number}[] = [], gc = hex(a.ghost ?? ramp?.[Math.floor(ramp.length * 0.7)] ?? "#8fb4ff");
@@ -253,67 +263,91 @@ export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectI
     get t() { return t; },
     /** How far the whole picture is thrown right now, in px. */
     get shake() {
-      if (shakeT <= 0) return [0, 0];
-      const k = amp * (shakeT / shake0), f = Math.floor(shakeT * 60);
+      // An authored scene hook replaces hit shake rather than double-counting a contact.
+      if (mod.cameraShake) return t < 0 ? [0, 0] : [...fx.shake];
+      const strength = fx.options.cameraMotion ?? 1;
+      if (!Number.isFinite(strength) || strength < 0) throw new RangeError("cameraMotion must be finite and non-negative");
+      if (shakeT <= 0 || strength === 0) return [0, 0];
+      const k = amp * (shakeT / shake0) * strength, f = Math.floor(shakeT * 60);
       return [Math.round(Math.sin(f * 2.4) * k), Math.round(Math.cos(f * 3.7) * k * 0.7)];
     },
     get frozen() { return stop > 0; },
     /** The pose he's in right now. */
     get pose() { return last; },
     update(dt: number) {
-      if (shakeT > 0) shakeT -= dt;
-      if (stop > 0) {
-        stop -= dt;
-        return;
-      }
-      const t0 = t;
-      t += dt;
-      if (t >= 0) fx.update(t0 < 0 ? t : dt);
-      if (meta.loop && t >= D) {
-        const n = Math.floor(t / D);
-        if (n !== loopN) {
-          loopN = n;
-          nh = 0;
-          nd = 0;
+      if (!Number.isFinite(dt) || dt < 0) throw new RangeError("dt must be finite and non-negative");
+      if (dt === 0) return;
+      let remaining = dt;
+      // Process the endpoint before returning, even when all wall time was used
+      // reaching it. Hits at the same instant share one freeze (the maximum).
+      for (;;) {
+        const offset = meta.loop ? loopN * D : 0;
+        for (; nh < hits.length && hits[nh].t + offset <= t + 1e-9; nh++) {
+          const h = hits[nh];
+          if (h.stop) stop = Math.max(stop, h.stop);
+          if (h.shake) {
+            shakeT = shake0 = h.shake;
+            amp = h.amp ?? 2;
+          }
+          if (h.target !== false) targets.forEach((g, i) => (h.at === undefined || h.at === i) && g.hit(h));
+          out.onHit?.(h);
         }
-      }
-      const tt = meta.loop && t >= D ? t % D : t;
-      for (; nh < hits.length && hits[nh].t <= tt; nh++) {
-        const h = hits[nh];
-        if (h.stop) stop = Math.max(stop, h.stop);
-        if (h.shake) {
-          shakeT = shake0 = h.shake;
-          amp = h.amp ?? 2;
+        for (; nd < dust.length && dust[nd].t + offset <= t + 1e-9; nd++) {
+          const d = dust[nd], n = d.n ?? 6;
+          for (let i = 0; i < n; i++) {
+            const dir = d.dir ?? (R.next() < 0.5 ? -1 : 1);
+            specks.push({ x: d.x + R.range(-3, 3), y: -1 - R.range(0, 2), vx: dir * R.range(22, 90), vy: R.range(-34, -6), age: 0, life: R.range(0.16, 0.4), big: R.next() < 0.45, c: d.c ? hex(d.c) : 0 });
+          }
         }
-        if (h.target !== false) targets.forEach((g, i) => (h.at === undefined || h.at === i) && g.hit(h));
-        out.onHit?.(h);
-      }
-      for (; nd < dust.length && dust[nd].t <= tt; nd++) {
-        const d = dust[nd], n = d.n ?? 6;
-        for (let i = 0; i < n; i++) {
-          const dir = d.dir ?? (R.next() < 0.5 ? -1 : 1);
-          specks.push({ x: d.x + R.range(-3, 3), y: -1 - R.range(0, 2), vx: dir * R.range(22, 90), vy: R.range(-34, -6), age: 0, life: R.range(0.16, 0.4), big: R.next() < 0.45, c: d.c ? hex(d.c) : 0 });
+        const boundary = meta.loop ? (loopN + 1) * D : Infinity;
+        if (meta.loop && t >= boundary - Math.min(1e-9, D * 1e-9)) {
+          // Finish the old cycle before dispatching the new cycle's t=0 events.
+          // Negative wind-up events belong only to the first playback.
+          t = boundary;
+          loopN++;
+          poseNow();
+          nh = hits.findIndex(h => h.t >= 0); if (nh < 0) nh = hits.length;
+          nd = dust.findIndex(d => d.t >= 0); if (nd < 0) nd = dust.length;
+          continue;
         }
+        if (remaining <= 0) break;
+        if (stop > 0) {
+          const frozen = Math.min(remaining, stop);
+          remaining -= frozen;
+          stop -= frozen;
+          shakeT = Math.max(0, shakeT - frozen); // Shake uses wall time during hit-stop.
+          continue;
+        }
+        const next = Math.min(hits[nh] ? hits[nh].t + offset : Infinity,
+          dust[nd] ? dust[nd].t + offset : Infinity, boundary);
+        // Never integrate past a contact. Small steps also keep the target spring
+        // and debris stable when the host catches up after a delayed frame.
+        const step = Math.min(remaining, next - t, 1 / 120);
+        const t0 = t;
+        t += step;
+        remaining = Math.max(0, remaining - step);
+        shakeT = Math.max(0, shakeT - step);
+        if (t > 0) fx.update(Math.max(0, t) - Math.max(0, t0));
+        for (const k of specks) {
+          k.age += step;
+          k.vx *= 1 - 5 * step;
+          k.vy += 110 * step;
+          k.x += k.vx * step;
+          k.y = Math.min(-1, k.y + k.vy * step);
+        }
+        for (let i = specks.length - 1; i >= 0; i--) if (specks[i].age >= specks[i].life) specks.splice(i, 1);
+        const q = poseNow();
+        for (const g of targets) g.step(step);
+        // after-images while a key asks for them
+        gAcc += step;
+        if (q.ghost && gAcc >= 1 / 30) {
+          gAcc = 0;
+          ghosts.push({ q, age: 0 });
+          if (ghosts.length > 7) ghosts.shift();
+        }
+        for (const g of ghosts) g.age += step;
+        while (ghosts.length && ghosts[0].age > GHOST_LIFE) ghosts.shift();
       }
-      for (const k of specks) {
-        k.age += dt;
-        k.vx *= 1 - 5 * dt;
-        k.vy += 110 * dt;
-        k.x += k.vx * dt;
-        k.y = Math.min(-1, k.y + k.vy * dt);
-      }
-      for (let i = specks.length - 1; i >= 0; i--) if (specks[i].age >= specks[i].life) specks.splice(i, 1);
-      const q = poseNow();
-      for (const g of targets) g.step(dt);
-      // after-images while a key asks for them
-      gAcc += dt;
-      if (q.ghost && gAcc >= 1 / 30) {
-        gAcc = 0;
-        ghosts.push({ q, age: 0 });
-        if (ghosts.length > 7) ghosts.shift();
-      }
-      for (const g of ghosts) g.age += dt;
-      while (ghosts.length && ghosts[0].age > GHOST_LIFE) ghosts.shift();
     },
     /** Paint it. { body: false } leaves the character out, { target: false } the target. */
     draw(frame: PaintFrame, { body = true, target: showTarget = true } = {}) {
@@ -476,7 +510,15 @@ export function actTiming<O extends EffectOptions>(mod: ActModule<O>) {
     recovery: mod.meta?.loop ? 0 : Math.max(0, to - D),
     onBody: !!a.onBody,
     targets: (a.targets ?? (a.target ? [a.target] : [])).map((g) => g.x ?? 66),
-    hits: (a.hits ?? []).map((h) => ({ t: h.t, freeze: h.stop ?? 0, shake: h.shake ?? 0, amp: h.amp ?? 0, push: h.target === false ? 0 : h.push ?? 1.2, skin: h.skin, at: h.at })),
+    hits: (a.hits ?? []).map((h): ActTimingHit => ({
+      t: h.t, freeze: h.stop ?? 0, shake: h.shake ?? 0, amp: h.amp ?? (h.shake ? 2 : 0),
+      target: h.target !== false, at: h.at, y: h.y ?? h.contact?.position[1] ?? -26,
+      ...(h.contact ? { contact: h.contact } : {}),
+      push: h.target === false ? 0 : h.push ?? 1.2,
+      straw: h.target === false ? 0 : h.straw ?? 8,
+      flash: h.target === false ? 0 : h.flash ?? 0.05,
+      shiver: h.target === false ? 0 : h.shiver ?? 0, skin: h.skin,
+    })),
     poses: (a.poses ?? []).map(([t, pose, how]) => ({ t, how: how ?? "smooth", pose })),
   };
 }

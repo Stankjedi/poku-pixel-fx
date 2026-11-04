@@ -8,8 +8,10 @@ export const meta = {
   name: "Arrow shot",
   desc: "He raises the bow, draws to his cheek, holds his breath and looses: the string snaps forward, the arrow crosses the floor and thuds home.",
   tags: ["move", "bow", "arrow", "projectile", "ranged", "one-shot"],
-  size: [300, 74],
-  origin: [38, 66],
+  // Keep the full launch wake and seeded impact spray, including between export frames.
+  // Padding changes only sheet framing; the bow, trajectory and hit stay in local space.
+  size: [344, 88],
+  origin: [62, 80],
   duration: 1.9,
   loop: false,
   fps: 30,

@@ -233,6 +233,7 @@ export function create(o: typeof meta.options & { actor: Actor }) {
       }
       if (t >= SNAP && !snapped) {
         snapped = true;
+        const firstNew = ps.list.length;
         lights.add(0, -1, 32, C[4], 0.5, 0.25);
         lights.add(0, -1, 10, WHITE, 0.5, 0.08);
         for (let i = 0; i < 22; i++) {
@@ -242,6 +243,12 @@ export function create(o: typeof meta.options & { actor: Actor }) {
         for (let i = 0; i < 12; i++) ps.spawn(P.STAR, R.range(-16, 16), -R.range(0, 46), R.range(-10, 10), -R.range(8, 26), R.range(0.5, 0.9), R.chance(0.5) ? WHITE : C[6], R.range(0.6, 1.8));
         // where the beam stood, motes keep rising for a while
         for (let i = 0; i < 18; i++) ps.spawn(R.chance(0.6) ? P.STAR : P.MOTE, R.range(-6, 6), -R.range(10, 100), R.range(-6, 6), -R.range(14, 40), R.range(0.5, 0.75), R.chance(0.4) ? WHITE : R.chance(0.5) ? C[6] : C[5], R.range(0.5, 1.4), R.range(0, 0.25));
+        // Keep the sampled motion and RNG order; only late lifetimes must fit before the one-shot ends.
+        // Delayed motes spend part of that budget waiting, and max must match so their fade stays natural.
+        for (let i = firstNew; i < ps.list.length; i++) {
+          const q = ps.list[i], budget = Math.max(0, meta.duration - t - q.delay);
+          if (q.life > budget) q.life = q.max = budget;
+        }
       }
       ps.update(dt);
       lights.update(dt);

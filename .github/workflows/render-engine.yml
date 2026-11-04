@@ -38,9 +38,10 @@ jobs:
           fi
       - run: npm run test:3d
       - run: npm run test:quality
+      - run: npm run test:export
       - name: Smoke-test integrated cinematic image exports
         run: |
-          for effect in frost slash blackhole wind windOriginal; do
+          for effect in frost slash blackhole wind windOriginal water shield; do
             node build-tools/tools/render-3d.mjs "$effect" --frames 3 --width 96 --height 72 --columns 3 --cinematic true --out "/tmp/${effect}-cinematic.png"
             test -s "/tmp/${effect}-cinematic.png"
           done

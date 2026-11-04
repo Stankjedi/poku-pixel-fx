@@ -8,10 +8,10 @@ import { spawnSync } from "node:child_process";
 import {
   createFrame3D, Painter3D, createFx3D, compositeFrame3D, enableHDRLight,
   CinematicCompositor, CinematicLighting3D,
-  frostNova3D, arcSlash3D, blackHole3D, windRasenshuriken3D, windRasenshurikenLegacy3D,
+  frostNova3D, arcSlash3D, blackHole3D, windRasenshuriken3D, windRasenshurikenLegacy3D, iceShatter3D, energyShield3D,
 } from "../build/3d/index.js";
 
-const effects = [frostNova3D, arcSlash3D, blackHole3D, windRasenshuriken3D, windRasenshurikenLegacy3D];
+const effects = [frostNova3D, arcSlash3D, blackHole3D, windRasenshuriken3D, windRasenshurikenLegacy3D, iceShatter3D, energyShield3D];
 const root = fileURLToPath(new URL("../", import.meta.url));
 function draw(mod, fx, cinematic = false) {
   const frame = createFrame3D(96, 72);
@@ -30,7 +30,11 @@ function draw(mod, fx, cinematic = false) {
     new CinematicCompositor().render(frame, output, { radiance: lighting.radiance, occlusion: lighting.occlusion });
     assert.deepEqual(frame.color, colors);
     assert.deepEqual(frame.light, emission);
-    if (frame.hdrLight) assert.ok(frame.hdrLight.some(value => value > 0));
+    if (frame.hdrLight) {
+      // Pressure-driven air, its wooden prop and dust reflect light; they do not emit energy.
+      if (mod === windRasenshuriken3D) assert.ok(frame.hdrLight.every(value => value === 0));
+      else assert.ok(frame.hdrLight.some(value => value > 0));
+    }
   } else compositeFrame3D(frame, output);
   return output;
 }
@@ -99,7 +103,7 @@ function cli(script, args) {
 test("cinematic PNG export retains wind variants, black hole, zero seed and sidecar paths", () => {
   const dir = mkdtempSync(join(tmpdir(), "poku-unified-png-"));
   try {
-    for (const name of ["wind", "windOriginal", "blackhole"]) {
+    for (const name of ["wind", "windOriginal", "blackhole", "shatter", "shield"]) {
       const out = join(dir, name);
       cli("build-tools/tools/render-3d.mjs", [name, "--frames", "3", "--columns", "3", "--width", "48", "--height", "36", "--seed", "0", "--cinematic", "true", "--out", out]);
       assert.deepEqual([...readFileSync(out + ".png").subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);

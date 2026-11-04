@@ -2,12 +2,12 @@ import type { Painter } from "../../core/painter.js";
 // The leaves' tumble (turning as they go, flipping over through edge-on, palettes of autumn and green) is adapted
 // from Sprite Fusion's open-source falling leaves (https://www.spritefusion.com/pixel-art-vfx/falling-leaves),
 // MIT License, Copyright (c) 2026 Hugo Duprez.
-import { cycle, fit, rng, smooth, clamp, lerp, TAU, WHITE, READY } from "../../core/index.js";
+import { cycle, fit, rng, smooth, clamp, lerp, TAU, WHITE, READY, helicalAirflow, airflowTrail, drawAirflow, wrap } from "../../core/index.js";
 import { drawLeaf } from "./_lib.js";
 
 export const meta = {
   name: "Leaf storm",
-  desc: "Leaves tumble up a rising spiral round the character, passing behind and in front, turning and flipping, wrapped in bright bands of wind; litter swirls at their feet.",
+  desc: "Leaves tumble up an expanding spiral around the character. Pale streamers climb with the updraft, passing behind and in front, while loose litter swirls at their feet.",
   tags: ["nature", "wind", "leaves", "buff", "aura", "actor", "loop"],
   size: [112, 104],
   origin: [56, 92],
@@ -19,6 +19,7 @@ export const meta = {
   options: {
     palette: ["#1a2420", "#2e4038", "#4a6656", "#7a9a84", "#b4d0b8", "#eef8e8"],
     leaves: ["#123818", "#2f7a2a", "#6cb83a", "#c8f070", "#4a2a08", "#a8701c", "#e8b42e", "#fff09a", "#3a1010", "#9a2e1c", "#e0642a", "#ffb070"],
+    airStyle: "flow",
     seed: 5,
   },
 };
@@ -57,7 +58,7 @@ function leaves(p: Painter, L: number[], t: number, seed: number, back: boolean)
 
 // wind bands: 1 px streaks on tilted rings round the character, bright at the head, fading behind, the far
 // halves dimmer and behind it
-function wind(p: Painter, C: number[], t: number, seed: number, back: boolean) {
+function classicWind(p: Painter, C: number[], t: number, seed: number, back: boolean) {
   for (let j = 0; j < 16; j++) {
     const R = rng(seed, j), y0 = -R.range(4, TOP - 4), r = ringR(y0) * R.range(1.0, 1.25), K = R.int(2, 3), span = R.range(1.1, 2.4);
     const head = R.range(0, TAU) + (TAU * K * t) / meta.duration, rise = R.range(-0.18, 0.18);
@@ -71,6 +72,24 @@ function wind(p: Painter, C: number[], t: number, seed: number, back: boolean) {
     }
     if (!back && Math.sin(head) > 0) p.glow(Math.cos(head) * r, y0 + Math.sin(head) * r * SY, 5, C[4], 0.25);
   }
+}
+
+// Connected rising streamers, not fixed-height hoops. Same rising and expanding transit family as the leaf updraft.
+function wind(p: Painter, C: number[], t: number, seed: number, back: boolean, classic: boolean) {
+  if (classic) return classicWind(p, C, t, seed, back);
+  cycle(t, meta.duration, 20, seed, R => R.range(1.5, 2.3), (age, life, R) => {
+    const turns = R.range(1.4, 2.2), phase = R.range(0, TAU), spread = R.range(0.9, 1.12);
+    const position = (a: number) => {
+      const k = clamp(a / life), u = Math.pow(k, 0.9);
+      const q = helicalAirflow(k, { height: TOP, turns, phase, shear: 0,
+        radius: (15 + 9 * u) * spread + smooth(0.75, 1, k) * 22, perspective: SY });
+      q.y += TOP * (k - u) - 1;
+      return q;
+    };
+    const k = age / life, a = smooth(0, 0.12, k) * (1 - smooth(0.75, 1, k));
+    drawAirflow(p, airflowTrail(position, age, R.range(0.28, 0.43), 48), {
+      back, color: C[back ? 2 : 3], head: C[back ? 3 : 5], alpha: a * (back ? 0.46 : 0.92), width: 1.05 });
+  });
 }
 
 // at the feet: litter and dust swept round on the floor
@@ -92,17 +111,19 @@ function swirl(p: Painter, C: number[], L: number[], t: number, seed: number, ba
 }
 
 export function drawBack(p: Painter, t: number, o: typeof meta.options) {
+  if (o.airStyle !== "classic") t = wrap(t, meta.duration);
   const C = fit(o.palette, 6), L = fit(o.leaves, 12);
   p.glow(0, -30, 46, C[4], 0.12);
   p.glow(0, -2, 26, L[2], 0.12);
   swirl(p, C, L, t, o.seed * 3 + 1, true);
-  wind(p, C, t, o.seed * 5 + 2, true);
+  wind(p, C, t, o.seed * 5 + 2, true, o.airStyle === "classic");
   leaves(p, L, t, o.seed * 7 + 3, true);
 }
 
 export function draw(p: Painter, t: number, o: typeof meta.options) {
+  if (o.airStyle !== "classic") t = wrap(t, meta.duration);
   const C = fit(o.palette, 6), L = fit(o.leaves, 12);
   swirl(p, C, L, t, o.seed * 3 + 1, false);
-  wind(p, C, t, o.seed * 5 + 2, false);
+  wind(p, C, t, o.seed * 5 + 2, false, o.airStyle === "classic");
   leaves(p, L, t, o.seed * 7 + 3, false);
 }

@@ -1,0 +1,12 @@
+{
+  "source": "Captured from pre-migration rocket.ts, independently of the new renderer.",
+  "frames": 36,
+  "hashes": {
+    "0/false": "a114f703ac898a6d18f917f432c69c85aa82e061317d7b0235ccc9cb18d1365f",
+    "0/true": "b692788cff71ef8b5353bd541bdc77373162cee2be18abcb72e86dd24d52b57f",
+    "5/false": "ae1d700dcce6f310d6b5cd2f1fbbf00bc23868d94e356f3668f6d2fd02a86db1",
+    "5/true": "d97f33ca743de69b1548e6c2c93fcbec68b91b512bae5dd7e054b6c6516731b0",
+    "72/false": "b00f552dc4e9b6936083e2b888e44dc42ccff07f8b20e120a9e2938c85fede10",
+    "72/true": "98a301222965bc971b337276cd91c9dd9cecd48ba9bda18e129cb57f25961727"
+  }
+}

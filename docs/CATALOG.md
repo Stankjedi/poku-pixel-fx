@@ -1,6 +1,6 @@
 # Catalog
 
-257 effects in 21 categories. Every one is a file in
+266 effects in 21 categories. Every one is a file in
 `src/fx/<category>/<name>.ts`; render any of them with `node build-tools/tools/render.mjs <id> --gif`.
 
 ## moves
@@ -9,13 +9,13 @@ whole attacks, wind-up to recovery, chained from the effects below.
 
 | effect | id | | size | what it does |
 |---|---|---|---|---|
-| Arrow shot | `moves/arrow-shot` | one-shot 1.9s | 300×74 | He raises the bow, draws to his cheek, holds his breath and looses: the string snaps forward, the arrow crosses the floor and thuds home. |
+| Arrow shot | `moves/arrow-shot` | one-shot 1.9s | 344×88 | He raises the bow, draws to his cheek, holds his breath and looses: the string snaps forward, the arrow crosses the floor and thuds home. |
 | Dash strike | `moves/dash-strike` | one-shot 2.3s | 372×156 | A crouch, then he's across the floor in a blur of after-images and already cutting: a critical hit, a beat, and he hops back to where he started. |
 | Earth stomp | `moves/earth-stomp` | one-shot 3.46s | 290×142 | A knee comes up, the boot slams down, the floor heaves under the target and a stone spike rams up through it. |
 | Fireball throw | `moves/fireball-throw` | one-shot 6.81s | 356×244 | He gathers fire in his hand, leans back and hurls it: the ball flies, the target takes it in a blast and comes out charred. |
 | Ground pound | `moves/ground-pound` | one-shot 3.82s | 304×204 | He coils, leaps out of frame height, hangs, and comes down like a rock: the floor cracks, shock waves race out and throw the target about as they pass. |
 | Holy smite | `moves/holy-smite` | one-shot 2.8s | 252×182 | Both hands go up and a glint marks the target; he brings them down and a bolt of light drops like a hammer, leaving the target blanched. |
-| Ice lance throw | `moves/ice-lance-throw` | one-shot 4.34s | 310×136 | Frost gathers into a spear in his hand, he throws it like a javelin, and the target ices over in a burst of snowflakes and shivers. |
+| Ice lance throw | `moves/ice-lance-throw` | one-shot 4.34s | 324×136 | Frost gathers into a spear in his hand, he throws it like a javelin, and the target ices over in a burst of snowflakes and shivers. |
 | Lightning call | `moves/lightning-call` | one-shot 3s | 290×266 | An arm goes up, a sigil lights under the target, and on the downswing a thick bolt comes down on it; the target jolts through the aftershocks. |
 | Meteor call | `moves/meteor-call` | one-shot 6.43s | 380×240 | A long chant: a circle draws itself round him, it flares, he points, and a burning rock comes down on the target and flattens the scene. |
 | Pistol shots | `moves/pistol-shots` | one-shot 2.6s | 378×76 | Three aimed shots: the gun kicks up each time and settles, tracers cross the floor, and the target staggers under each hit. |
@@ -31,6 +31,7 @@ torches, breath, pillars, walls of flame.
 | Brazier | `fire/brazier` | loop 3s | 112×148 | An iron bowl on a tripod heaped with glowing coals and a big roaring fire, sparks and embers streaming up off it, light on the iron and the floor. |
 | Campfire | `fire/campfire` | loop 3s | 128×128 | Crossed logs on a bed of coals and a lively fire: tongues that lick and leap, popping sparks, embers drifting up, smoke curling off, a warm pool of light. |
 | Candle | `fire/candle` | loop 4s | 56×76 | A wax candle in a brass dish: a calm flame with a blue root that sways and stretches, a halo of light, motes drifting in it, a bead of wax running down a drip. |
+| Convection Plume | `fire/convection-plume` | loop 3s | 112×152 | Wind feeds a forked flame above a coal bed. Hot tongues rise, cool into widening soot, and carry sparse embers along the same continuous flow. |
 | Fire breath | `fire/fire-breath` | loop 1.5s | 160×116 | A roaring cone of fire streaming right from the mouth: white-hot at the lips, billowing out and cooling to red and smoke at its edges, sparks thrown out ahead. |
 | Fire ring | `fire/fire-ring` | one-shot 3.9s | 224×128 | A white flash at the feet, then flames race outward along the floor in a ring, flaring as the front passes and burning down behind it over a smouldering scorch. |
 | Fire tornado | `fire/fire-tornado` | loop 2s | 120×152 | A spinning funnel of fire: spiral bands turning round it, licks flung off its sides, a ring of flame whirling at its foot, embers orbiting it in and out of view. |
@@ -38,8 +39,10 @@ torches, breath, pillars, walls of flame.
 | Flame pillar | `fire/flame-pillar` | one-shot 5s | 184×256 | The floor cracks and glows, a column of fire erupts white-hot and roars, spewing embers and shedding flame, then collapses into rolling smoke. |
 | Flamethrower | `fire/flamethrower` | loop 1.6s | 184×104 | A pressurised jet shooting right: a blue pilot at the nozzle, a tight stream with surges racing down it, a sputter, burning drops falling off, a tip that curls up into smoke. |
 | Meteor | `fire/meteor` | one-shot 5s | 272×232 | A burning rock streaks in from the upper left in a comet of fire and smashes into the floor: a white flash, a fireball, rocks and brands thrown, a glowing crater that cools. |
+| Solar crown detonation | `fire/solar-crown-detonation` | one-shot 2.5s | 224×224 | A compressed sun ignites into a many-pointed crown, releases twin expanding shock rings and sheds curved golden cinders. |
 | Spirit flame | `fire/spirit-flame` | loop 3s | 80×124 | A cold blue-teal ghost fire floating in the air: a bright rim round a hollow dark heart, a wave climbing its wispy tail, curls breaking off, cold sparks rising. |
 | Torch | `fire/torch` | loop 2s | 72×120 | A wall torch on an iron bracket: a licking flame leaping off a pitch-soaked wrap, licks and puffs torn off its tips, smoke, embers, a flickering light on the wall. |
+| Volcanic cataclysm | `fire/volcanic-cataclysm` | one-shot 3.6s | 300×230 | The ground tears open in a red-hot fissure, a giant eruption rises, and molten shards shower out through an expanding shockwave. |
 
 ## explosions
 
@@ -66,14 +69,16 @@ splashes, falls, fountains, waves.
 
 | effect | id | | size | what it does |
 |---|---|---|---|---|
+| Abyssal maelstrom | `water/abyssal-maelstrom` | one-shot 3.2s | 240×180 | A deep blue surge erupts as a curling liquid column, breaks into foamy waves and droplets, then recedes into spreading ripples. |
 | Bubbles | `water/bubbles` | loop 4s | 104×112 | Bubbles stream up from a vent of pebbles, wobbling and swelling as they rise, flare as they cross shafts of light from the surface, then dome up and pop there. |
+| Capillary crown | `water/capillary-crown` | one-shot 2.2s | 184×128 | A clear drop opens a hollow crown. Its rim pinches into round beads, collapses into a rebound jet, and settles through small landing rings and fading capillary waves. |
 | Drip | `water/drip` | loop 1.6s | 72×88 | A bead swells under a wet stone tip and catches the light, pinches off, falls stretched by its speed and plinks into a puddle with a crown, a ring and a tiny rebound. |
 | Fountain | `water/fountain` | loop 2s | 120×104 | A stone basin; a jet rises from its spout and blooms into glassy arcs that break into beads, fall back and plink into the water with rings. |
 | Geyser | `water/geyser` | one-shot 5s | 184×168 | A pool heaves and burbles faster and faster, then blasts a white column of water skyward with a churning foam head; it rains back down in drops and steam, slumps and sputters out. |
 | Rain splash | `water/rain-splash` | loop 2.4s | 176×80 | A low close-up on one puddle in the rain: big drops land in crowns that throw beads and a rebound jet, rings spread and interfere, a lamp's reflection wobbles on the water. |
 | Ripples | `water/ripples` | loop 2s | 136×52 | A drop plinks on still dark water and rings spread out across it at a low angle: the swell of each ring catches the light, crests glint, and they fade into the calm. |
-| Splash | `water/splash` | one-shot 2.5s | 176×100 | A stone drops into still water: a white hit, a crown that tears into droplets arcing out to plink down with rings, a jet that bounces back, foam and drifting mist. |
-| Water jet | `water/water-jet` | loop 1s | 188×80 | A pressurised stream blasts right: a tight glassy rod with surges running down it that swells, roughens, bends under its weight and breaks into chunks, spray and mist. |
+| Splash | `water/splash` | one-shot 2.5s | 176×104 | A stone drops into still water: a white hit, a crown that tears into droplets arcing out to plink down with rings, a jet that bounces back, foam and drifting mist. |
+| Water jet | `water/water-jet` | loop 1s | 188×80 | A pressurised liquid stream bends under gravity, pinches into round beads and sheds a sparse fan of falling spray. Narrow reflected highlights reveal the wet surface. |
 | Water orb | `water/water-orb` | loop 3s | 100×108 | A sphere of water floats and wobbles: a current circles inside it, the floor shows upside down through it, it shines, light gathers on the floor under it, and drips fall and plink. |
 | Waterfall | `water/waterfall` | loop 2s | 144×136 | A river pours from a notch in a rock outcrop: a white curl, a deep sheet that splits into strands, churning foam, spray, drifting mist and rings on a dark pool. |
 | Wave crash | `water/wave-crash` | one-shot 3.2s | 224×104 | A swell rolls in and steepens, its lip throws forward and curls over a dark barrel, then crashes into a burst of white foam and spray that surges on and fades to lace. |
@@ -87,6 +92,7 @@ spikes, novas, freezing, shattering.
 |---|---|---|---|---|
 | Blizzard vortex | `ice/blizzard-vortex` | loop 2s | 128×116 | A swirling snow tornado: wind bands spin up a leaning funnel, flakes and ice crystals orbit in front and behind, snow boils at its foot and cold light fills its throat. |
 | Freeze | `ice/freeze` | one-shot 4s | 176×128 | Frost races in and climbs the character, turning it to ice; a faceted block crystallizes round it pane by pane, glints, cracks and bursts, and the character thaws free. |
+| Frost beam | `ice/frost-beam` | one-shot 3.5s | 320×176 | A freezing jet stops at metal. Frost spreads across the face, grows attached crystal branches, then fractures into falling flakes that tick across the floor. |
 | Frost breath | `ice/frost-breath` | loop 1.2s | 184×104 | A cone of icy wind blowing right: frost puffs billow out, swell and sink, wind streaks race through, ice crystals tumble and glint off a white-hot mouth. |
 | Frost nova | `ice/frost-nova` | one-shot 3.4s | 288×192 | Frost spirals into a spinning snowflake, then a wave blooms three rings of ice crystals round the caster; snow drifts, frost creeps, and the ice melts back into the floor. |
 | Ice crystal | `ice/ice-crystal` | loop 3s | 96×100 | A floating ice crystal turning slowly in its own cold light: its facets brighten and darken as they turn, glints flash on them, frost motes circle it. |
@@ -106,6 +112,7 @@ strikes, arcs, coils, storms.
 | Chain lightning | `lightning/chain-lightning` | one-shot 1.8s | 248×104 | A bolt leaps from the caster's hand through three targets in turn; each flashes, sparks and grounds itself to the floor while the arcs between them flicker, then the chain snaps. |
 | Charge up | `lightning/charge-up` | one-shot 2.7s | 272×184 | Sparks streak and arcs whip in to a crackling core at the caster's hand that swells and pulses faster, then it flashes and bursts: bolts every way, a ring, a spray of sparks. |
 | Electrified | `lightning/electrified` | loop 2s | 108×92 | Current runs through a character: arcs crawl over and leap across the body, sparks spit off, the body flares to an electric silhouette on each jolt, and the feet ground out. |
+| Ion stormburst | `lightning/ion-stormburst` | one-shot 2.4s | 232×184 | A violet storm condenses into a falling ion core; branching lightning erupts, then a spinning electrical shock ring shatters into drifting sparks. |
 | Lightning strike | `lightning/lightning-strike` | one-shot 3s | 240×264 | A targeted strike: a sigil charges on the floor, the scene darkens, a thick bolt slams into it, arcs race out along the cracks it splits, the channel crumbles to a scorch. |
 | Plasma ball | `lightning/plasma-ball` | loop 3s | 112×104 | A glass globe on a dark pedestal: wandering plasma tendrils reach from the core to the glass and fan out in bright feet where they touch it, lighting the stand and floor. |
 | Spark arc | `lightning/spark-arc` | loop 2s | 124×120 | A climbing arc between two rods: it strikes white at their narrow foot, climbs on rising heat as it stretches and bows, sputters and snaps at the top, then strikes again. |
@@ -147,7 +154,7 @@ slashes, smears, cleaves, combos.
 | Scythe reap | `melee/scythe-reap` | one-shot 2.1s | 184×116 | A slow, huge dark crescent reaps round the front with a pale ghostly edge; it hangs, then tears away from the tail into curling wisps and cold vapour. |
 | Spear sweep | `melee/spear-sweep` | one-shot 1.5s | 216×84 | A wide low sweep at shin height: a long flat crescent swings from behind the legs round the front, and the wind of it kicks a wake of dust and grit along the floor. |
 | Spin slash | `melee/spin-slash` | one-shot 0.8s | 208×104 | The blade whirls once round the waist on a tilted plane, behind the body and back in front; the closed ring flares white, dissolves into a dotted trace and throws sparks. |
-| Sword slash | `melee/sword-slash` | one-shot 0.75s | 136×104 | A tilted crescent whips round in two frames, cools from white to deep blue as it trails off, glints at the tip and throws sparks. |
+| Sword slash | `melee/sword-slash` | one-shot 0.75s | 144×120 | A tilted crescent whips round in two frames, cools from white to deep blue as it trails off, glints at the tip and throws sparks. |
 | Thrust | `melee/thrust` | one-shot 0.75s | 196×76 | A piercing stab: a bundle of streaks shoots out from the hand to a point, a long four-point star flares at the tip with a pierce ring, sparks and speed lines. |
 | Uppercut | `melee/uppercut` | one-shot 0.85s | 132×128 | A crescent rises from the floor past the face, and at the top a comic impact star bursts: bold outline, hot core, burst lines, twinkles and sparks. |
 | Whip crack | `melee/whip-crack` | one-shot 0.85s | 192×80 | A whip rolls out to the right as a loop running down its length, faster and faster, until the tip flips over and cracks: a white pop, a ring of air, sparks and a puff of smoke. |
@@ -161,6 +168,7 @@ hit sparks, shockwaves, landings.
 | Blunt hit | `impacts/blunt-hit` | one-shot 0.9s | 128×88 | A heavy, soft thud: a white-hot lumpy blob cools to cream in a warm pool of light, inked wedges jab out and snap back, a squashed ring of dust puffs swells and drifts, clods drop. |
 | Bullet impact | `impacts/bullet-impact` | one-shot 1.4s | 152×100 | A bullet hits a wall on the right: a hot half-star, sparks sprayed back in a cone, a puff of grit, chips that fall and bounce, a pock mark cooling to soot. |
 | Critical hit | `impacts/crit-hit` | one-shot 0.9s | 216×136 | A critical hit: a jagged starburst slams in white and overshoots, a ring breaks into flying arcs, sparks streak off, shards tumble to the floor under a big flare. |
+| Glass shatter | `impacts/glass-shatter` | one-shot 2.6s | 288×160 | A clear pane spiders from one strike, peels into fitted translucent slivers, turns edge-on, pings at real floor contacts, and settles. No dust or glow. |
 | Ground slam | `impacts/ground-slam` | one-shot 3.2s | 288×208 | Something lands hard: the floor flashes and cracks, two crescent shock waves race out along it, a dust wave and a tall dust cloud rise, rocks erupt, bounce and settle. |
 | Heavy landing | `impacts/heavy-landing` | one-shot 1.6s | 176×80 | A character lands hard: the floor dents and cracks under their feet, two rings of dust roll out along the floor one after the other, and pebbles hop away. |
 | Hit flash | `impacts/hit-flash` | one-shot 0.5s | 80×64 | The character takes damage: a white frame, then their own colors flushed red and blinking white, cooling off, while comic hit lines jab in at them. |
@@ -184,6 +192,7 @@ bullets, rockets, lasers, arrows.
 | Homing missile | `projectiles/homing-missile` | one-shot 3.8s | 248×140 | A missile kicks off, arcs up, rolls over and dives onto its target (the origin), its smoke trail left hanging in the air, and hits in a fiery blast of flame, sparks and rocks. |
 | Laser bolt | `projectiles/laser-bolt` | loop 0.5s | 128×32 | A red laser bolt: a white-hot core in a rounded head, red bands tapering back, pulses racing down it, a tail that shimmers apart into wavering dashes. |
 | Magic missile | `projectiles/magic-missile` | one-shot 1.9s | 208×112 | Motes gather into an arcane orb at a hand `height` px above the floor (the origin); it weaves to its target trailing a twisting ribbon and bursts into a star of light. |
+| Missile salvo | `projectiles/missile-salvo` | one-shot 3.8s | 352×232 | Three steel missiles arc through hanging exhaust. Staggered contacts buckle mineral ground, eject bouncing rubble and spread low dust under sharp flame tongues. |
 | Pistol shot | `projectiles/muzzle-pistol` | one-shot 1.8s | 96×72 | One pistol shot from a muzzle `height` px above the floor (the origin): a spiky white-cored flash, sparks, a curl of smoke hooking up and back, a casing that bounces and settles. |
 | Shotgun blast | `projectiles/muzzle-shotgun` | one-shot 3.2s | 160×88 | A shotgun blast from a muzzle `height` px above the floor (the origin): a wide ragged fan of flame, pellet streaks, a heavy rolling smoke cloud, a red shell kicked out on the pump. |
 | SMG burst | `projectiles/muzzle-smg` | loop 1s | 112×72 | Sustained fire at twelve rounds a second: each shot a different spiky flash with a white core, sparks, smoke wisps piling up and drifting, brass casings bouncing on the floor. |
@@ -218,10 +227,13 @@ portals, runes, missiles, beams.
 | Arcane orb | `arcane/arcane-orb` | loop 2.4s | 136×112 | A floating orb of smoky violet glass with a swirl turning round a white-hot heart, two tilted rings of light orbiting behind and in front. |
 | Blink in | `arcane/blink-in` | one-shot 1.4s | 136×96 | Glittering bits spiral in to a point of light that opens into a line, then into a white silhouette that cools into the caster. |
 | Blink out | `arcane/blink-out` | one-shot 1.6s | 136×96 | The caster crackles with gathering light, flashes white, squeezes into a line of light that collapses and pops away in sparks. |
+| Celestial Supernova | `arcane/celestial-supernova` | one-shot 2.8s | 224×184 | A star ascends, compresses into white light, then erupts into concentric celestial rings and streaking shards. |
+| Dimensional convergence | `arcane/dimensional-convergence` | one-shot 3.2s | 192×144 | A luminous floor sigil unfolds into rotating orbit rings, a prismatic core and rising arcane fragments before the rift collapses. |
+| Astral castle | `arcane/magic-castle` | loop 4s | 224×184 | An intricate floating citadel with crystalline spires, fluttering banners and windows glowing above a rotating astral seal. |
 | Magic circle cast | `arcane/magic-circle-cast` | one-shot 3.9s | 200×220 | A circle draws itself on the floor, runes ignite one by one, it flashes, and a column of light fires up and breaks apart into glints. |
 | Mana burst | `arcane/mana-burst` | one-shot 1.8s | 208×150 | Energy rushes into a point and blows out in a white flash and rings, flinging glowing runes that flare and pop into sparks one after another. |
 | Portal | `arcane/portal` | loop 2.4s | 152×116 | An upright rift: fibrous spiral arms wind down into the dark, a lit rim wobbles, motes and streaks are pulled in, the floor glows. |
-| Rune circle | `arcane/rune-circle` | loop 4s | 136×100 | A rune circle turns on the floor in perspective: a carousel of runes lit by chasing light, a turning square, ticks, motes rising off it. |
+| Rune circle | `arcane/rune-circle` | loop 4s | 136×100 | An engraved seal turns in perspective: raised runes stand on twin rails, counter-rotating compass seals frame a hollow center, and reading lights release script and curved motes. |
 | Spell charge | `arcane/spell-charge` | loop 1.6s | 120×86 | Energy gathers in the caster's hand: streaks and motes spiral in, rings collapse into a swelling orb that crackles with arcs, ready to fire. |
 | Star fall | `arcane/star-fall` | one-shot 2.5s | 232×172 | Stars streak down on long trails across an area, each landing with a white flash, a ring across the floor and a kick of sparks. |
 | Starlight bloom | `arcane/starlight-bloom` | one-shot 1.2s | 96×96 | A turquoise star unfolds into crystal petals, then sheds luminous fragments. |
@@ -237,10 +249,11 @@ heals, halos, pillars of light.
 | Divine shield | `holy/divine-shield` | loop 2.4s | 88×84 | A bubble of gold light round the character: a bright rim and a thin gold film, meridians turning like a slow globe, a sheen sweeping across and sparkles winking on it. |
 | Feather burst | `holy/feather-burst` | one-shot 3s | 160×160 | A white puff pops and throws feathers that brake hard, then rock from side to side as they sink and fade, with down drifting after them. |
 | Halo | `holy/halo` | loop 2s | 56×80 | A ring of gold light floats over the head with a glint running round it; fine dust sifts down from it and the head catches its light. |
-| Heal | `holy/heal` | one-shot 1.9s | 80×104 | Petals of light bloom under the feet, a hoop of light rises up the body restoring its colour and leaving sparkles, and motes spiral up and pop into tiny hearts. |
+| Heal | `holy/heal` | one-shot 2.1s | 96×104 | A jade lotus gathers at the feet, two ribbons climb around the target, and a soft chest beat restores the silhouette before three leaves rise away. |
 | Healing ring | `holy/heal-aoe` | one-shot 2.9s | 256×136 | A seed of green light sinks into the floor and a soft ring rolls out from it; the floor glows where it passes and plus signs sprout and float up. |
 | Holy pillar | `holy/holy-pillar` | one-shot 3.5s | 192×232 | Light breaks through from above: a sun opens at the top and a fan of shafts converges on the mark, pulsing, while a sigil burns on the floor; then the fan folds shut. |
 | Resurrection | `holy/resurrection` | one-shot 4.8s | 192×160 | Light pours down on the fallen and life climbs back up the body; wings of light unfold, a halo forms, one great wingbeat, then the wings scatter into feathers. |
+| Seraphic verdict | `holy/seraphic-verdict` | one-shot 2.8s | 240×220 | A golden seal unfolds into a cascading pillar of light; radiant wings and concentric halos burst outward before falling into motes. |
 | Smite | `holy/smite` | one-shot 2.8s | 224×176 | A glint marks the spot, then a bolt of light drops like a hammer: a white flash, a shockwave over the floor, stone chips flying and cracks that glow and cool. |
 | Sunburst | `holy/sunburst` | loop 4s | 128×128 | A white-hot core in a gold corona; long and short rays turn slowly round it, breathing, with glints running out along them that wink at the tips. |
 
@@ -250,7 +263,8 @@ curses, voids, tendrils, souls.
 
 | effect | id | | size | what it does |
 |---|---|---|---|---|
-| Black dragon slash | `shadow/black-dragon-slash` | one-shot 2.4s | 256×192 | A trembling black dragon face roars behind a broad spatial cut, leaving a dark fissure and brief afterglow. |
+| Abyssal fracture | `shadow/abyssal-fracture` | one-shot 3s | 224×224 | A serrated violet rift tears through space, draws in orbiting shards and snaps shut in a final flash. |
+| Black dragon slash | `shadow/black-dragon-slash` | one-shot 2.4s | 256×192 | A black dragon trembles and roars as a massive silver-edged cut rips open space in front of it. |
 | Black hole | `shadow/black-hole` | loop 4s | 184×132 | A tilted disk of banded rings turns round a black hole, its far side bent up over the top and under the bottom; debris spirals in, stretches and is swallowed. |
 | Curse | `shadow/curse` | one-shot 3.4s | 112×124 | Wisps gather over the head, a skull stamps down with a flash, its eyes burn as the curse floods the body violet, then it cracks and crumbles. |
 | Dark explosion | `shadow/dark-explosion` | one-shot 3.8s | 280×248 | Motes swirl into a pulsing core, a black star cuts across a violet-white flash, and a black sphere burns at the rim, throws lit shards and smoke, then collapses. |
@@ -262,6 +276,7 @@ curses, voids, tendrils, souls.
 | Shadow flames | `shadow/shadow-flames` | loop 2.4s | 104×112 | Inside-out fire on the floor: a black heart wrapped in violet flame with pale skin and tips, shedding embers and dark smoke. |
 | Shadow tendrils | `shadow/shadow-tendrils` | one-shot 3.2s | 208×130 | A dark pool opens on the floor; tentacles with lit rims and hooked tips lash up out of it with a splash, writhe, and sink back as it closes. |
 | Soul drain | `shadow/soul-drain` | loop 3.2s | 208×120 | Pale souls are torn loose on the right and dragged down a funnel of streaks into a black crystal vessel, which flares violet as each one lands. |
+| Spatial Severance | `shadow/spatial-severance` | one-shot 1.08s | 384×216 | A 54 ms razor punches a white-hot flash through a smooth cyan-violet incision, carries a bright crest along its rim, then seals to a needle. |
 | Void orb | `shadow/void-orb` | loop 3.2s | 168×160 | A black orb hangs in the air, a pale rim crawling round it; a dark vortex winds into it, motes and streaks are pulled in, and light bends round its edge. |
 
 ## status
@@ -290,18 +305,20 @@ poison, vines, thorns, quakes.
 
 | effect | id | | size | what it does |
 |---|---|---|---|---|
-| Acid splash | `nature/acid-splash` | one-shot 2.8s | 184×116 | A gob of acid bursts into a crown and spatters; it eats a glowing, smoking pit into the floor and boils down into it, spitting bright beads, pale steam curling off. |
+| Acid splash | `nature/acid-splash` | one-shot 3.4s | 264×160 | Green fluid flattens against metal and drains in narrow runs. Attached bubbles collapse to reveal a pitted surface. Stylized fantasy corrosion, not chemistry. |
 | Boulder | `nature/boulder` | one-shot 2.3s | 264×120 | A spinning boulder arcs right shedding dust and pebbles, smashes into the floor in a white flash and bursts into tumbling chunks, gravel and rolling dust. |
 | Earth spike | `nature/earth-spike` | one-shot 3.4s | 272×150 | The floor cracks with light and heaves, a faceted stone spike rams up with two side shards in a burst of chips, grit and dust; rubble rains, then it splits and crumbles. |
-| Emerald fireflies | `nature/emerald-fireflies` | one-shot 2s | 96×112 | Emerald fireflies spiral upward with flickering cores and fading trails. |
+| Emerald fireflies | `nature/emerald-fireflies` | one-shot 2s | 96×112 | Emerald fireflies spiral upward with warm flickering cores and fading trails. |
 | Healing bloom | `nature/healing-bloom` | one-shot 3.3s | 124×120 | A sprout pushes up and unfurls, a bud swells and opens round a glowing golden heart in a flare of healing light; its petals lift away one by one as motes. |
-| Leaf storm | `nature/leaf-storm` | loop 2.4s | 112×104 | Leaves tumble up a rising spiral round the character, passing behind and in front, turning and flipping, wrapped in bright bands of wind; litter swirls at their feet. |
+| Leaf storm | `nature/leaf-storm` | loop 2.4s | 112×104 | Leaves tumble up an expanding spiral around the character. Pale streamers climb with the updraft, passing behind and in front, while loose litter swirls at their feet. |
 | Poison cloud | `nature/poison-cloud` | loop 4s | 256×100 | A miasma hugging the floor: ragged sheets of gas lit yellow-green from within, fading to violet, creep out in tongues that curl over at their tips; plumes twist up as ribbons. |
+| Prismatic blossom | `nature/prismatic-blossom` | one-shot 3.4s | 268×200 | A radiant crystalline flower erupts, unfurls uneven petals, then shatters into drifting leaves and luminous pollen. |
 | Quake | `nature/quake` | one-shot 3.1s | 288×104 | The ground jolts three times: a rift tears out along the floor glowing deep inside, slabs of floor heave up and drop back askew, pebbles hop and dust bursts out of the split. |
+| Rock fracture | `nature/rock-fracture` | one-shot 2.8s | 256×144 | A sandstone boulder cracks into fitted heavy blocks, falls into bouncing rubble, and settles. Low dust spreads from fractures and landing points, with no glow or crystal glints. |
 | Root snare | `nature/root-snare` | one-shot 2.7s | 128×96 | The floor cracks and roots burst up round the character, spiralling round its legs; they cinch tight with a snap, hold, then crack and crumble into bark and dust. |
 | Spore burst | `nature/spore-burst` | one-shot 3.2s | 212×132 | A toadstool pushes up, swells and trembles as its gills glow, then squashes and puffs a lumpy cloud of glowing spores that billows up and drifts down twinkling. |
 | Thorns | `nature/thorns` | one-shot 2.4s | 232×92 | A seam races along the floor and hooked thorns punch up out of it one after another, each bigger than the last, in bursts of dirt and green light; they hold, then sink. |
-| Tornado | `nature/tornado` | loop 2s | 196×168 | A snaking funnel of spinning wind bands under a flared, churning top that flickers with lightning; leaves and debris whirl round it front and back, dust boils at its foot. |
+| Tornado | `nature/tornado` | loop 2s | 196×168 | A snaking funnel lifts dust through rising helical streaks into a soft, rolling crown. Leaves and debris pass in front and behind; lightning briefly lights the cloud. |
 | Toxic puddle | `nature/toxic-puddle` | loop 4s | 176×100 | Black tar lit from inside by chartreuse veins and a glowing rim, an oily sheen drifting on it; glossy bubbles dome, stretch and pop, vapour curls up in fraying ribbons. |
 | Vine whip | `nature/vine-whip` | one-shot 1.4s | 216×128 | A thorny vine bursts from the floor, rears back coiled, then lashes out right in a whip crack that sprays sap and tears off leaves, before sliding back into the ground. |
 
@@ -315,11 +332,13 @@ rain, snow, fog, aurora.
 | Blizzard | `weather/blizzard` | loop 8s | 320×180 | Snow driven almost flat by a gale: streaks at three depths race past, gusts throw translucent sheets of snow across the sky and spindrift streams off the drifts. |
 | Cherry blossoms | `weather/cherry-blossoms` | loop 10s | 320×180 | Pink petals flutter down on a spring breeze, tumbling in little spirals and flashing as they catch the light, with a few whole blossoms spinning among them. |
 | Clouds | `weather/clouds` | loop 12s | 320×180 | Layers of clouds drift past a bright moon at night: silver-lit tops, dark bellies, edges that flare where they cross the moon, forming and thinning as they go. |
+| Crosswind Gust | `weather/crosswind-gust` | one-shot 2.4s | 256×184 | A swift lateral gust rolls its leading edge into loose curls. Pale air tracers and tumbling leaves share the same transport, then stretch and dissolve downstream. |
 | Falling leaves | `weather/falling-leaves` | loop 10s | 320×180 | Autumn leaves swing down through the air, tilting and flipping to show their pale backs, ride a gust, land flat in the litter and fade. |
 | Fireflies | `weather/fireflies` | loop 12s | 320×180 | Fireflies wander over a meadow at night, each glowing up and fading on its own rhythm, trailing light and lighting the grass tips beneath them. |
 | Fog | `weather/fog` | loop 12s | 320×180 | Slow banks of moonlit fog at three depths drift past each other, crests catching the light, while thin streaks of mist slide by in front. |
 | God rays | `weather/god-rays` | loop 10s | 320×180 | Shafts of light slant down from high on the left, breathing and swaying, pooling on the floor, as drifting dust motes light up whenever they cross a beam. |
 | Rain | `weather/rain` | loop 8s | 320×180 | Slanted rain at four depths: far drops fade into the dark, near ones glint and splash, drops ring the puddles and a low mist drifts over the wet floor. |
+| Rising Smoke | `weather/rising-smoke` | loop 4s | 144×168 | A narrow soot column swells into rolling curls. Rising folds entrain pockets of air, widen and shear into thin translucent wisps. Smoke receives light but emits none. |
 | Shooting stars | `weather/shooting-stars` | loop 10s | 320×180 | Meteors burn across a starry sky, white heads trailing gold and rose; the big ones flare and break up, and each leaves a glowing train that twists and fades. |
 | Snow | `weather/snow` | loop 12s | 320×180 | Snow at three depths in a gusty breeze: far specks, drifting flakes, big near crystals that spin and glow; they settle on a sparkling drift and melt away. |
 | Storm | `weather/storm` | loop 10s | 320×180 | Driving rain at two depths under a churning cloud deck; a forked bolt strikes in a double flash that lights the sky and the rain, then sheet lightning glows in the clouds. |
@@ -396,16 +415,3 @@ slimes, bats, ghosts, frogs.
 | Slime | `critters/slime` | loop 1.8s | 112×88 | A glossy slime hops in place: it squashes to wind up, stretches into the jump, rounds out in the air, splats down flinging droplets that creep back, then wobbles and blinks. |
 | Snake | `critters/snake` | loop 2.4s | 136×56 | A snake slithers along the floor, head raised: humps rise and roll back down its patterned body to the tail, dust puffs where it touches down, its forked tongue flicks. |
 | Wisp | `critters/wisp` | loop 3.2s | 128×104 | A will-o'-the-wisp loops a figure-eight over the floor: a little soul-flame with a face, its flame tail licking up and streaming behind, shedding puffs and sparks. |
-
-## New effects
-
-- `arcane/celestial-supernova` — 천체 초신성: 별이 떠올라 다중 궤도와 성운 파편으로 폭발합니다.
-- `arcane/dimensional-convergence` — 차원 융합 소환: 마법진과 회전 궤도가 차원의 핵을 열어냅니다.
-- `arcane/magic-castle` — 별빛 마법성: 빛나는 마법진 위로 환영의 성과 별이 나타납니다.
-- `fire/solar-crown-detonation` — 태양 왕관 폭발: 압축된 태양이 왕관 광선과 이중 충격파로 터집니다.
-- `fire/volcanic-cataclysm` — 화산 대격변: 지면의 균열에서 용암 분수와 불타는 암편이 솟습니다.
-- `lightning/ion-stormburst` — 이온 폭풍 폭발: 이온핵과 번개가 충격파를 일으키며 흩어집니다.
-- `holy/seraphic-verdict` — 천사의 심판: 황금 날개와 마법진이 광휘의 기둥을 내립니다.
-- `shadow/abyssal-fracture` — 심연의 균열: 보랏빛 균열이 열리고 파편이 회전하며 퍼집니다.
-- `water/abyssal-maelstrom` — 심해의 대소용돌이: 나선 물기둥과 물결이 깊은 소용돌이를 만듭니다.
-- `nature/prismatic-blossom` — 프리즘 꽃개화: 수정 꽃잎과 덩굴 사이로 빛나는 꽃가루가 흩어집니다.

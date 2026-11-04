@@ -3,16 +3,15 @@
 import { readdirSync, existsSync, statSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname, relative, sep, isAbsolute } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { spawnSync } from "node:child_process";
-const { createFrame, clearFrame, createFx, createAct, actBounds, actTiming, composite, painterFor, drawActor, stockActor, backdrop, actorAlphaOf } = await import(new URL("../../../build/core/index.js", import.meta.url).href);
+const { createFrame, clearFrame, createFx, createAct, actBounds, actTiming, composite, painterFor, drawActor, stockActor, backdrop, actorAlphaOf, sceneCameraOffset, transformImpactContact2D, defineRestorationTiming2D } = await import(new URL("../../../build/core/index.js", import.meta.url).href);
 const { rasterText, textWidth } = await import(new URL("../../../build/core/font.js", import.meta.url).href);
 import { encodePNG } from "./png.mjs";
 
 
 export interface EffectData { id: string; file: string; mod: Record<string, any>; meta: Record<string, any> }
-export interface RenderOptions { fps?: number; seed?: number; bg?: string; margin?: number; pad?: number; options?: Record<string, any>; actor?: boolean; target?: boolean; seconds?: number; hold?: number }
+export interface RenderOptions { fps?: number; seed?: number; bg?: string; margin?: number; pad?: number; options?: Record<string, any>; cameraMotion?: number; actor?: boolean; target?: boolean; seconds?: number; hold?: number }
 export interface FrameData { t: number; color: Uint8ClampedArray; clear: Uint8ClampedArray; frozen?: boolean; raw?: Uint32Array; light?: Uint32Array }
-export interface RenderResult { w: number; h: number; fps: number; n: number; frames: FrameData[]; margin?: number; pivot?: number[] }
+export interface RenderResult { w: number; h: number; fps: number; n: number; frames: FrameData[]; margin?: number; pivot?: number[]; contacts?: readonly unknown[] }
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 export const FX_DIR = join(ROOT, "src", "fx");
@@ -71,7 +70,7 @@ export function renderFrames(fx: EffectData, opts: RenderOptions = {}): RenderRe
   const shown = createFrame(w, h, -m, -m), bare = createFrame(w, h, -m, -m);
   const bgKind = opts.bg ?? meta.bg;
   const bg = bgKind === "none" ? null : backdrop(bgKind, w, h, OY + m);
-  const inst = createFx(fx.mod, { x: OX, y: OY, ...(opts.seed !== undefined ? { seed: opts.seed } : {}), ...(opts.options ?? {}) });
+  const inst = createFx(fx.mod, { x: OX, y: OY, ...(opts.cameraMotion !== undefined ? { cameraMotion: opts.cameraMotion } : {}), ...(opts.seed !== undefined ? { seed: opts.seed } : {}), ...(opts.options ?? {}) });
   const actor = meta.actor && opts.actor !== false ? inst.options.actor ?? stockActor() : null;
   const fade = m === 0 && !isScreen(meta);
   const frames: FrameData[] = [];
@@ -85,15 +84,17 @@ export function renderFrames(fx: EffectData, opts: RenderOptions = {}): RenderRe
     if (actor) drawActor(painterFor(shown).place(OX, OY, !!opts.options?.flip), actor, actorAlphaOf(fx.mod, fx.meta.loop ? inst.t % fx.meta.duration : Math.min(inst.t, fx.meta.duration), inst.options));
     inst.draw(shown, "front");
     if (fade) (edgeFade(bare), edgeFade(shown));
+    const visible = composite(shown, new Uint8ClampedArray(w * h * 4), bg), [sx, sy] = sceneCameraOffset(inst.shake, false, bg === null);
     frames.push({
       t: i / fps,
-      color: composite(shown, new Uint8ClampedArray(w * h * 4), bg),
+      color: sx || sy ? shifted(visible, w, h, sx, sy) : visible,
       clear: composite(bare, new Uint8ClampedArray(w * h * 4), null),
       raw: bare.color.slice(),
       light: bare.light.slice(),
     });
   }
-  return { w, h, fps, n, frames, margin: m };
+  return { w, h, fps, n, frames, margin: m, pivot: [(inst.options.x ?? OX) + m, (inst.options.y ?? OY) + m],
+    contacts: inst.contacts.map((c: any) => transformImpactContact2D(c, { flip: inst.options.flip, angle: inst.options.angle })) };
 }
 
 /**
@@ -251,30 +252,13 @@ export function spriteSheet(fx: EffectData, r: RenderResult, name: string) {
     app: "Poku Pixel FX", version: "1", image: `${name}.png`, format: "RGBA8888",
     size: { w: cols * w, h: rows * h }, scale: "1",
     frameTags: [{ name: name, from: 0, to: n - 1, direction: "forward" }],
-    pokuFx: { id: fx.id, name: m.name, fps, loop: m.loop, frames: n, frameSize: [w, h], pivot: m.origin, columns: cols, ...(fx.mod.act ? { act: actTiming(fx.mod) } : {}) },
+    pokuFx: { id: fx.id, name: m.name, fps, loop: m.loop, frames: n, frameSize: [w, h], pivot: r.pivot ?? m.origin, columns: cols, ...(r.contacts?.length ? { contacts: r.contacts } : {}), ...(fx.mod.restoration ? { restoration: defineRestorationTiming2D(fx.mod.restoration) } : {}), ...(fx.mod.act ? { act: actTiming(fx.mod) } : {}) },
   };
   return { png: img.png(), json };
 }
 
-/** Animated preview through ffmpeg (GIF or MP4), scaled k times. Returns false if ffmpeg is missing. */
-export function writeVideo(file: string, r: {w: number; h: number; fps: number; frames: Array<{color: Uint8ClampedArray}>}, k: number, { loops = 1 } = {}) {
-  const { w, h, frames, fps } = r, W = w * k, H = h * k;
-  const evenW = W + (W % 2), evenH = H + (H % 2), mp4 = file.endsWith(".mp4");
-  const parts = [];
-  for (let l = 0; l < loops; l++) for (const f of frames) parts.push(Buffer.from(upscale(f.color, w, h, k).buffer));
-  const vf = mp4
-    ? `pad=${evenW}:${evenH}:0:0:black,format=yuv420p`
-    : "split[a][b];[a]palettegen=max_colors=255:stats_mode=full[p];[b][p]paletteuse=dither=none";
-  const args = ["-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgba", "-s", `${W}x${H}`, "-r", String(fps), "-i", "-", "-vf", vf];
-  if (mp4) args.push("-c:v", "libx264", "-crf", "14", "-preset", "slow", "-movflags", "+faststart");
-  else args.push("-loop", "0");
-  args.push(file);
-  mkdirSync(dirname(file), { recursive: true });
-  const res = spawnSync("ffmpeg", args, { input: Buffer.concat(parts), maxBuffer: 1 << 30 });
-  if (res.error) return false;
-  if (res.status !== 0) throw new Error(`ffmpeg 실행 실패: ${res.stderr}`);
-  return true;
-}
+// Keep the existing synchronous API available to CLI callers and external authoring scripts.
+export { writeVideo } from "./video.mjs";
 
 export function save(file: string, buf: string | Uint8Array) {
   mkdirSync(dirname(file), { recursive: true });

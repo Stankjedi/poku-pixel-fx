@@ -26,7 +26,7 @@ export interface BloomOptions {
 export interface CinematicOptions {
   /** Packed ABGR backing color, per-pixel backing color, or null for transparent export. */
   background?: number | Uint32Array | null;
-  /** Original 8-bit light buffer multiplier. */
+  /** Multiplier for both packed and native HDR emission; extra radiance is independent. */
   lightStrength?: number;
   /** Optional extra HDR RGB radiance in linear units, three floats per pixel. */
   radiance?: Float32Array;
@@ -35,6 +35,9 @@ export interface CinematicOptions {
   bloom?: false | BloomOptions;
   exposure?: number;
   toneMap?: "aces" | "reinhard" | "none";
+  /** Preserve pre-tonemap RGB ratios in overexposed highlights (0..1, default 0).
+   * Only affects ACES/Reinhard highlights above linear 1; neutral cores stay neutral. */
+  highlightColor?: number;
   saturation?: number;
   contrast?: number;
   /** Corner darkening, 0..1. Applied only to the final resolved image. */
@@ -195,12 +198,13 @@ export class CinematicCompositor {
         this.base[j + ch] = (opaque ? v * a + channel(k, shift) * (1 - a) : v * a) * shade;
         // Native HDR already contains Painter emissions: max avoids double-counting
         // the 8-bit mirror, while still including direct legacy-buffer writes.
-        this.emission[j + ch] = Math.max(channel(l, shift) * lightStrength, nativeHDR?.[j + ch] ?? 0) + (extra?.[j + ch] ?? 0);
+        this.emission[j + ch] = Math.max(channel(l, shift), nativeHDR?.[j + ch] ?? 0) * lightStrength + (extra?.[j + ch] ?? 0);
       }
     }
     if (bloom && n) this.buildBloom(Math.max(0, bloom.threshold ?? 0.16), Math.max(0, bloom.knee ?? 0.18));
 
     const mapper = options.toneMap ?? "aces", exposure = Math.max(0, options.exposure ?? 1.15);
+    const highlightColor = clamp01(options.highlightColor ?? 0);
     const saturation = Math.max(0, options.saturation ?? 1.08);
     const contrast = Math.max(0, options.contrast ?? 1.04);
     const vignette = clamp01(options.vignette ?? 0.08);
@@ -231,9 +235,26 @@ export class CinematicCompositor {
       let alpha = this.alpha[i];
       if (!opaque) alpha = Math.max(alpha, clamp01(Math.max(r, g, b) * 0.85));
       const invA = alpha > 0 ? 1 / alpha : 0;
-      r = tone(r * exposure * invA, mapper);
-      g = tone(g * exposure * invA, mapper);
-      b = tone(b * exposure * invA, mapper);
+      if (highlightColor > 0 && mapper !== "none") {
+        r = r * exposure * invA; g = g * exposure * invA; b = b * exposure * invA;
+        // Independent channel curves converge toward white under heavy exposure.
+        // Blend only HDR highlights toward a single peak-based compression scale.
+        // The smooth onset leaves midtones and the established default grade alone.
+        const peak = Math.max(r, g, b), onset = clamp01((peak - 1) / 3);
+        const preserve = highlightColor * onset * onset * (3 - 2 * onset);
+        if (preserve > 0) {
+          const scale = tone(peak, mapper) / peak;
+          r = tone(r, mapper) * (1 - preserve) + r * scale * preserve;
+          g = tone(g, mapper) * (1 - preserve) + g * scale * preserve;
+          b = tone(b, mapper) * (1 - preserve) + b * scale * preserve;
+        } else {
+          r = tone(r, mapper); g = tone(g, mapper); b = tone(b, mapper);
+        }
+      } else {
+        r = tone(r * exposure * invA, mapper);
+        g = tone(g * exposure * invA, mapper);
+        b = tone(b * exposure * invA, mapper);
+      }
       const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
       const fade = 1 - vignette * edge * edge;
       r = (luminance + (r - luminance) * saturation - 0.18) * contrast + 0.18;
