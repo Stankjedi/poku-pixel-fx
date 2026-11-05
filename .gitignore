@@ -1,4 +1,7 @@
 node_modules/
+node_modules
+native/**/target/
+.qa/
 dist/
 records/
 sheets/

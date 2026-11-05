@@ -70,6 +70,12 @@ export class Rng {
   constructor(seed: number = 1) {
     this.s = seed >>> 0 || 1;
   }
+  /** Explicit RNG state for deterministic checkpoint/restore; does not change the seed algorithm. */
+  captureState():number { return this.s; }
+  restoreState(state:number):void {
+    if(!Number.isSafeInteger(state)||state<0||state>0xffffffff)throw new RangeError('RNG state must be uint32');
+    this.s=state;
+  }
   next() {
     let t = (this.s = (this.s + 0x6d2b79f5) >>> 0);
     t = Math.imul(t ^ (t >>> 15), t | 1);

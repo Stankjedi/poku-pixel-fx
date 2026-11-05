@@ -1,0 +1,168 @@
+{
+  "schema": "poku.project/v1",
+  "id": "explosions/layered-detonation",
+  "name": "explosion",
+  "kind": "recipe",
+  "seed": 1,
+  "options": {
+    "seed": 1
+  },
+  "fps": 30,
+  "bg": "dark",
+  "actor": false,
+  "target": false,
+  "layers": {},
+  "edits": [],
+  "notes": "짧은 압력 전선 뒤에 겹치는 고체 화구, 무거운 파편, 늦게 식는 연기가 남는다.",
+  "recipe": {
+    "schema": "poku.effect-recipe/v1",
+    "kind": "explosion",
+    "intentRef": "../../authoring/explosions/layered-detonation.intent.json",
+    "duration": 2.4,
+    "loop": false,
+    "seed": 1,
+    "size": [
+      320,
+      180
+    ],
+    "origin": [
+      50,
+      146
+    ],
+    "parameters": {
+      "width": 5,
+      "spin": 1.8,
+      "travel": 1.1,
+      "density": 20,
+      "glow": 0.45,
+      "trail": 0.11,
+      "material": "metal",
+      "palette": [
+        "#241c32",
+        "#6f2941",
+        "#bf4939",
+        "#f68a3c",
+        "#ffd778",
+        "#fff1c9"
+      ]
+    },
+    "path": [
+      [
+        0,
+        -36
+      ],
+      [
+        76,
+        -79
+      ],
+      [
+        162,
+        -59
+      ],
+      [
+        210,
+        -27
+      ]
+    ],
+    "tracks": {
+      "environment": [
+        {
+          "time": 0,
+          "value": 0
+        },
+        {
+          "time": 0.12,
+          "value": 1
+        },
+        {
+          "time": 1.728,
+          "value": 1
+        },
+        {
+          "time": 2.4,
+          "value": 0
+        }
+      ],
+      "trail": [
+        {
+          "time": 0,
+          "value": 0
+        },
+        {
+          "time": 0.12,
+          "value": 1
+        },
+        {
+          "time": 1.728,
+          "value": 1
+        },
+        {
+          "time": 2.4,
+          "value": 0
+        }
+      ],
+      "body": [
+        {
+          "time": 0,
+          "value": 0
+        },
+        {
+          "time": 0.12,
+          "value": 1
+        },
+        {
+          "time": 1.728,
+          "value": 1
+        },
+        {
+          "time": 2.4,
+          "value": 0
+        }
+      ],
+      "debris": [
+        {
+          "time": 0,
+          "value": 0
+        },
+        {
+          "time": 0.12,
+          "value": 1
+        },
+        {
+          "time": 1.728,
+          "value": 1
+        },
+        {
+          "time": 2.4,
+          "value": 0
+        }
+      ],
+      "glow": [
+        {
+          "time": 0,
+          "value": 0
+        },
+        {
+          "time": 0.12,
+          "value": 1
+        },
+        {
+          "time": 1.728,
+          "value": 1
+        },
+        {
+          "time": 2.4,
+          "value": 0
+        }
+      ]
+    },
+    "layers": {
+      "body": true,
+      "trail": true,
+      "glow": true,
+      "debris": true,
+      "environment": true
+    }
+  },
+  "intentRef": "../../authoring/explosions/layered-detonation.intent.json"
+}

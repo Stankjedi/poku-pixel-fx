@@ -1,0 +1,33 @@
+{
+  "schema": "poku.bundle-metrics/v1",
+  "unit": "uncompressed JavaScript bytes",
+  "entries": {
+    "gallery/app.ts": {
+      "entry": "build-gallery/app.js",
+      "entryBytes": 193976,
+      "staticGraphBytes": 958166
+    },
+    "gallery/3d.ts": {
+      "entry": "build-gallery/3d.js",
+      "entryBytes": 259460,
+      "staticGraphBytes": 345858
+    },
+    "gallery/studio.ts": {
+      "entry": "build-gallery/studio.js",
+      "entryBytes": 64823,
+      "staticGraphBytes": 805260
+    },
+    "gallery/studio-worker.ts": {
+      "entry": "build-gallery/studio-worker.js",
+      "entryBytes": 2426,
+      "staticGraphBytes": 703688
+    }
+  },
+  "lazyModuleEntries": 274,
+  "baseline": {
+    "commit": "b5f72dd125d90e5c53643ca9c79aebbf80e3d520",
+    "monolithicGalleryJavaScriptBytes": 2465710
+  },
+  "galleryStaticGraphReductionPercent": 61.14,
+  "scope": "Uncompressed JavaScript static dependency graph only. Visible lazy effect modules, CSS, fonts, compression, transfer timing and device performance are excluded."
+}

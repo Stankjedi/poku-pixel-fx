@@ -6,6 +6,13 @@
   font-display: swap;
   src: url(fonts/PokuPixel-Regular.ttf) format("truetype");
 }
+@font-face {
+  font-family: "Poku Studio UI";
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  src: url(fonts/SUIT-Variable.woff2) format("woff2");
+}
 :root {
   --ground: #000000;
   --panel: #111111;
@@ -14,9 +21,9 @@
   --quiet: #999999;
   --line: #333333;
   --patch: #f53cd1;
-  --display: "Poku Pixel", ui-monospace, "SFMono-Regular", monospace;
-  --text: "Poku Pixel", system-ui, sans-serif;
-  --mono: "Poku Pixel", ui-monospace, monospace;
+  --display: "Poku Pixel", "Poku Studio UI", ui-monospace, "SFMono-Regular", monospace;
+  --text: "Poku Pixel", "Poku Studio UI", system-ui, sans-serif;
+  --mono: "Poku Pixel", "Poku Studio UI", ui-monospace, monospace;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }

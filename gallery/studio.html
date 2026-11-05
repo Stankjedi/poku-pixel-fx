@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POKU Pixel FX · Studio</title>
+<meta name="description" content="픽셀 이펙트와 캐릭터의 의도, 시간, 레이어, 팔레트를 편집하고 게임 자산으로 내보내는 제작 화면">
+<link rel="stylesheet" href="studio.css">
+</head>
+<body>
+<header><a class="brand" href="index.html"><span class="brand-mark"></span>POKU <strong>STUDIO</strong></a><span class="project-name" id="project-name">새 프로젝트</span><nav><button id="open">열기</button><button id="save">프로젝트 저장</button><button id="undo" disabled>실행 취소</button><button id="redo" disabled>다시 실행</button><a href="3d.html">3D 작업실 ↗</a><button class="primary" id="export">Atlas 내보내기</button></nav></header>
+<main>
+<aside class="library">
+  <div class="panel-head"><h2>제작 시작</h2><span>01</span></div>
+  <p class="muted">형태와 움직임이 정해진 템플릿에서 시작하세요.</p>
+  <div id="recipes" class="recipe-grid"></div>
+  <label>새 캐릭터 높이 <select id="new-character-height"><option>32</option><option>48</option><option>64</option><option selected>96</option><option>128</option><option>192</option></select></label>
+  <button class="wide" id="new-character">+ 캐릭터 제작</button>
+  <div class="panel-head"><h2>효과 라이브러리</h2><span id="library-count"></span></div>
+  <label class="sr-only" for="search">효과 검색</label><input id="search" placeholder="검, 회전, 물, 접촉…" type="search">
+  <div id="results" class="results"></div>
+  <section class="intent"><h2>제작 의도</h2><label>한눈에 보여야 할 의미<textarea id="intent" rows="3" placeholder="무엇이 어떤 힘으로 움직이고, 무엇이 달라지나요?"></textarea></label><label>의도서 경로<input id="intent-ref" placeholder="authoring/melee/effect.intent.json"></label><button id="import-review">검토 기록 열기</button><div id="observations"></div></section>
+</aside>
+<section class="workbench">
+  <div class="viewport-tools"><label>배경 <select id="background"><option value="dark">어두움</option><option value="light">밝음</option><option value="ground">게임 바닥</option><option value="none">투명</option></select></label><label>배율 <select id="zoom"><option value="integer">정수 맞춤</option><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="fit">화면 맞춤</option></select></label><label>보기 <select id="diagnostic"><option value="color">원본</option><option value="silhouette">실루엣</option><option value="value">명암</option><option value="gaps">픽셀 진단</option><option value="motion">시간 변화</option></select></label><label>렌더러 <select id="backend"><option value="cpu">CPU</option><option value="webgpu">WebGPU HDR</option></select></label></div>
+  <div class="viewport" id="viewport"><canvas id="stage" aria-label="픽셀 이펙트와 캐릭터 제작 화면"></canvas><span class="view-label" id="view-label">320 × 180 · 정수 픽셀</span></div>
+  <div class="transport"><button id="restart" title="처음">↤</button><button id="previous" title="이전 프레임">−1</button><button id="play" class="primary">재생</button><button id="next" title="다음 프레임">+1</button><output id="time">0.00 s</output><label><input id="onion" type="checkbox">어니언 스킨</label><label>속도 <select id="speed"><option value=".25">¼×</option><option value=".5">½×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label></div>
+  <label class="sr-only" for="timeline">시간 이동</label><input class="timeline" id="timeline" type="range" min="0" max="2.2" step=".033333" value="0">
+  <div id="markers" class="markers" aria-label="발사와 접촉 마커"></div>
+  <section class="edit-tools"><label>픽셀 도구 <select id="brush"><option value="none">선택 / 이동</option><option value="color">그리기</option><option value="erase">지우기</option><option value="emission">발광</option><option value="mask">의미 마스크</option></select></label><label>색 <input id="brush-color" type="color" value="#a5edf1"></label><label>크기 <input id="brush-size" type="number" min="1" max="16" value="1"></label><label>범위 <select id="edit-scope"><option value="frame">현재 프레임</option><option value="all">전체 프레임</option></select></label><label id="target-label" hidden>편집 레이어 <select id="edit-target"><option>body</option></select></label><label id="mask-operation-label" hidden>마스크 연산 <select id="mask-operation"><option value="+">추가</option><option value="-">해제</option></select></label><label id="mask-label" hidden>마스크 <select id="mask-name"><option>solidSubject</option><option>negativeSpace</option><option>featureMask</option><option>skin</option><option>cloth</option><option>metal</option></select></label><button id="save-frame">현재 PNG</button></section>
+  <div class="work-status"><span id="status" role="status">프로젝트 준비 중</span><span id="performance"></span></div>
+  <div id="downloads" class="downloads"></div><button id="cancel-export" hidden>내보내기 취소</button>
+</section>
+<aside class="inspector">
+  <div class="panel-head"><h2>속성</h2><span>02</span></div>
+  <div class="field-row"><label>Seed<input id="seed" type="number" min="0" max="4294967295" step="1" value="1"></label><label>FPS<input id="fps" type="number" min="1" max="120" value="30"></label></div>
+  <label>클립 길이 (초)<input id="duration" type="number" min=".1" max="60" step=".1" value="2.2"></label>
+  <div id="character-controls"></div><div id="parameters"></div>
+  <section><h2>레이어</h2><div id="layers"></div></section>
+  <section><h2>곡선과 경로</h2><label>트랙<select id="track"><option value="body">본체</option><option value="trail">잔상</option><option value="glow">발광</option><option value="debris">파편</option><option value="environment">환경</option></select></label><canvas id="curve" width="260" height="110" aria-label="시간 곡선. 클릭하여 키 추가, 드래그하여 이동"></canvas><p class="hint">클릭: 키 추가 · 드래그: 값/시간 이동 · 우클릭: 키 삭제</p><div id="path-fields"></div></section>
+  <section><h2>픽셀 스타일</h2><label>팔레트 정책<select id="color-policy"><option value="cinematic">자유 색상 + 발광</option><option value="palette-locked">최종 팔레트 고정</option></select></label><label>알파<select id="alpha-policy"><option value="coverage">Coverage</option><option value="solid">불투명 면</option><option value="authored-dither">Ordered dither</option></select></label><label>외곽선<select id="outline-policy"><option value="none">원본 유지</option><option value="silhouette">전체 실루엣</option><option value="selective">선택적 외곽선</option></select></label><label>디더 좌표<select id="dither-anchor"><option value="object">물체</option><option value="world">월드</option><option value="screen">화면</option></select></label></section>
+  <details><summary>프로젝트 JSON</summary><textarea id="project-json" rows="12" spellcheck="false" aria-label="프로젝트 JSON"></textarea><button id="apply-json">JSON 적용</button></details>
+</aside>
+</main>
+<input id="open-file" type="file" accept=".json" hidden><input id="review-file" type="file" accept=".json" hidden>
+<script type="module" src="studio.js"></script>
+</body></html>

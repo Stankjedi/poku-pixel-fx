@@ -1,0 +1,26 @@
+{
+  "schema": "poku.character-example-render/v1",
+  "nativeReference": [
+    864,
+    576
+  ],
+  "nativeTechniques": [
+    576,
+    232
+  ],
+  "playback": {
+    "frames": 60,
+    "fps": 30,
+    "duration": 2,
+    "frameSize": [
+      192,
+      160
+    ],
+    "clip": "idle"
+  },
+  "review": {
+    "nativeContactSheetObserved": false,
+    "fullSpeedObserved": false,
+    "notes": "Rendering alone is not visual acceptance; record actual observations separately."
+  }
+}

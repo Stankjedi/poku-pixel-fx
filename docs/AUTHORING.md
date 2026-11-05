@@ -236,7 +236,7 @@ your eyes, feed your references.
    `--all` every frame, `--mp4` motion).
 4. **Benchmark**: put his and yours next to each other at the same height on screen. If his has more detail, light
    or life, yours isn't done.
-5. **Fix the worst thing, render again.** Three rounds minimum; showpieces take more.
+5. **Fix the worst observed defect, then inspect again.** Stop when the intent and visual acceptance criteria pass; do not invent work to meet an iteration count. Record remaining limitations.
 6. **Act it out** if there's a character: `node build-tools/tools/act.mjs <id>`. Consecutive frames, not samples.
 7. **Check**: `node build-tools/tools/check.mjs <id>` until it passes clean.
 

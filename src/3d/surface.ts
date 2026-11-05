@@ -9,6 +9,14 @@ const pack = (r: number, g: number, b: number) => {
   return value ? (value | 0xff000000) >>> 0 : 0;
 };
 
+export interface SurfaceDiagnostics3D {
+  submitted: number; accepted: number; rejected: number; opaque: number; transparent: number;
+  maxLayersPerPixel: number; resolves: number; recomposedFragments: number;
+  arenaCapacity: number; arenaBytes: number; activeFragments: number;
+  budget: number | null; budgetExceeded: boolean;
+}
+export interface SurfaceBudget3D { /** Exact rendering throws instead of silently dropping fragments. */ maxFragments?: number }
+
 /**
  * Exact per-pixel far-to-near source-over. The common ordered append is O(1);
  * only a fragment inserted behind existing translucency recomposes that pixel.
@@ -35,6 +43,10 @@ export class SurfaceFragments3D {
   private screenHDR?: Float32Array;
   private surfaceLight?: Uint32Array;
   private surfaceHDR?: Float32Array;
+  private layers?: Uint32Array;
+  private maxFragments = Infinity;
+  private metrics = { submitted: 0, accepted: 0, rejected: 0, opaque: 0, transparent: 0,
+    maxLayersPerPixel: 0, resolves: 0, recomposedFragments: 0, budgetExceeded: false };
 
   constructor(readonly frame: Frame3D) {}
 
@@ -44,6 +56,23 @@ export class SurfaceFragments3D {
     this.screenHDR?.fill(0); this.surfaceHDR?.fill(0);
     // Enabling/disabling HDR is allowed between frames, without stale optional arrays.
     if (!this.frame.hdrLight) { this.baseHDR = this.screenHDR = this.surfaceHDR = undefined; }
+    this.layers?.fill(0);
+    this.metrics = { submitted: 0, accepted: 0, rejected: 0, opaque: 0, transparent: 0,
+      maxLayersPerPixel: 0, resolves: 0, recomposedFragments: 0, budgetExceeded: false };
+  }
+
+  configure(budget: SurfaceBudget3D = {}) {
+    const n = budget.maxFragments ?? Infinity;
+    if (n !== Infinity && (!Number.isSafeInteger(n) || n < 1)) throw new RangeError('maxFragments must be a positive integer');
+    this.maxFragments = n;
+  }
+  diagnostics(): Readonly<SurfaceDiagnostics3D> {
+    const arrays = [this.next, this.z, this.colors, this.alphas, this.depthWrites, this.energy,
+      this.heads, this.tails, this.layers, this.baseColor, this.baseLight, this.baseDepth, this.baseHDR,
+      this.screenLight, this.screenHDR, this.surfaceLight, this.surfaceHDR];
+    return Object.freeze({ ...this.metrics, arenaCapacity: this.capacity,
+      arenaBytes: arrays.reduce((n, a) => n + (a?.byteLength ?? 0), 0), activeFragments: this.layers?.reduce((sum, count) => sum + count, 0) ?? 0,
+      budget: this.maxFragments === Infinity ? null : this.maxFragments });
   }
 
   private prepare() {
@@ -52,6 +81,7 @@ export class SurfaceFragments3D {
       this.heads = new Uint32Array(n); this.tails = new Uint32Array(n);
       this.baseColor = new Uint32Array(n); this.baseLight = new Uint32Array(n);
       this.baseDepth = new Float32Array(n);
+      this.layers = new Uint32Array(n);
     }
     if (this.frame.hdrLight && !this.baseHDR) this.baseHDR = new Float32Array(this.frame.w * this.frame.h * 3);
     if (this.count + 1 < this.capacity) return;
@@ -91,11 +121,13 @@ export class SurfaceFragments3D {
   }
 
   private resolve(i: number) {
+    this.metrics.resolves++;
     this.frame.color[i] = this.baseColor![i];
     const light = this.baseLight![i], j = i * 3, hdr = this.baseHDR;
     this.writeLight(i, light & 255, (light >>> 8) & 255, (light >>> 16) & 255, hdr?.[j] ?? 0, hdr?.[j + 1] ?? 0, hdr?.[j + 2] ?? 0);
     let depth = this.baseDepth![i];
     for (let k = this.heads![i]; k; k = this.next[k]) {
+      this.metrics.recomposedFragments++;
       const e = k * 6;
       this.over(i, this.colors[k], this.alphas[k], this.energy[e], this.energy[e + 1], this.energy[e + 2], this.energy[e + 3], this.energy[e + 4], this.energy[e + 5]);
       if (this.depthWrites[k]) depth = Math.max(depth, this.z[k]);
@@ -114,11 +146,15 @@ export class SurfaceFragments3D {
   /** Preintegrated coverage/emission for custom raster materials (e.g. volume rays). */
   layer(i: number, depth: number, color: number, alpha: number, lr: number, lg: number, lb: number, hr: number, hg: number, hb: number, depthWrite = true) {
     const z = Math.fround(depth), opacity = alpha * (color >>> 24) / 255;
-    if (opacity <= 0 || z < this.opaqueDepth(i)) return false;
+    this.metrics.submitted++;
+    const emissiveOnly = !depthWrite && Math.max(lr, lg, lb, hr, hg, hb) > 0;
+    if ((opacity <= 0 && !emissiveOnly) || z < this.opaqueDepth(i)) { this.metrics.rejected++; return false; }
     let head = this.heads?.[i] ?? 0;
     if (opacity >= 1 && depthWrite) {
+      this.metrics.accepted++;
+      this.metrics.opaque++;
       // A newly submitted opaque surface replaces its same-depth predecessors too.
-      while (head && this.z[head] <= z) head = this.next[head];
+      while (head && this.z[head] <= z) { head = this.next[head]; if (this.layers) this.layers[i]--; }
       if (head) {
         this.heads![i] = head; this.baseColor![i] = (color | 0xff000000) >>> 0;
         this.baseLight![i] = pack(lr, lg, lb); this.baseDepth![i] = z;
@@ -126,12 +162,22 @@ export class SurfaceFragments3D {
         this.resolve(i);
       } else {
         if (this.heads) this.heads[i] = this.tails![i] = 0;
+        if (this.layers) this.layers[i] = 0;
         this.frame.color[i] = (color | 0xff000000) >>> 0; this.frame.depth[i] = z;
         this.writeLight(i, lr, lg, lb, hr, hg, hb);
       }
       return true;
     }
+    if (this.count >= this.maxFragments) {
+      this.metrics.rejected++;
+      this.metrics.budgetExceeded = true;
+      throw new RangeError(`Exact transparency fragment budget exceeded (${this.maxFragments}); reduce overlap or bake this effect`);
+    }
     this.prepare();
+    this.metrics.accepted++;
+    this.metrics.transparent++;
+    this.layers![i]++;
+    this.metrics.maxLayersPerPixel = Math.max(this.metrics.maxLayersPerPixel, this.layers![i]);
     if (!head) {
       this.baseColor![i] = this.frame.color[i]; this.baseLight![i] = this.light()[i]; this.baseDepth![i] = this.frame.depth[i];
       if (this.baseHDR) { const hdr = this.hdr(), j = i * 3; this.baseHDR[j] = hdr?.[j] ?? 0; this.baseHDR[j + 1] = hdr?.[j + 1] ?? 0; this.baseHDR[j + 2] = hdr?.[j + 2] ?? 0; }
@@ -189,6 +235,7 @@ export class SurfaceFragments3D {
   /** Refraction/postprocessing starts a new resolved pass; existing visible depth is its input. */
   adoptResolved() {
     this.heads?.fill(0); this.tails?.fill(0); this.count = 0;
+    this.layers?.fill(0);
     if (this.surfaceLight) this.surfaceLight.set(this.frame.light);
     if (this.surfaceHDR && this.frame.hdrLight) this.surfaceHDR.set(this.frame.hdrLight);
     this.screenLight?.fill(0); this.screenHDR?.fill(0);
@@ -202,3 +249,5 @@ export function surfacesFor3D(frame: Frame3D) {
   return state;
 }
 export function resetSurfaces3D(frame: Frame3D) { states.get(frame)?.reset(); }
+export function surfaceDiagnostics3D(frame: Frame3D): Readonly<SurfaceDiagnostics3D> { return surfacesFor3D(frame).diagnostics(); }
+export function configureSurfaceBudget3D(frame: Frame3D, budget: SurfaceBudget3D): void { surfacesFor3D(frame).configure(budget); }

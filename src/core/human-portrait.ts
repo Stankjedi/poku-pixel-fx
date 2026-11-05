@@ -1,3 +1,4 @@
+import { blitSprite2D } from './sprite-raster.js';
 /** Original adult portrait studies. Native face budgets, semantic eyes and joined color masses. */
 import { Painter } from './painter.js';
 import { hex } from './color.js';
@@ -19,6 +20,8 @@ export interface HumanPortraitStyle {
   clothing?:'blouse'|'coat'|'knit';
   cloth?:'ocean'|'rose'|'moss'|'violet';
   outline?:string|null;
+  /** Palette identity shared with native full-body construction, without resizing either image. */
+  palettes?:{skin?:readonly[string,string,string,string];hair?:readonly[string,string,string,string];cloth?:readonly[string,string,string,string];eyes?:readonly[string,string,string]};
 }
 export interface HumanPortraitPose {
   expression?:HumanPortraitExpression;gaze?:number;blink?:boolean;
@@ -42,6 +45,7 @@ function validate(style:HumanPortraitStyle,pose:HumanPortraitPose){
   for(const[key,allowed]of Object.entries(choices)){const value=(style as Record<string,unknown>)[key];if(value!==undefined&&!allowed.includes(value as string))throw new RangeError(`Unknown portrait ${key}: ${value}`);}
   if(style.canvas!==undefined&&(!Array.isArray(style.canvas)||style.canvas.length!==2||!Array.from(style.canvas).every(n=>Number.isInteger(n)&&n>=resolution&&n<=512)))throw new RangeError('Portrait canvas must be two integers from resolution through 512');
   if(style.outline!==undefined&&style.outline!==null&&!/^#(?:[a-f\d]{3}|[a-f\d]{6})$/i.test(style.outline))throw new TypeError('Portrait outline must be null or a hex color');
+  for(const[key,colors]of Object.entries(style.palettes??{}))if(!['skin','hair','cloth','eyes'].includes(key)||!Array.isArray(colors)||colors.length!==(key==='eyes'?3:4)||!colors.every(c=>typeof c==='string'&&/^#(?:[a-f\d]{3}|[a-f\d]{6})$/i.test(c)))throw new RangeError('Invalid shared portrait palette');
   if(!['neutral','smile','determined','surprised'].includes(pose.expression??'neutral'))throw new RangeError('Unknown portrait expression');
   for(const key of['time','gaze']as const)if(pose[key]!==undefined&&!Number.isFinite(pose[key]))throw new RangeError(`${key} must be finite`);
   for(const key of['blink','reducedMotion']as const)if(pose[key]!==undefined&&typeof pose[key]!=='boolean')throw new TypeError(`${key} must be boolean`);
@@ -58,7 +62,7 @@ function renderPortraitUncached(style:HumanPortraitStyle={},pose:HumanPortraitPo
   const [w,h]=style.canvas??[resolution,resolution],s=resolution/128,t=((pose.time??0)%2+2)%2,compact=resolution===64,rich=resolution===192;
   // Idle is a blink, not a rigid whole-bust bob or an unsupported hair simulation.
   const ox=Math.floor((w-resolution)/2),oy=Math.floor((h-resolution)/2),cx=ox+Math.round(resolution*.5),cy=oy+Math.round(resolution*.375);
-  const skin=characterPalette(SKIN[style.skin??'warm']),hair=characterPalette(HAIR[style.hairColor??'ink']),cloth=characterPalette(CLOTH[style.cloth??'ocean']),iris=characterPalette(EYES[style.eyes??'teal']);
+  const skin=characterPalette(style.palettes?.skin??SKIN[style.skin??'warm']),hair=characterPalette(style.palettes?.hair??HAIR[style.hairColor??'ink']),cloth=characterPalette(style.palettes?.cloth??CLOTH[style.cloth??'ocean']),iris=characterPalette(style.palettes?.eyes??EYES[style.eyes??'teal']);
   const base=frame(w,h),face=frame(w,h),front=frame(w,h),eye=frame(w,h),safe=frame(w,h),p=new Painter(base),fp=new Painter(face),hp=new Painter(front),ep=new Painter(eye),rp=new Painter(safe);
   const pt=(x:number,y:number):[number,number]=>[cx+Math.round(x*s),cy+Math.round(y*s)];
   const poly=(p:Painter,a:number[][],c:number)=>p.poly(a.map(([x,y])=>pt(x,y)),c);
@@ -209,4 +213,4 @@ export function renderHumanPortrait2D(style:HumanPortraitStyle={},pose:HumanPort
   } else {portraitCache.delete(key);portraitCache.set(key,a);}
   return {...a,pixels:a.pixels.slice(),mask:{...a.mask,data:a.mask.data.slice()},faceMask:a.faceMask.slice(),eyeRegionMask:a.eyeRegionMask.slice(),eyeMask:a.eyeMask.slice(),frontHairMask:a.frontHairMask.slice(),headAnchor:[...a.headAnchor],eyeAnchors:[[...a.eyeAnchors[0]],[...a.eyeAnchors[1]]]};
 }
-export function drawHumanPortrait2D(p:Painter,style:HumanPortraitStyle={},pose:HumanPortraitPose={}):HumanPortraitSprite {const a=renderHumanPortrait2D(style,pose);for(let y=0;y<a.h;y++)for(let x=0;x<a.w;x++)if(a.pixels[y*a.w+x])p.px(x,y,a.pixels[y*a.w+x]);return a;}
+export function drawHumanPortrait2D(p:Painter,style:HumanPortraitStyle={},pose:HumanPortraitPose={}):HumanPortraitSprite {const a=renderHumanPortrait2D(style,pose);blitSprite2D(p,a);return a;}

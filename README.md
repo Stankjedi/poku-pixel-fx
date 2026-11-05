@@ -4,11 +4,36 @@
 
 > **Origin:** POKU Pixel FX is a Korean-localized, TypeScript-based open-source fork/derivative of [PixelFX by Patch](https://github.com/patch-gg/pixelfx). This repository is maintained separately and is not linked as a GitHub network fork. The upstream MIT license credits Patch and Hugo Duprez; see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for copyright and third-party notices.
 
+## 0.4 Studio · GPU · CharacterAsset
+
+0.4는 **저장 가능한 제작 프로젝트**를 중심으로 편집·검토·게임 자산 출력을 연결합니다. [Studio 사용법](docs/STUDIO.md), [80개 개선 항목의 구현과 검증 범위](docs/IMPROVEMENT_IMPLEMENTATION.md)를 함께 읽으세요.
+
+```sh
+npm ci
+npm run build
+npm run gallery
+```
+
+`http://127.0.0.1:8080/gallery/studio.html`에서 투척 검·검격 리본·번개·폭발·불꽃·포털 템플릿을 편집하거나 캐릭터를 만듭니다. 프로젝트 파일은 seed, 파라미터, 레이어, 시간 곡선, 팔레트 정책, 프레임별 픽셀 수정, 캐릭터와 장비를 보존합니다.
+
+```sh
+npm run render -- --project examples/projects/thrown-blade.poku-project.json --bundle --trim --deduplicate
+npm run render -- --project examples/projects/wayfarer-sword.poku-project.json --bundle
+npm run render -- --project examples/projects/frost-native.poku-project.json --bundle
+```
+
+- [WebGPU / native wgpu](docs/GPU_RENDERING.md): GPU HDR·bloom·tone mapping, DrawIR 배치 래스터, 장식 입자, 동일 WGSL을 사용하는 Rust 참조 플레이어. 기존 CPU 및 WebGL2 경로도 유지됩니다.
+- [캐릭터](docs/CHARACTER_STUDIO.md): 원본 4종, 확장 동작, 장비·방향성 소켓, 저장되는 cel/의미 마스크, root motion·이벤트와 초상화 identity.
+- [픽셀 도구](docs/PIXEL_TOOLKIT.md): 역변환 셀 래스터, indexed palette, 좌표 기준 디더, 선택적 외곽선, authored AA/subpixel, 재질 ramp, 진단과 12개 예제.
+- [게임 자산](docs/ASSET_EXPORT.md): 투명 RGBA + linear HDR, 다중 atlas, trim·dedup, 시간·pivot·소켓·해시, Aseprite와 공유 사이트 metadata 보존.
+
+새 GPU 경로는 opt-in입니다. 실제 그래픽카드별 성능은 별도 측정 대상이며, 저장소의 검증 기록은 사용한 어댑터와 확인 범위를 명시합니다. 원화 예제의 생성, 실제 시각 관찰, 사용자 승인은 각각 기록됩니다.
+
 ## 한국어 빠른 시작
 
 공개 사이트의 소스와 실행·배포 안내는 [site/README.md](site/README.md)에 있습니다. 라이브러리 갤러리와 공유 사이트는 별도 앱이며, 공유 사이트에는 최신순·높은 별점순과 공개 작품 기능이 포함되어 있습니다.
 
-Node.js 18 이상과 로컬 개발 의존성을 준비한 뒤 `npm run build`를 실행합니다. `npm run gallery`를 실행하고 브라우저에서 `http://127.0.0.1:8080/gallery/`를 열면 한국어로 이펙트를 검색하고 미리 볼 수 있습니다. 상세 화면에서 스프라이트 시트를 생성한 뒤 PNG 시트 또는 움직이는 WebP 애니메이션으로 내려받을 수 있습니다. WebP는 상세 미리보기의 설정을 반영하며 브라우저 압축으로 색상이 달라질 수 있습니다. 정확한 색상이 필요하면 PNG를 사용하세요.
+Node.js 20 이상과 로컬 개발 의존성을 준비한 뒤 `npm run build`를 실행합니다. `npm run gallery`를 실행하고 브라우저에서 `http://127.0.0.1:8080/gallery/`를 열면 한국어로 이펙트를 검색하고 미리 볼 수 있습니다. 상세 화면에서 스프라이트 시트를 생성한 뒤 PNG 시트 또는 움직이는 WebP 애니메이션으로 내려받을 수 있습니다. WebP는 상세 미리보기의 설정을 반영하며 브라우저 압축으로 색상이 달라질 수 있습니다. 정확한 색상이 필요하면 PNG를 사용하세요.
 
 사이트의 기본 효과 파일을 현재 라이브러리 코드와 맞추려면 저장소 루트에서 `npm run sync:site`를 실행합니다. 공유 사이트는 공유 원본을 별도 게시물로 표시하므로 해당 원본의 로컬 라이브러리 복사본을 기본 효과 목록에서 제외합니다. 로컬 라이브러리 갤러리에서는 두 복사본을 볼 수 있습니다.
 
@@ -17,16 +42,16 @@ Node.js 18 이상과 로컬 개발 의존성을 준비한 뒤 `npm run build`를
 - `node build-tools/tools/new.mjs fire/my-effect`: 새 TypeScript 이펙트를 만들고 목록에 등록. 다시 빌드한 뒤 사용
 - `node build-tools/tools/check.mjs fire/torch`: 이펙트의 품질 및 동작 검사
 
-**Aseprite 편집 연동:** `npm run aseprite -- export fire/torch --out ./aseprite-work/torch`로 투명 PNG/JSON을 만들고, 명시한 Aseprite 실행 파일로 편집용 문서를 생성하거나 편집 결과를 엔진으로 가져올 수 있습니다. 가변 프레임 시간·투명도·태그를 유지하며, 원래 절차형 레이어와 발광 버퍼는 평면 이미지로 합쳐집니다. 실제 앱 실행 검증 범위와 사용법은 [Aseprite 연결 문서](docs/ASEPRITE_BRIDGE.md)를 확인하세요.
+**Aseprite 편집 연동:** `npm run aseprite -- export fire/torch --out ./aseprite-work/torch`로 투명 PNG/JSON을 만들고, 명시한 Aseprite 실행 파일로 편집용 문서를 생성하거나 편집 결과를 엔진으로 가져올 수 있습니다. 가변 프레임 시간·투명도·태그·slice 소켓을 유지합니다. `--layers`는 색상 레이어와 HDR sidecar를 분리하고, 편집 중 유지·수정·삭제한 발광을 명시적으로 다시 가져옵니다. 기본 평면 내보내기도 계속 사용할 수 있습니다. 실제 앱 실행 검증 범위와 사용법은 [Aseprite 연결 문서](docs/ASEPRITE_BRIDGE.md)를 확인하세요.
 
 **선택형 GPU 합성:** 상세 미리보기의 “GPU 합성 시도” 또는 `FrameRenderer(canvas, { backend: "auto" })`로 WebGL2 색·광원 합성을 사용할 수 있습니다. 픽셀 작성·시뮬레이션은 CPU이며 GPU가 불가하면 이유와 함께 CPU로 돌아갑니다. 실제 장치 검증 범위와 제약은 [GPU 합성 문서](docs/GPU_COMPOSITING.md)를 확인하세요.
 
-**새 선택형 시네마틱 엔진:** 기존 255개 2D 이펙트 및 3D 이펙트 파일을 변경하지 않고, 선형 RGB 기반 HDR 발광 누적, 멀티스케일 블룸, ACES 톤매핑, 월드 좌표 3D 포인트 광원 및 SSAO를 추가했습니다. `enableHDRLight(frame)`로 8비트 포화 없는 발광을 활성화하고, `CinematicCompositor`로 픽셀 경계를 보존하면서 후처리할 수 있습니다. 3D 프리뷰의 **CINEMATIC** 스위치에서 기존 출력과 비교할 수 있습니다. 사용법과 제약은 [시네마틱 렌더링 문서](docs/CINEMATIC_RENDERER.md)를 참고하세요.
+**새 선택형 시네마틱 엔진:** 기존 2D/3D 이펙트의 기본 경로를 보존하면서, 선형 RGB 기반 HDR 발광 누적, 멀티스케일 블룸, ACES 톤매핑, 월드 좌표 3D 포인트 광원 및 SSAO를 추가했습니다. `enableHDRLight(frame)`로 8비트 포화 없는 발광을 활성화하고, `CinematicCompositor`로 픽셀 경계를 보존하면서 후처리할 수 있습니다. 3D 프리뷰의 **CINEMATIC** 스위치에서 기존 출력과 비교할 수 있습니다. 사용법과 제약은 [시네마틱 렌더링 문서](docs/CINEMATIC_RENDERER.md)를 참고하세요.
 
 GIF·MP4 미리보기에는 로컬 ffmpeg가 필요합니다. 갤러리의 한글은 시스템 글꼴 대체를 사용하며 Poku Pixel 글꼴은 영문·숫자·기본 기호를 제공합니다. 이펙트 식별자와 코드 API, 내보낸 원본 메타데이터는 호환성을 위해 그대로 유지합니다.
 
 
-**<!-- count -->266<!-- /count --> pixel art effects and animations, every one a small piece of code.** Fire,
+**<!-- count -->274<!-- /count --> pixel art effects and animations, every one a small piece of code.** Fire,
 explosions, magic, weather, UI, pickups, critters and more. Play them live, recolor and mirror them, drop them into
 a browser game, or export sprite sheets for any engine. Plus a Claude Code skill that makes new ones the way a
 picky pixel artist would: draft, render, look, refine.
@@ -49,17 +74,17 @@ the idea at library scale, with a skill to keep going.
 | category | effects | some of them |
 |---|---|---|
 | **moves** | 12 | arrow shot, dash strike, earth stomp, fireball throw, ground pound, holy smite… |
-| **fire** | 15 | brazier, campfire, candle, convection plume, fire breath, fire ring… |
-| **explosions** | 12 | barrel explosion, big explosion, cartoon pow, dirt explosion, firework burst, firework rocket… |
+| **fire** | 16 | brazier, campfire, candle, convection plume, fire breath, fire ring… |
+| **explosions** | 13 | barrel explosion, big explosion, cartoon pow, dirt explosion, firework burst, firework rocket… |
 | **water** | 14 | abyssal maelstrom, bubbles, capillary crown, drip, fountain, geyser… |
 | **ice** | 11 | blizzard vortex, freeze, frost beam, frost breath, frost nova, ice crystal… |
-| **lightning** | 12 | ball lightning, chain lightning, charge up, electrified, ion stormburst, lightning strike… |
+| **lightning** | 13 | ball lightning, chain lightning, charge up, electrified, focused arc, ion stormburst… |
 | **sci-fi** | 12 | emp blast, energy core, force field, glitch, hologram, jetpack… |
-| **melee** | 12 | claw swipe, dagger flurry, double slash, hammer smash, heavy cleave, scythe reap… |
+| **melee** | 14 | claw swipe, dagger flurry, double slash, hammer smash, heavy cleave, scythe reap… |
 | **impacts** | 12 | blunt hit, bullet impact, critical hit, glass shatter, ground slam, heavy landing… |
-| **projectiles** | 14 | arrow, bullet tracer, cannon shot, energy disc, signal flare, homing missile… |
+| **projectiles** | 15 | arrow, bullet tracer, cannon shot, energy disc, signal flare, homing missile… |
 | **spawn & death** | 10 | coin drop, disintegrate, dissolve burn, egg hatch, poof, respawn beam… |
-| **arcane** | 16 | arcane beam, arcane missiles, arcane orb, blink in, blink out, celestial supernova… |
+| **arcane** | 18 | arcane beam, arcane missiles, arcane orb, blink in, blink out, celestial supernova… |
 | **holy** | 11 | blessing, divine shield, feather burst, halo, heal, healing ring… |
 | **shadow** | 15 | abyssal fracture, black dragon slash, black hole, curse, dark explosion, eclipse… |
 | **status** | 13 | bleeding, burning, charmed, confused, cursed, frozen… |
@@ -75,7 +100,7 @@ Every effect is a file in `src/fx/<category>/<name>.ts`. The [catalog](docs/CATA
 
 ## 3D Pixel FX Engine
 
-The optional **3D VFX engine** lives in `src/3d/` without changing the existing 2D catalog. It uses real XYZ camera projection, z-buffered pixel triangles, solid procedural crystals, 3D particles, a fixed 120 Hz timeline, seeded randomness, Bayer dither and a separate additive-light buffer. Three examples ship: **Frost Nova 3D**, **Arc Slash 3D**, and **Black Hole 3D** (3D accretion disk, gravity lens and orbiting debris).
+The optional **3D VFX engine** lives in `src/3d/` without changing the existing 2D catalog. It uses real XYZ camera projection, z-buffered pixel triangles, solid procedural crystals, 3D particles, a fixed 120 Hz timeline, seeded randomness, Bayer dither and a separate additive-light buffer. Thirteen effects ship, including **Frost Nova 3D**, **Arc Slash 3D**, **Black Hole 3D**, fire, water, wind, lightning, laser and shield scenes. A common saved render profile keeps camera, lighting and export settings consistent.
 
 - Run `npm run build && npm run gallery` and open [the 3D preview](gallery/3d.html) (live URL: `http://127.0.0.1:8080/gallery/3d.html`). Orbit the camera, adjust pixel size/glow and download a PNG snapshot.
 - Export contact sheets with `npm run render:3d -- frost --frames 24` or `npm run render:3d -- slash --frames 24`, or `npm run render:3d -- blackhole --frames 32`.
@@ -229,7 +254,7 @@ Made by [Patch](https://patch.gg).
 
 ## Local independent use
 
-Use Node 18 or newer and run `npm run build` first. Run `node build-tools/tools/render.mjs fire/torch --sheet` to export locally, or `node build-tools/tools/serve.mjs` for the gallery on 127.0.0.1. GIF/MP4 export requires a locally installed ffmpeg. Building the TypeScript sources and gallery requires the local development dependencies, including TypeScript and esbuild; the compiled effect runtime has no package dependencies. The Poku Pixel font supports ASCII letters, digits and common punctuation; other characters use system fallback fonts.
+Use Node 20 or newer and run `npm run build` first. Run `node build-tools/tools/render.mjs fire/torch --sheet` to export locally, or `node build-tools/tools/serve.mjs` for the gallery on 127.0.0.1. GIF/MP4 export requires a locally installed ffmpeg. Building the TypeScript sources and gallery requires the local development dependencies, including TypeScript and esbuild; the compiled effect runtime has no package dependencies. The Poku Pixel font supports ASCII letters, digits and common punctuation; other characters use system fallback fonts.
 
 The 2D GIF/MP4 exporter stages one native-size RGBA sequence in the system temporary directory and lets ffmpeg scale and repeat it. Temporary disk use is `width × height × 4 × frame count` bytes, plus a small GIF palette, regardless of export scale or loop count; staged files are removed after success or failure. It avoids keeping enlarged, repeated raw frames in memory. After building, run `npm run test:export` to check export behavior; real GIF/MP4 checks require both ffmpeg and ffprobe.
 
@@ -243,7 +268,7 @@ The 2D GIF/MP4 exporter stages one native-size RGBA sequence in the system tempo
 
 The migration targets TypeScript effect sources in `src/fx/<category>/<name>.ts`, TypeScript core sources in `src/core/`, and `.mts` CLI sources in `tools/`. Run `npm run build` before using the package or CLI; emitted runtime modules and declarations are in `build/`, and compiled CLI entry points are under `build-tools/tools/`. Relative source imports retain `.js` specifiers to resolve to the compiled JavaScript modules. Rebuild after editing or creating an effect before rendering it.
 
-The core, all 255 effects, the gallery and CLI tools are TypeScript sources. The earlier 244-effect baseline was sampled for reference equivalence; the ten newer effects have separate sampled render checks; black dragon slash has its own render and automated check (including a performance warning). Strict builds and a packaged-library import passed. Reference rendering compared every effect at 3 fps and representative acted effects across 14 categories; it does not prove every frame or engine integration. The native engine runtime remains a separate future task; see `docs/NATIVE_MIGRATION.md`.
+The core, registered effects, gallery and CLI tools are TypeScript sources. The 0.4 implementation adds a tested headless Rust/wgpu renderer and exported-asset player in `native/`. The full procedural TypeScript catalog is not automatically ported to native code. Current verification and platform limits are recorded in [the implementation ledger](docs/IMPROVEMENT_IMPLEMENTATION.md) and [native integration guide](docs/NATIVE_MIGRATION.md).
 
 Sprite-sheet metadata uses `meta.pokuFx`; consumers of older sheets need to migrate their metadata reader.
 
@@ -253,8 +278,8 @@ Sprite-sheet metadata uses `meta.pokuFx`; consumers of older sheets need to migr
 | DONE | Convert and type-check the TypeScript core, 244 effects, gallery and CLI |
 | DONE | Verify sampled reference output, package import, CLI exports and representative gallery flow |
 | DONE | Localize gallery, effect names, descriptions, tags and CLI messages in Korean |
-| TODO | Define and implement a native engine ABI after choosing engine and target platforms |
-| TODO | Compare native output against reference frames and verify engine integration |
+| REFERENCE | Native Rust/wgpu asset-player library and capture CLI use the shared DrawIR/WGSL; host-game/window integration remains application-specific |
+| VERIFIED SCOPE | Software-adapter parity and native asset contracts are recorded in docs/GPU_RENDERING.md; physical GPU/game integration is a separate target |
 
 ## 스킬 설치
 

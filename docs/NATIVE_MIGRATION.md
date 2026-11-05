@@ -1,21 +1,23 @@
 # Engine integration and migration
 
-Current state: TypeScript sources cover the core, all 254 effects and gallery; CLI sources use `.mts`, and `npm run build` emits JavaScript for execution. Sampled reference rendering and representative CLI, package and gallery flows have passed; full-frame equivalence and target-engine integration are not established. Node is needed for the current tools; the browser runtime uses compiled JavaScript. There is no native library or engine binding yet.
+## Implemented in 0.4
 
-## Existing exchange format
+The TypeScript package supplies the effect catalog, authoring data, browser editor and precompiled CLI. The optional `native/` crate is an actual **Rust/wgpu headless reference renderer and exported-asset player**. It requires no Node process during playback. Its scene renderer and cinematic pipeline use the canonical WGSL under `src/render/shaders/`.
 
-A sprite-sheet export consists of an RGBA PNG and Aseprite-style JSON with frame rectangles, durations and `meta.pokuFx`: effect id, frame size, pivot, frame rate, loop flag and optional act timing. This is the available engine-neutral path today. Rendering frames is the visual reference for any future port.
+Use [native/README.md](../native/README.md) for commands and embedding APIs, [GPU_RENDERING.md](GPU_RENDERING.md) for the exact renderer contracts and measured adapter scope, and [ASSET_EXPORT.md](ASSET_EXPORT.md) for the versioned asset format.
 
-## Proposed native boundary
+## Existing exchange and playback boundary
 
-Select target engines and platforms before freezing an ABI. A minimal candidate is an opaque effect instance with explicit create/update/draw/destroy operations, caller-owned RGBA buffers, dimensions and stride, configurable seed, palette, origin and timing. Define channel order, alpha and light-buffer compositing, thread ownership, error handling, lifetime, deterministic time steps, and versioning before implementation. A C ABI wrapping C++ or Rust is a candidate, not a selected implementation.
+`poku-asset/v1` retains RGBA color, independent linear HDR emission, variable frame durations, pages/trim/pivot, oriented sockets, events and integrity hashes. Optional radiance and occlusion sidecars preserve the saved 3D camera's lighting snapshot. The native player resolves the stored finishing and final-palette policy before submitting frames.
 
-## Acceptance criteria
+`Renderer::submit()` and `submit_with_lighting()` leave an output GPU texture that a game host can sample in its render pass. Explicit capture produces PNG frames and a playback trace. Resident atlas revisions avoid repeatedly uploading unchanged pixel assets. CPU scene construction and lighting restoration still perform array copies in the reference implementation.
 
-1. Type-check all migrated TypeScript without suppressing errors; retain local tools and exports.
-2. Implement the selected native runtime with no Node dependency in the game process.
-3. Compare dimensions, pivot, frame count, timing, loop seams and image pixels against reference exports for pure, simulated and acted effects; document numerical tolerances.
-4. Run an actual target-engine integration with update, draw, recolor, disposal and export or playback. Verify representative visual quality and performance on the target platform.
-5. Preserve copyright and license notices for incorporated code and assets.
+The actual native comparison harness covers DrawIR primitives, alpha/depth, palette policy, capture, asset timing and a real 3D catalog export. Its documented software-adapter measurements do not establish physical GPU performance or universal numerical identity.
 
-No native behavior is claimed until these checks pass.
+## Additional integration work
+
+The current crate does not implement a native window, a Unity/Godot/Unreal plugin, a stable C ABI, a complete skeletal physics engine, or automatic execution of arbitrary TypeScript effect callbacks. These remain separate integration choices rather than implied capabilities of asset playback.
+
+Before adding a game-engine binding, select its host/device ownership and define texture format, alpha/light conventions, frame/event clock, destruction, errors and versioning. Test the actual game loop with update, seek, draw, socket attachment and disposal. A host that changes sprite transforms must transform screen-space lighting consistently. A different 3D camera requires rendering the original scene again; an atlas is not relightable mesh geometry.
+
+Retain the MIT license, NOTICE and relevant third-party notices in redistributed tools and assets.

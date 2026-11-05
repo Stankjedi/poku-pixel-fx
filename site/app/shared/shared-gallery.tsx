@@ -1,47 +1,62 @@
 'use client';
 import BulkTools from './bulk-tools';
 import { useEffect, useRef, useState, type FormEvent, type ChangeEvent } from 'react';
+import { sharedPlayback, type SharedFrame } from '../../lib/shared-manifest';
 
 type Animation = {frameWidth:number; frameHeight:number; frameCount:number; fps:number; loop:boolean};
-type Item = { id: string; title: string; created: string; owned: boolean; tags: string[]; animation: Animation | null; model?: string | null };
+type Item = { id: string; title: string; created: string; owned: boolean; tags: string[]; animation: Animation | null; model?: string | null; manifest?: boolean };
 type Result = { items: Item[]; next: string | null; error?: string };
 const box: React.CSSProperties = { background: '#15131d', border: '1px solid #393449', padding: '1rem', borderRadius: 8 };
 const button: React.CSSProperties = { background: '#f7eaf8', color: '#120d18', border: 0, padding: '.65rem .9rem', borderRadius: 6, cursor: 'pointer', fontWeight: 700 };
 function AnimationFields({animation}: {animation?: Animation | null}) {
   async function importJson(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.currentTarget.files?.[0], form = e.currentTarget.form;
+    const input = e.currentTarget, file = input.files?.[0], form = input.form;
     if (!file || !form || file.size > 1024*1024) return;
     try {
-      const json = JSON.parse(await file.text()); const frames = Array.isArray(json.frames) ? json.frames : Object.values(json.frames || {});
-      const first = frames[0] as {frame?: {w?: number; h?: number}; duration?:number};
-      const fx = json.meta?.pokuFx;
-      const values: Record<string,number> = {frameWidth: first.frame?.w ?? fx?.frameWidth, frameHeight: first.frame?.h ?? fx?.frameHeight, frameCount: frames.length, fps: Math.round(fx?.fps || 1000 / (first.duration || 0))};
-      if (Object.values(values).some(v => !Number.isInteger(v) || v <= 0)) throw new Error();
+      const { animation: imported } = sharedPlayback(JSON.parse(await file.text()));
+      const values: Record<string,number> = { frameWidth: imported.frameWidth, frameHeight: imported.frameHeight, frameCount: imported.frameCount, fps: imported.fps };
       for (const [name,value] of Object.entries(values)) { const input = form.elements.namedItem(name) as HTMLInputElement | null; if (input) input.value = String(value); }
-      const loop = form.elements.namedItem('loop') as HTMLSelectElement | null; if (loop && typeof fx?.loop === 'boolean') loop.value = fx.loop ? 'yes' : 'no';
-    } catch { alert('프레임 정보를 읽지 못했습니다. 값을 직접 입력하세요.'); }
+      const loop = form.elements.namedItem('loop') as HTMLSelectElement | null; if (loop) loop.value = imported.loop ? 'yes' : 'no';
+    } catch { input.value = ''; alert('프레임 정보를 읽지 못했습니다. 올바른 JSON을 다시 선택하거나 값을 직접 입력하세요.'); }
   }
   return <fieldset style={{display:'grid',gap:'.5rem',border:'1px solid #544a60',padding:'.8rem'}}>
     <legend>애니메이션 설정</legend>
-    <label>시트 JSON 가져오기 (선택) <input type="file" accept=".json,application/json" onChange={importJson}/></label>
-    <small>간격 없는 격자 시트를 왼쪽부터 재생합니다. Poku JSON을 선택하거나 값을 입력하세요.</small>
-    <label>프레임 너비 (px) <input name="frameWidth" type="number" min={1} max={2048} required defaultValue={animation?.frameWidth ?? ''}/></label>
-    <label>프레임 높이 (px) <input name="frameHeight" type="number" min={1} max={2048} required defaultValue={animation?.frameHeight ?? ''}/></label>
-    <label>프레임 수 <input name="frameCount" type="number" min={2} max={4096} required defaultValue={animation?.frameCount ?? ''}/></label>
+    <label>시트 JSON 가져오기 (선택) <input type="file" name="manifest" accept=".json,application/json" onChange={importJson}/></label>
+    <small>JSON을 함께 올리면 프레임별 시간, 잘린 위치, 피벗과 태그를 원본대로 보존합니다. 직접 입력은 간격 없는 격자 시트용입니다.</small>
+    <label>프레임 너비 (px) <input name="frameWidth" type="number" min={1} max={4096} required defaultValue={animation?.frameWidth ?? ''}/></label>
+    <label>프레임 높이 (px) <input name="frameHeight" type="number" min={1} max={4096} required defaultValue={animation?.frameHeight ?? ''}/></label>
+    <label>프레임 수 <input name="frameCount" type="number" min={1} max={4096} required defaultValue={animation?.frameCount ?? ''}/></label>
     <label>재생 방식 <select name="loop" defaultValue={animation?.loop ? "yes" : "no"}><option value="no">1회 재생</option><option value="yes">반복</option></select></label>
-    <label>초당 프레임 (FPS) <input name="fps" type="number" min={1} max={60} required defaultValue={animation?.fps ?? ''}/></label>
+    <label>초당 프레임 (FPS) <input name="fps" type="number" min={1} max={240} required defaultValue={animation?.fps ?? ''}/></label>
   </fieldset>;
 }
 function AnimatedPreview({item}: {item: Item}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const a=item.animation, c=canvas.current; if (!a || !c) return;
-    let animation=0, alive=true; const img=new Image(); img.src='/api/share?id='+encodeURIComponent(item.id); img.onload=()=>{
-      if (!alive) return; c.width=a.frameWidth; c.height=a.frameHeight; const ctx=c.getContext('2d'); if(!ctx) return;
-      const cols=Math.floor(img.width/a.frameWidth), start=performance.now();
-      const tick=(now:number)=>{ const f=Math.floor((now-start)*a.fps/1000)%a.frameCount; ctx.clearRect(0,0,c.width,c.height); ctx.imageSmoothingEnabled=false; ctx.drawImage(img,(f%cols)*a.frameWidth,Math.floor(f/cols)*a.frameHeight,a.frameWidth,a.frameHeight,0,0,a.frameWidth,a.frameHeight); animation=requestAnimationFrame(tick); }; animation=requestAnimationFrame(tick);
-    }; return ()=>{alive=false; cancelAnimationFrame(animation);};
-  },[item.id,item.animation]);
+    let animation=0, alive=true; const controller=new AbortController(), img=new Image();
+    img.src='/api/share?id='+encodeURIComponent(item.id);
+    const metadata = item.manifest ? fetch('/api/share?id='+encodeURIComponent(item.id)+'&format=manifest', {signal:controller.signal})
+      .then(r=>{if(!r.ok)throw new Error('Manifest unavailable');return r.json();}) : Promise.resolve(null);
+    Promise.all([img.decode(),metadata]).then(([,raw])=>{
+      if(!alive)return; const ctx=c.getContext('2d'); if(!ctx)return;
+      const cols=Math.floor(img.width/a.frameWidth);
+      const legacy:SharedFrame[]=Array.from({length:a.frameCount},(_,i)=>({frame:{x:i%cols*a.frameWidth,y:Math.floor(i/cols)*a.frameHeight,w:a.frameWidth,h:a.frameHeight},
+        sourceSize:{w:a.frameWidth,h:a.frameHeight},spriteSourceSize:{x:0,y:0,w:a.frameWidth,h:a.frameHeight},duration:Math.round((i+1)*1000/a.fps)-Math.round(i*1000/a.fps)}));
+      const playback=raw ? sharedPlayback(raw,{w:img.width,h:img.height}) : {frames:legacy,loop:a.loop,durationMs:legacy.reduce((n,f)=>n+f.duration,0)};
+      const ends:number[]=[];let sum=0;for(const f of playback.frames){sum+=f.duration;ends.push(sum);}
+      const start=performance.now(), reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const tick=(now:number)=>{
+        if(!alive)return;const elapsed=reduced?0:now-start, t=playback.loop?elapsed%sum:Math.min(elapsed,sum);
+        let low=0,high=ends.length-1;while(low<high){const middle=(low+high)>>>1;if(t<ends[middle])high=middle;else low=middle+1;}
+        const f=playback.frames[low],r=f.frame,s=f.spriteSourceSize;
+        if(c.width!==f.sourceSize.w)c.width=f.sourceSize.w;if(c.height!==f.sourceSize.h)c.height=f.sourceSize.h;
+        ctx.clearRect(0,0,c.width,c.height);ctx.imageSmoothingEnabled=false;ctx.drawImage(img,r.x,r.y,r.w,r.h,s.x,s.y,s.w,s.h);
+        if(!reduced&&(playback.loop||elapsed<sum))animation=requestAnimationFrame(tick);
+      };tick(start);
+    }).catch(()=>{if(alive){c.width=a.frameWidth;c.height=a.frameHeight;}});
+    return ()=>{alive=false;controller.abort();cancelAnimationFrame(animation);};
+  },[item.id,item.animation,item.manifest]);
   return item.animation ? <canvas ref={canvas} aria-label={item.title + ' 애니메이션'} style={{width:'100%',height:220,objectFit:'contain',imageRendering:'pixelated',background:'#08070a'}}/> : <><img src={'/api/share?id='+encodeURIComponent(item.id)} alt={item.title} style={{width:'100%',maxHeight:220,objectFit:'contain',imageRendering:'pixelated'}}/><p>재생 정보가 없습니다. 작성자가 수정에서 설정해 주세요.</p></>;
 }
 export default function SharedGallery({ signedIn, signInPath }: { signedIn: boolean; signInPath: string }) {
@@ -82,15 +97,9 @@ export default function SharedGallery({ signedIn, signInPath }: { signedIn: bool
       const png = pngs[0], json = jsons[0];
       if (png.name.replace(/\.png$/i, '').toLocaleLowerCase() !== json.name.replace(/\.json$/i, '').toLocaleLowerCase()) throw new Error('PNG와 JSON의 파일 이름이 같아야 합니다.');
       if (png.type !== 'image/png' || png.size > 5 * 1024 * 1024 || json.size > 1024 * 1024) throw new Error('PNG는 5MB, JSON은 1MB 이하여야 합니다.');
-      const metadata = JSON.parse(await json.text());
-      const frames = Array.isArray(metadata.frames) ? metadata.frames : Object.values(metadata.frames || {});
-      const first = frames[0] as {frame?: {w?: number; h?: number}; duration?: number} | undefined;
-      const fx = metadata.meta?.pokuFx;
-      const values: Record<string, number> = { frameWidth: Number(first?.frame?.w ?? fx?.frameWidth), frameHeight: Number(first?.frame?.h ?? fx?.frameHeight), frameCount: frames.length, fps: Math.round(Number(fx?.fps) || 1000 / Number(first?.duration)) };
-      if (Object.values(values).some(v => !Number.isInteger(v) || v <= 0)) throw new Error('JSON의 재생 정보를 읽지 못했습니다.');
-      data.delete('bundle'); data.set('file', png);
-      for (const [name, value] of Object.entries(values)) data.set(name, String(value));
-      data.set('loop', fx?.loop === true ? 'yes' : 'no');
+      const { animation } = sharedPlayback(JSON.parse(await json.text()));
+      data.delete('bundle'); data.set('file', png); data.set('manifest', json);
+      for (const [name, value] of Object.entries(animation)) data.set(name, name==='loop' ? value?'yes':'no' : String(value));
       const r = await fetch('/api/share', { method: 'POST', body: data }); const result = await r.json() as {error?: string};
       if (!r.ok) throw new Error(result.error || '게시하지 못했습니다.');
       form.reset(); setQuickTitle(''); setMessage('공개 갤러리에 게시했습니다.'); await load();
@@ -157,7 +166,7 @@ export default function SharedGallery({ signedIn, signInPath }: { signedIn: bool
           <h3 style={{ overflowWrap: 'anywhere' }}>{item.title}</h3>
           {item.model && <p style={{ color: '#b8adbf', fontSize: '.9rem', overflowWrap: 'anywhere' }}>제작 모델: {item.model} (게시자 입력)</p>}
           {item.created && <time dateTime={item.created} style={{ color: '#b8adbf' }}>{new Date(item.created).toLocaleDateString('ko-KR')}</time>}
-          <div style={{ display: 'flex', gap: '.5rem', marginTop: '.7rem', flexWrap: 'wrap' }}><a style={{ color: '#eca6e7' }} href={'/api/share?id=' + encodeURIComponent(item.id)} target="_blank" rel="noreferrer">원본 보기 · 링크 공유</a>{item.owned && <><button type="button" disabled={busy} onClick={() => setEditing(item.id)}>수정</button><button type="button" disabled={busy} onClick={() => void erase(item.id)}>내 작품 삭제</button></>}</div>
+          <div style={{ display: 'flex', gap: '.5rem', marginTop: '.7rem', flexWrap: 'wrap' }}><a style={{ color: '#eca6e7' }} href={'/api/share?id=' + encodeURIComponent(item.id)} target="_blank" rel="noreferrer">원본 보기 · 링크 공유</a><a href={'/api/share?id='+encodeURIComponent(item.id)+'&format=manifest'} download="effect.json">{item.manifest?'원본 JSON':'이전 재생 JSON'}</a>{item.owned && <><button type="button" disabled={busy} onClick={() => setEditing(item.id)}>수정</button><button type="button" disabled={busy} onClick={() => void erase(item.id)}>내 작품 삭제</button></>}</div>
           {editing === item.id && <form onSubmit={e => void saveEdit(e, item.id)} style={{display:'grid',gap:'.6rem',marginTop:'1rem'}}>
             <label>제목 <input name="title" required maxLength={80} defaultValue={item.title} /></label>
             <label>태그 <input name="tags" maxLength={167} defaultValue={(item.tags || []).join(', ')} /></label>

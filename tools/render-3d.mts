@@ -4,25 +4,36 @@ import { basename, dirname, resolve } from "node:path";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { canvas, createSpriteSheet, save } from "./lib/fxlib.mjs";
 import { createLayerSheet } from "./lib/layers.mjs";
+import { createAssetBundle } from "./lib/asset-bundle.mjs";
 import { parseFlags3D, positiveInteger, scene3D } from "./lib/scene3d.mjs";
 
 const args = process.argv.slice(2), name = args[0] ?? "frost", flags = parseFlags3D(args.slice(1));
-const atlas = flags.atlas === "true" || flags.atlas === "1", split = flags.layers === "true" || flags.layers === "1";
+const bundled = flags.bundle === "true" || flags.bundle === "1";
+const atlas = flags.atlas === "true" || flags.atlas === "1" || bundled, split = flags.layers === "true" || flags.layers === "1";
 if (split && !atlas) throw new Error("--layers requires --atlas true (game assets use a continuous frame timeline)");
 const run = await scene3D(name, flags, atlas ? "atlas" : "contact"), r = run.sequence;
 const columns = positiveInteger(flags.columns, atlas ? Math.max(1, Math.ceil(Math.sqrt(r.n * r.h / r.w))) : 6, "columns");
 const destination = resolve(flags.out ?? `records/3d/${name}${atlas ? ".atlas" : ""}.png`);
 const out = destination.toLowerCase().endsWith(".png") ? destination : destination + ".png", base = out.slice(0, -4);
 if (atlas) {
-  const info = { ...r, columns: Math.min(columns, r.n) }, sink = createSpriteSheet(run.effect, info, name, basename(out));
+  const info = { ...r, columns: Math.min(columns, r.n) };
+  const sink = !bundled || flags.atlas === "true" || flags.atlas === "1" ? createSpriteSheet(run.effect, info, name, basename(out)) : undefined;
   let layers: ReturnType<typeof createLayerSheet> | undefined;
+  let bundle: ReturnType<typeof createAssetBundle> | undefined;
   try {
     if (split) layers = createLayerSheet(base, run.effect, info);
-    let i = 0; for (const frame of r.frames) { sink.push(frame, i); layers?.push(frame, i); i++; }
-    const result = sink.result(), made = [save(out, result.png), save(base + ".json", JSON.stringify(result.json, null, 2))];
+    if (bundled) bundle = createAssetBundle(base, run.effect, info, {
+      maxTextureSize: flags["max-texture"] !== undefined ? +flags["max-texture"] : undefined,
+      padding: flags.padding !== undefined ? +flags.padding : undefined,
+      trim: flags.trim === "true" || flags.trim === "1", deduplicate: flags.deduplicate === "true" || flags.deduplicate === "1",
+    });
+    let i = 0; for (const frame of r.frames) { sink?.push(frame, i); layers?.push(frame, i); bundle?.push(frame, i); i++; }
+    const made: string[] = [];
+    if (sink) { const result = sink.result(); made.push(save(out, result.png), save(base + ".json", JSON.stringify(result.json, null, 2))); }
     if (layers) made.push(...layers.finish());
+    if (bundle) made.push(...bundle.finish().files);
     console.log(`${run.meta.id}: ${r.n} game frames at ${r.fps} fps → ${made.join("  ")}`);
-  } finally { layers?.abort(); }
+  } finally { layers?.abort(); bundle?.abort(); }
 } else {
   const rows = Math.ceil(r.n / columns), sheet = canvas(r.w * columns, r.h * rows, [0, 0, 0, 0]);
   const timeSamples: number[] = [];

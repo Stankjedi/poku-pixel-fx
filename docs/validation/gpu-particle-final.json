@@ -1,0 +1,24 @@
+{
+  "status": "passed",
+  "adapter": {
+    "vendor": "",
+    "architecture": "",
+    "device": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "description": "4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.2",
+    "stackgroup_min_size": 4,
+    "stackgroup_max_size": 128,
+    "vendor_id": 65541,
+    "device_id": 0,
+    "adapter_type": "CPU",
+    "backend_type": "OpenGL"
+  },
+  "software": true,
+  "checks": [
+    "Identical state and command bytes for 60 ticks versus 60 single-tick submissions",
+    "Seed and stable slot ID affect reproducible cosmetic trajectories",
+    "Particles end exactly at their declared 240-tick lifetime",
+    "Fixed semi-implicit gravity agrees with the independent ballistic sum"
+  ],
+  "computeDispatches": 64,
+  "scope": "Actual WGSL compute execution. No physical GPU or cross-device bit-exact claim."
+}

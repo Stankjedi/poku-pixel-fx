@@ -1,0 +1,22 @@
+[package]
+name = "poku-pixel-fx-player"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Native wgpu player and shared DrawIR renderer for poku-pixel-fx"
+
+[dependencies]
+wgpu = "=30.0.1"
+pollster = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+image = { version = "0.25", default-features = false, features = ["png"] }
+sha2 = "0.10"
+
+[lib]
+name = "poku_pixel_fx_player"
+path = "src/lib.rs"
+
+[[bin]]
+name = "poku-player"
+path = "src/main.rs"

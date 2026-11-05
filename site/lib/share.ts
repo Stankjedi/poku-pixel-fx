@@ -1,5 +1,6 @@
 /** Public PNG gallery on Sites R2. Authentication is supplied by the caller, not by browser input. */
 import { reserveUpload, releaseUpload, type QuotaDatabase } from './quota';
+import { parseSharedManifest } from './shared-manifest';
 export interface StoredObject { key: string; customMetadata?: Record<string, string>; body: ReadableStream<Uint8Array>; etag?: string }
 export interface ObjectSummary { key: string; customMetadata?: Record<string, string> }
 export interface GalleryBucket {
@@ -9,8 +10,9 @@ export interface GalleryBucket {
   delete(key: string): Promise<void>;
 }
 const PREFIX = 'shared/';
+const MANIFEST_PREFIX = 'shared-manifests/';
 const MAX_FILE = 5 * 1024 * 1024;
-const MAX_BODY = MAX_FILE + 64 * 1024;
+const MAX_BODY = MAX_FILE + 1024 * 1024 + 64 * 1024;
 const MAX_PIXELS = 4_194_304;
 const ID = /^\d{13}-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.png$/;
 const headers = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' };
@@ -60,7 +62,7 @@ function animationFromForm(form: FormData, data: ArrayBuffer): Animation | null 
   const frameWidth = Number(form.get('frameWidth')), frameHeight = Number(form.get('frameHeight'));
   const frameCount = Number(form.get('frameCount')), fps = Number(form.get('fps'));
   if (![frameWidth, frameHeight, frameCount, fps].every(Number.isInteger)) return null;
-  if (frameWidth < 1 || frameHeight < 1 || frameCount < 2 || frameCount > 4096 || fps < 1 || fps > 60) return null;
+  if (frameWidth < 1 || frameHeight < 1 || frameCount < 1 || frameCount > 4096 || fps < 1 || fps > 240) return null;
   const view = new DataView(data), width = view.getUint32(16), height = view.getUint32(20);
   if (width % frameWidth || height % frameHeight || frameCount > (width / frameWidth) * (height / frameHeight)) return null;
   return { frameWidth, frameHeight, frameCount, fps, loop: form.get('loop') === 'yes' };
@@ -68,8 +70,26 @@ function animationFromForm(form: FormData, data: ArrayBuffer): Animation | null 
 function storedAnimation(encoded: string | undefined): Animation | null {
   if (!encoded) return null;
   try { const a = JSON.parse(decodeTitle(encoded));
-    return a && [a.frameWidth,a.frameHeight,a.frameCount,a.fps].every(Number.isInteger) && a.frameWidth > 0 && a.frameHeight > 0 && a.frameCount >= 2 && a.fps >= 1 && a.fps <= 60 ? a : null;
+    return a && [a.frameWidth,a.frameHeight,a.frameCount,a.fps].every(Number.isInteger) && a.frameWidth > 0 && a.frameHeight > 0 && a.frameCount >= 1 && a.fps >= 1 && a.fps <= 240 ? a : null;
   } catch { return null; }
+}
+async function manifestFromForm(form: FormData, data: ArrayBuffer) {
+  const value = form.get('manifest');
+  if (value === null || value === '' || (value instanceof Blob && value.size === 0)) return null;
+  if (value instanceof Blob && value.size > 1024 * 1024) throw new Error('JSON은 1MB 이하여야 합니다.');
+  const text = typeof value === 'string' ? value : value instanceof Blob ? await value.text() : '';
+  const view = new DataView(data);
+  return parseSharedManifest(text, { w: view.getUint32(16), h: view.getUint32(20) });
+}
+function storedManifestKey(id: string, metadata: Record<string, string> | undefined): string | null {
+  const key = metadata?.manifestKey;
+  return key?.startsWith(`${MANIFEST_PREFIX}${id}/`) && /^[0-9a-f-]+\.json$/.test(key.slice(`${MANIFEST_PREFIX}${id}/`.length)) ? key : null;
+}
+async function writeManifest(bucket: GalleryBucket, id: string, content: string) {
+  const key = `${MANIFEST_PREFIX}${id}/${crypto.randomUUID()}.json`;
+  const bytes = new TextEncoder().encode(content);
+  await bucket.put(key, bytes.buffer as ArrayBuffer, { httpMetadata: { contentType: 'application/json' }, customMetadata: {} });
+  return key;
 }
 function validPng(bytes: Uint8Array): boolean {
   if (bytes.length < 33 || bytes.length > MAX_FILE) return false;
@@ -120,19 +140,26 @@ export async function upload(req: Request, bucket: GalleryBucket, db: QuotaDatab
   if (!(file instanceof Blob) || file.type !== 'image/png' || file.size > MAX_FILE) return error('PNG 파일만 5MB 이하로 올릴 수 있습니다.', 400);
   const data = new Uint8Array(await file.arrayBuffer());
   if (!validPng(data)) return error('PNG 파일 헤더가 올바르지 않거나 이미지가 2048×2048을 초과합니다.', 400);
-  const animation = animationFromForm(form, data.buffer as ArrayBuffer);
-  if (!animation) return error('프레임 크기, 프레임 수, FPS가 시트와 맞는지 확인하세요. 2프레임 이상이어야 합니다.', 400);
+  let manifest;
+  try { manifest = await manifestFromForm(form, data.buffer as ArrayBuffer); }
+  catch (e) { return error(e instanceof Error ? e.message : 'JSON을 읽을 수 없습니다.', 400); }
+  const animation = manifest?.playback.animation ?? animationFromForm(form, data.buffer as ArrayBuffer);
+  if (!animation) return error('프레임 크기, 프레임 수, FPS가 시트와 맞는지 확인하세요.', 400);
   // The declaration is recorded; it does not establish actual ownership or licensing.
   const now = new Date(); const id = `${String(9999999999999 - Date.now()).padStart(13, '0')}-${crypto.randomUUID()}.png`;
   let reserved: boolean;
   try { reserved = await reserveUpload(db, id, userId); }
   catch { return error('업로드 제한을 확인할 수 없어 게시하지 못했습니다.', 503); }
   if (!reserved) return error('계정당 게시 50개 또는 업로드 횟수 제한(10분 5회, 24시간 20회)에 도달했습니다.', 429);
+  let manifestKey: string | undefined;
   try {
+    if (manifest) manifestKey = await writeManifest(bucket, id, manifest.json);
     await bucket.put(PREFIX + id, data.buffer as ArrayBuffer, { httpMetadata: { contentType: 'image/png' }, customMetadata: {
       title64: encodeTitle(title), tags64: encodeTitle(JSON.stringify(tags)), model64: encodeTitle(model), animation64: encodeTitle(JSON.stringify(animation)), created: now.toISOString(), owner: await ownerHash(userId), rightsDeclaration: 'v1',
+      ...(manifestKey ? { manifestKey, manifestVersion: 'original-v1' } : {}),
     }});
   } catch {
+    if (manifestKey) try { await bucket.delete(manifestKey); } catch { /* Reconcile orphan sidecars separately. */ }
     try { await releaseUpload(db, id, userId); } catch { /* An operator must reconcile this reservation. */ }
     return error('저장에 실패했습니다. 나중에 다시 시도해 주세요.', 503);
   }
@@ -144,6 +171,23 @@ export async function read(req: Request, bucket: GalleryBucket, userId: string |
     if (!ID.test(id)) return error('파일을 찾을 수 없습니다.', 404);
     const item = await bucket.get(PREFIX + id);
     if (!item) return error('파일을 찾을 수 없습니다.', 404);
+    if (url.searchParams.get('format') === 'manifest') {
+      const key = storedManifestKey(id, item.customMetadata);
+      if (key) {
+        const manifest = await bucket.get(key);
+        if (!manifest) return error('원본 JSON을 찾을 수 없습니다.', 404);
+        return new Response(manifest.body, { headers: { ...headers, 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': 'attachment; filename="effect.json"' } });
+      }
+      // Legacy entries never claimed to retain a source manifest. Keep them readable.
+      const animation = storedAnimation(item.customMetadata?.animation64);
+      if (!animation) return error('재생 정보가 없습니다.', 404);
+      const bytes = await new Response(item.body).arrayBuffer(), view = new DataView(bytes), width = view.getUint32(16), height = view.getUint32(20);
+      const columns = Math.floor(width / animation.frameWidth);
+      const frames = Array.from({ length: animation.frameCount }, (_, i) => ({ filename: `effect ${i}`,
+        frame: { x: i % columns * animation.frameWidth, y: Math.floor(i / columns) * animation.frameHeight, w: animation.frameWidth, h: animation.frameHeight },
+        duration: Math.round((i + 1) * 1000 / animation.fps) - Math.round(i * 1000 / animation.fps) }));
+      return json({ frames, meta: { image: 'effect.png', size: { w: width, h: height }, pokuFx: { ...animation, reconstructedLegacy: true } } });
+    }
     return new Response(item.body, { headers: { ...headers, 'Content-Type': 'image/png', 'Content-Disposition': 'inline; filename="effect.png"' } });
   }
   const cursor = url.searchParams.get('cursor') ?? undefined;
@@ -156,6 +200,7 @@ export async function read(req: Request, bucket: GalleryBucket, userId: string |
     id: item.key.slice(PREFIX.length), title: decodeTitle(item.customMetadata?.title64), created: item.customMetadata?.created ?? '',
     tags: (() => { try { const t = JSON.parse(decodeTitle(item.customMetadata?.tags64)); return Array.isArray(t) ? t.filter((x: unknown) => typeof x === 'string') : []; } catch { return []; } })(),
     animation: storedAnimation(item.customMetadata?.animation64),
+    manifest: !!storedManifestKey(item.key.slice(PREFIX.length), item.customMetadata),
     model: storedModel(item.customMetadata?.model64),
     owned: !!owner && item.customMetadata?.owner === owner,
   })), next: result.truncated ? result.cursor ?? null : null });
@@ -183,18 +228,35 @@ export async function edit(req: Request, bucket: GalleryBucket, userId: string |
   if (item.customMetadata?.owner !== await ownerHash(userId)) return error('본인이 게시한 작품만 수정할 수 있습니다.', 403);
   if (!item.etag) return error('파일 버전을 확인할 수 없어 수정하지 못했습니다.', 503);
   let data: ArrayBuffer;
-  if (file instanceof Blob && file.size > 0) {
+  const replaceImage = file instanceof Blob && file.size > 0;
+  if (replaceImage) {
     if (form.get('rights') !== 'yes') return error('새 파일의 게시 권한과 책임에 동의해야 합니다.', 400);
     if (file.type !== 'image/png' || file.size > MAX_FILE) return error('PNG 파일만 5MB 이하로 올릴 수 있습니다.', 400);
     data = await file.arrayBuffer();
     if (!validPng(new Uint8Array(data))) return error('PNG 형식 또는 크기가 올바르지 않습니다.', 400);
   } else data = await new Response(item.body).arrayBuffer();
-  const animation = animationFromForm(form, data);
-  if (!animation) return error('프레임 크기, 프레임 수, FPS가 시트와 맞는지 확인하세요. 2프레임 이상이어야 합니다.', 400);
+  let manifest;
+  try { manifest = await manifestFromForm(form, data); }
+  catch (e) { return error(e instanceof Error ? e.message : 'JSON을 읽을 수 없습니다.', 400); }
+  const oldKey = storedManifestKey(id, item.customMetadata);
+  const animation = manifest?.playback.animation ?? (!replaceImage && oldKey ? storedAnimation(item.customMetadata?.animation64) : animationFromForm(form, data));
+  if (!animation) return error('프레임 크기, 프레임 수, FPS가 시트와 맞는지 확인하세요.', 400);
+  const metadata: Record<string, string> = { ...item.customMetadata, title64: encodeTitle(title), tags64: encodeTitle(JSON.stringify(tags)),
+    ...(rawModel === null ? {} : { model64: encodeTitle(model) }), animation64: encodeTitle(JSON.stringify(animation)) };
+  if (replaceImage && !manifest) { delete metadata.manifestKey; delete metadata.manifestVersion; }
+  let newKey: string | undefined;
   try {
-    const result = await bucket.put(PREFIX + id, data, { httpMetadata: {contentType:'image/png'}, customMetadata: { ...item.customMetadata, title64:encodeTitle(title), tags64:encodeTitle(JSON.stringify(tags)), ...(rawModel === null ? {} : { model64:encodeTitle(model) }), animation64:encodeTitle(JSON.stringify(animation)) }, onlyIf:{etagMatches:item.etag} });
-    if (!result) return error('작품이 변경되어 저장하지 못했습니다. 새로고침 후 다시 시도하세요.', 409);
-  } catch { return error('수정하지 못했습니다. 나중에 다시 시도해 주세요.', 503); }
+    if (manifest) { newKey = await writeManifest(bucket, id, manifest.json); metadata.manifestKey = newKey; metadata.manifestVersion = 'original-v1'; }
+    const result = await bucket.put(PREFIX + id, data, { httpMetadata: {contentType:'image/png'}, customMetadata: metadata, onlyIf:{etagMatches:item.etag} });
+    if (!result) {
+      if (newKey) await bucket.delete(newKey);
+      return error('작품이 변경되어 저장하지 못했습니다. 새로고침 후 다시 시도하세요.', 409);
+    }
+  } catch {
+    if (newKey) try { await bucket.delete(newKey); } catch { /* Preserve the original entry on failure. */ }
+    return error('수정하지 못했습니다. 나중에 다시 시도해 주세요.', 503);
+  }
+  if (oldKey && oldKey !== metadata.manifestKey) try { await bucket.delete(oldKey); } catch { /* New revision is already committed. */ }
   return json({updated:true});
 }
 export async function remove(req: Request, bucket: GalleryBucket, db: QuotaDatabase, userId: string | null): Promise<Response> {
@@ -207,6 +269,8 @@ export async function remove(req: Request, bucket: GalleryBucket, db: QuotaDatab
   if (item.customMetadata?.owner !== await ownerHash(userId)) return error('본인이 게시한 작품만 삭제할 수 있습니다.', 403);
   try { await bucket.delete(PREFIX + id); }
   catch { return error('삭제하지 못했습니다. 나중에 다시 시도해 주세요.', 503); }
+  const manifestKey = storedManifestKey(id, item.customMetadata);
+  if (manifestKey) try { await bucket.delete(manifestKey); } catch { /* Image deletion has succeeded; orphan cleanup is safe. */ }
   try { await releaseUpload(db, id, userId); }
   catch { return error('이미지는 삭제되었지만 게시 한도를 갱신하지 못했습니다. 관리자에게 문의해 주세요.', 503); }
   return json({ deleted: true });

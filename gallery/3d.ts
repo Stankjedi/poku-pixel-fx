@@ -1,3 +1,9 @@
+import { createRenderProfile3D, parseRenderProfile3D, type RenderProfile3D } from '../src/render/profile3d.js';
+import { integerViewport, PlaybackClock } from '../src/authoring/clock.js';
+import { createProject, parseProject, serializeProject, type ResolvedProject } from '../src/authoring/project.js';
+import { CinematicFrameRenderer } from '../src/render/webgpu.js';
+import { encodeRGBAPNG } from './png.js';
+import { postprocessProjectFrame,finishProjectRGBA } from '../src/authoring/edits.js';
 import { createFrame3D, compositeFrame3D, Painter3D, createFx3D, CinematicCompositor, CinematicLighting3D, enableHDRLight, type PointLight3D, type Camera3D, type FxInstance3D } from "../src/3d/index.js";
 import * as shield from "../src/3d/effects/energy-shield.js";
 import * as voidrift from "../src/3d/effects/void-rift.js";
@@ -33,41 +39,29 @@ let frame = createFrame3D(16, 16), painter = new Painter3D(frame), image = offCt
 let pixel = 3, yaw = 0.68, elevation = 28 * Math.PI / 180, zoom = 1, glow = true;
 let dragging = false, prevX = 0, prevY = 0;
 let seed = blackhole.meta.options.seed;
+let projectOptions:Record<string,any>={},projectName='';
+let loadedProject:ResolvedProject|undefined;
+const previewProject=createProject({id:'3d/preview',kind:'3d'});
+const selectedFps=()=>loadedProject?.fps??30;
+const presentationClock=new PlaybackClock(blackhole.meta.duration,true);
+presentationClock.playing=true;
 
 const cinematic = new CinematicCompositor();
 const worldLights = new CinematicLighting3D();
-// Preserve the original luminous wind rig only for the legacy energy-styled version.
-const windRig: PointLight3D[] = [
-  { position: [-2.1, 3.5, 1.7], radius: 7, color: "#70efff", intensity: 1.65, specular: 0.5, rim: 0.25 },
-  { position: [2.4, 2.1, -1.8], radius: 6, color: "#8b9dff", intensity: 1.15, specular: 0.38, rim: 0.22 },
-];
-const rigs: Record<keyof typeof effects, PointLight3D[]> = {
-  blackhole: [
-    { position: [-2.3, 3.3, 1.5], radius: 6.5, color: "#ff874b", intensity: 1.8, specular: 0.5, rim: 0.25 },
-    { position: [2.5, 1.9, -2.2], radius: 5.5, color: "#7b56ff", intensity: 1.35, specular: 0.42, rim: 0.32 },
-  ],
-  frost: [
-    { position: [-2.2, 2.8, 2.0], radius: 7.1, color: "#6fe5ff", intensity: 1.9, specular: 0.55, rim: 0.32 },
-    { position: [2.2, 1.3, -1.8], radius: 6.5, color: "#9d79ff", intensity: 1.05, specular: 0.36 },
-  ],
-  slash: [
-    { position: [-1.2, 3.2, 1.8], radius: 7, color: "#96ccff", intensity: 1.6, specular: 0.6 },
-    { position: [2.6, 2.0, -1.8], radius: 6.4, color: "#eb82ff", intensity: 1.4, specular: 0.42, rim: 0.3 },
-  ],
-  shatter: [
-    { position: [-2.2, 4, 2], radius: 7, color: "#91e8fa", intensity: 1.2, specular: 0.6 },
-    { position: [2, 2, -2], radius: 6, color: "#486dc4", intensity: 0.6, specular: 0.3 },
-  ],
-  flame: [],
-  lightning: [],
-  water: [],
-  meteor: [],
-  laser: [],
-  shield: [],
-  voidrift: [],
-  wind: [],
-  windOriginal: windRig,
-};
+let profile = createRenderProfile3D(selected);
+let cinematicRenderer: CinematicFrameRenderer | null = null;
+let exactPixels = true;
+let rendererRequest = 0;
+async function selectRenderer() {
+  const token=++rendererRequest;
+  cinematicRenderer?.dispose(); cinematicRenderer=null;
+  const backend=(document.querySelector<HTMLSelectElement>('#backend')!.value==='webgpu'?'webgpu':'cpu');
+  try {
+    const candidate=await CinematicFrameRenderer.create(offscreen,{backend,onStatus: (s:any)=>{document.querySelector('#renderer-status')!.textContent=JSON.stringify(s);}});
+    if(token!==rendererRequest){candidate.dispose();return;}
+    cinematicRenderer=candidate;dirty=true;
+  } catch(error){ document.querySelector('#renderer-status')!.textContent=`CPU · ${String(error)}`; }
+}
 
 function syncLabels() {
   document.querySelector<HTMLElement>("#pxText")!.textContent = `${pixel}×`;
@@ -76,26 +70,17 @@ function syncLabels() {
 }
 function chooseEffect(name: keyof typeof effects) {
   dirty = true;
-  selected = name;
-  if (name === "frost") instance = createFx3D(frost, { seed });
-  else if (name === "voidrift") instance = createFx3D(voidrift, { seed });
-  else if (name === "shield") instance = createFx3D(shield, { seed });
-  else if (name === "laser") instance = createFx3D(laser, { seed });
-  else if (name === "meteor") instance = createFx3D(meteor, { seed });
-  else if (name === "water") instance = createFx3D(water, { seed });
-  else if (name === "lightning") instance = createFx3D(lightning, { seed });
-  else if (name === "flame") instance = createFx3D(flame, { seed });
-  else if (name === "shatter") instance = createFx3D(shatter, { seed });
-  else if (name === "slash") instance = createFx3D(slash, { seed });
-  else if (name === "wind") instance = createFx3D(wind, { seed });
-  else if (name === "windOriginal") instance = createFx3D(windOriginal, { seed });
-  else instance = createFx3D(blackhole, { seed });
+  selected = name; profile = createRenderProfile3D(name);
+  instance = (createFx3D as any)(effects[name],{...projectOptions,seed});
+  presentationClock.duration=loadedProject?.seconds??instance.meta.duration;presentationClock.reset();
+  document.querySelector<HTMLInputElement>('#timeline')!.max=String(presentationClock.duration);
+  document.querySelector<HTMLInputElement>('#timeline')!.step=String(1/selectedFps());
   status.textContent = instance.meta.description;
+  profileFields();
 }
 function resize() {
   const box = screen.getBoundingClientRect();
-  const sample = Math.max(pixel, box.width / (selected === "flame" ? 192 : selected === "meteor" ? 260 : 400), box.height / (selected === "flame" ? 144 : selected === "meteor" ? 180 : 300));
-  const w = Math.max(96, Math.ceil(box.width / sample)), h = Math.max(72, Math.ceil(box.height / sample));
+  const [w,h]=profile.nativeSize;
   const dpr = Math.min(3, window.devicePixelRatio || 1);
   const cw = Math.max(1, Math.round(box.width * dpr)), ch = Math.max(1, Math.round(box.height * dpr));
   if (width === w && height === h && canvas.width === cw && canvas.height === ch) return;
@@ -114,64 +99,67 @@ function render() {
   enableHDRLight(frame);
   const isBlackHole = selected === "blackhole";
   const isWind = selected === "wind" || selected === "windOriginal";
-  const baseCamera: Camera3D = {
-    yaw, elevation, zoom: zoom * (selected === "shield" ? 1.45 : selected === "laser" ? 1.45 : selected === "meteor" ? 0.98 : selected === "voidrift" ? 1.3 : isBlackHole ? 1.36 : isWind ? 1.18 : selected === "shatter" ? 1.2 : selected === "flame" ? 1.65 : selected === "lightning" ? 1.35 : selected === "water" ? 1.28 : 1),
-    target: [0, selected === "shield" ? 2.1 : selected === "laser" ? 1.2 : selected === "meteor" ? 2.3 : selected === "voidrift" ? 2.5 : selected === "water" ? 1.05 : selected === "lightning" ? 2.6 : selected === "flame" ? 1.95 : selected === "shatter" ? 1.1 : selected === "slash" ? 1.4 : isBlackHole ? 1.12 : isWind ? 2.35 : 0.75, 0],
-  };
-  const camera = reducedMotion.matches ? baseCamera : instance.camera(baseCamera);
-  painter.setCamera(camera).begin(isBlackHole ? "#05030d" : isWind ? "#061222" : "#0a1525");
-  if (!isBlackHole && !isWind) painter.grid(8, 1);
+  const baseCamera: Camera3D = {...profile.camera,yaw,elevation,zoom:zoom*profile.camera.zoom};
+  const camera = reducedMotion.matches || !profile.cameraMotion ? baseCamera : instance.camera(baseCamera);
+  painter.setCamera(camera).begin(profile.background??0);
+  if (profile.grid) painter.grid(8, 1);
   instance.draw(painter);
+  const project=loadedProject??previewProject;
+  (frame as any).semanticMasks=undefined;
+  postprocessProjectFrame(frame,project,instance.t,Math.floor(instance.t*selectedFps()+1e-6),{space:'screen-only'});
   if (glow) {
-    const lighting = worldLights.evaluate(frame, camera, rigs[selected], {
-      ambientOcclusion: { radius: 3, bias: 0.1, intensity: 0.34 },
-    });
-    cinematic.render(frame, image.data, {
-      radiance: lighting.radiance, occlusion: lighting.occlusion,
-      bloom: { threshold: 0.12, knee: 0.2, intensity: 1.1, levels: 4 },
-      toneMap: "aces", exposure: 1.3, saturation: 1.12, contrast: 1.05,
-      vignette: 0.07, chromaticFringe: 0.55,
-    });
-  } else compositeFrame3D(frame, image.data, 0);
-  offCtx.putImageData(image, 0, 0);
+    const lighting = worldLights.evaluate(frame, camera, profile.lights, profile.lighting);
+    const options = {...profile.cinematic,radiance:lighting.radiance,occlusion:lighting.occlusion,...(project.pixelStyle?.finalColorPolicy==='palette-locked'?{finalPalette:project.pixelStyle.palette}:{})};
+    if(cinematicRenderer) cinematicRenderer.render(frame,options);
+    else {cinematic.render(frame,image.data,options);finishProjectRGBA(image.data,project);offCtx.putImageData(image,0,0);}
+  } else {compositeFrame3D(frame,image.data,0);finishProjectRGBA(image.data,project);offCtx.putImageData(image,0,0);}
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height);
+  ctx.fillStyle='#050811';ctx.fillRect(0,0,canvas.width,canvas.height);
+  const v=integerViewport(width,height,canvas.width,canvas.height);
+  const scale=Math.min(v.scale,Math.max(1,Math.round(pixel*(devicePixelRatio||1))));
+  if(exactPixels) ctx.drawImage(offscreen,Math.floor((canvas.width-width*scale)/2),Math.floor((canvas.height-height*scale)/2),width*scale,height*scale);
+  else ctx.drawImage(offscreen,0,0,canvas.width,canvas.height);
+  const rendererStatus=cinematicRenderer?.status;
+  document.querySelector('#renderer-status')!.textContent=rendererStatus?`${rendererStatus.backend.toUpperCase()} · ${rendererStatus.adapter?.software?'소프트웨어 어댑터 · ':''}${rendererStatus.reason??rendererStatus.state}`:'CPU cinematic';
   dirty = false;
 }
 function animation(now: number) {
-  const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
-  last = now;
-  if (!paused) {
-    instance.update(dt);
-    if (instance.done()) instance.restart();
-  }
+  presentationClock.playing=!paused;
+  const tick=presentationClock.tick(now,!document.hidden);
+  const time=Math.min(presentationClock.duration,Math.floor(presentationClock.time*selectedFps()+1e-6)/selectedFps());
+  if(tick.wrapped||time<instance.t)instance.restart();
+  if(time>instance.t)instance.update(time-instance.t);
   if (!paused || dirty) render();
   readout.textContent = `${instance.t.toFixed(2)} / ${instance.meta.duration.toFixed(2)} s`;
   stage.textContent = instance.stage();
+  document.querySelector<HTMLInputElement>('#timeline')!.value=String(presentationClock.time);
   requestAnimationFrame(animation);
 }
 function button(id: string, handler: () => void) { document.querySelector<HTMLButtonElement>(id)!.addEventListener("click", handler); }
-button("#replay", () => { instance.restart(); paused = false; dirty = true; last = performance.now(); document.querySelector<HTMLButtonElement>("#pause")!.textContent = "Ⅱ PAUSE"; });
+button("#replay", () => { instance.restart();presentationClock.reset(); paused = false; dirty = true; last = performance.now(); document.querySelector<HTMLButtonElement>("#pause")!.textContent = "Ⅱ PAUSE"; });
 button("#pause", () => {
   paused = !paused;
+  presentationClock.suspend();
   last = performance.now();
   dirty = true;
   document.querySelector<HTMLButtonElement>("#pause")!.textContent = paused ? "▶ PLAY" : "Ⅱ PAUSE";
 });
 button("#seed", () => {
+  const kept=profile;
   seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-  chooseEffect(selected); syncLabels();
+  chooseEffect(selected);profile=kept;syncLabels();profileFields();
 });
 button("#save", () => {
-  const a = document.createElement("a");
-  a.href = canvas.toDataURL("image/png");
-  a.download = `poku-3d-${selected}-${instance.t.toFixed(2)}.png`;
-  a.click();
+  void(async()=>{render();const rgba=cinematicRenderer&&glow?await cinematicRenderer.capture():image.data;
+  const a = document.createElement("a"),url=URL.createObjectURL(await encodeRGBAPNG(width,height,rgba));
+  a.href=url;a.download = `poku-3d-${selected}-${instance.t.toFixed(2)}.png`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  })().catch(error=>{status.textContent=String(error);});
 });
 document.querySelector<HTMLSelectElement>("#effect")!.addEventListener("change", e => {
   const value = (e.target as HTMLSelectElement).value;
   if (Object.prototype.hasOwnProperty.call(effects, value)) {
     const key = value as keyof typeof effects;
+    projectOptions={};projectName='';loadedProject=undefined;
     seed = effects[key].meta.options.seed;
     chooseEffect(key); syncLabels();
   }
@@ -190,10 +178,48 @@ canvas.addEventListener("pointermove", e => {
 canvas.addEventListener("pointerup", () => { dragging = false; });
 canvas.addEventListener("pointercancel", () => { dragging = false; });
 canvas.addEventListener("wheel", e => { e.preventDefault(); zoom = Math.max(0.6, Math.min(2, zoom * Math.exp(-e.deltaY * 0.001))); dirty = true; }, { passive: false });
-window.addEventListener("keydown", e => { if (e.code === "Space" && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); instance.restart(); paused = false; dirty = true; last = performance.now(); document.querySelector<HTMLButtonElement>("#pause")!.textContent = "Ⅱ PAUSE"; } });
-document.addEventListener("visibilitychange", () => { last = performance.now(); dirty = true; });
+window.addEventListener("keydown", e => { if (e.code === "Space" && !(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement)) { e.preventDefault(); instance.restart();presentationClock.reset(); paused = false; dirty = true; last = performance.now(); document.querySelector<HTMLButtonElement>("#pause")!.textContent = "Ⅱ PAUSE"; } });
+document.addEventListener("visibilitychange", () => { presentationClock.suspend(); dirty = true; });
 new ResizeObserver(() => { dirty = true; }).observe(screen);
 window.addEventListener("resize", () => { dirty = true; });
 reducedMotion.addEventListener("change", () => { dirty = true; });
+document.querySelector('#backend')!.addEventListener('change',()=>{void selectRenderer();});
+document.querySelector('#exact')!.addEventListener('change',e=>{exactPixels=(e.target as HTMLInputElement).checked;dirty=true;});
+function currentProject(){
+  const output:RenderProfile3D={...profile,camera:{...profile.camera,yaw,elevation,zoom:zoom*profile.camera.zoom}};
+  return createProject({...loadedProject,id:loadedProject?.id??`3d/${selected==='windOriginal'?'wind-original':selected}`,name:projectName||effects[selected].meta.name||selected,kind:'3d',seed,fps:selectedFps(),bg:profile.background===null?'none':'dark',options:projectOptions,renderProfile:output});
+}
+button('#project',()=>{
+  const project=currentProject();
+  const url=URL.createObjectURL(new Blob([serializeProject(project)],{type:'application/json'}));
+  const a=document.createElement('a');a.href=url;a.download=`${selected}.poku.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+function profileFields(){
+  const e=document.querySelector<HTMLInputElement>('#exposure');if(!e)return;
+  e.value=String(profile.cinematic.exposure??1);document.querySelector<HTMLInputElement>('#bloom')!.value=String(profile.cinematic.bloom&&profile.cinematic.bloom.intensity||0);
+  document.querySelector<HTMLInputElement>('#grid')!.checked=profile.grid;document.querySelector<HTMLInputElement>('#camera-motion')!.checked=profile.cameraMotion;
+  document.querySelector<HTMLTextAreaElement>('#profile-json')!.value=JSON.stringify(profile,null,2);
+}
+function openProject(project:ResolvedProject){
+  if(project.kind!=='3d'||!project.renderProfile)throw new Error('3D RenderProfile이 포함된 프로젝트를 선택하세요.');
+  const loaded=parseRenderProfile3D(JSON.stringify(project.renderProfile));seed=project.seed;projectOptions=project.options;projectName=project.name;
+  loadedProject=project;
+  chooseEffect(loaded.effectId);profile=loaded;yaw=profile.camera.yaw;elevation=profile.camera.elevation;zoom=1;document.querySelector<HTMLSelectElement>('#effect')!.value=selected;
+  elevationSlider.value=String(elevation*180/Math.PI);paused=true;dirty=true;syncLabels();profileFields();
+}
+button('#open-project',()=>document.querySelector<HTMLInputElement>('#project-file')!.click());
+document.querySelector<HTMLInputElement>('#project-file')!.onchange=async event=>{
+  try{const file=(event.target as HTMLInputElement).files?.[0];if(file)openProject(parseProject(await file.text()));}catch(error){status.textContent=String(error);}
+};
+document.querySelector<HTMLInputElement>('#timeline')!.oninput=event=>{paused=true;presentationClock.seek(Number((event.target as HTMLInputElement).value));dirty=true;};
+for(const [id,delta] of [['#previous',-1],['#next',1]] as const)button(id,()=>{paused=true;presentationClock.step(delta,selectedFps());dirty=true;});
+document.querySelector<HTMLInputElement>('#exposure')!.oninput=event=>{profile.cinematic.exposure=Number((event.target as HTMLInputElement).value);dirty=true;};
+document.querySelector<HTMLInputElement>('#bloom')!.oninput=event=>{profile.cinematic.bloom={...profile.cinematic.bloom,intensity:Number((event.target as HTMLInputElement).value)};dirty=true;};
+document.querySelector<HTMLInputElement>('#grid')!.onchange=event=>{profile.grid=(event.target as HTMLInputElement).checked;dirty=true;};
+document.querySelector<HTMLInputElement>('#camera-motion')!.onchange=event=>{profile.cameraMotion=(event.target as HTMLInputElement).checked;dirty=true;};
+button('#apply-profile',()=>{try{const loaded=parseRenderProfile3D(document.querySelector<HTMLTextAreaElement>('#profile-json')!.value);openProject(createProject({...currentProject(),renderProfile:loaded}));}catch(error){status.textContent=String(error);}});
+button('#refresh-profile',()=>{document.querySelector<HTMLTextAreaElement>('#profile-json')!.value=JSON.stringify(currentProject().renderProfile,null,2);});
+addEventListener('pagehide',()=>cinematicRenderer?.dispose());
 chooseEffect(selected); syncLabels();
+try{const saved=sessionStorage.getItem('poku-studio-3d-project');if(saved){sessionStorage.removeItem('poku-studio-3d-project');openProject(parseProject(saved));}}catch(error){status.textContent=String(error);}
 requestAnimationFrame(animation);

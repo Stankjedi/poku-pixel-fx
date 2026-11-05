@@ -5,23 +5,30 @@ import { resolve } from 'node:path';
 import { createIntentBrief, readIntentBrief, prepareIntentReview, recordIntentReview, requireIntentReview } from './lib/effect-intent.mjs';
 
 const args = process.argv.slice(2); let root = fileURLToPath(new URL('../', import.meta.url));
+let variant;
+const variantAt = args.indexOf('--variant');
+if (variantAt !== -1) {
+  variant = args[variantAt + 1];
+  if (!variant || !/^[0-9a-f]{64}$/.test(variant)) { console.error('--variant needs a project SHA-256'); process.exit(1); }
+  args.splice(variantAt, 2);
+}
 const rootAt = args.indexOf('--root');
 if (rootAt !== -1) {
   if (!args[rootAt + 1]) { console.error('--root needs a path'); process.exit(1); }
-  root = resolve(args[rootAt + 1]); args.splice(rootAt, 2);
+  root = resolve(args[rootAt + 1]); process.env.POKU_WORKSPACE = root; args.splice(rootAt, 2);
 }
 const [command, id, file, ...extra] = args;
 try {
   if (extra.length || !['init', 'validate', 'prepare', 'record', 'check'].includes(command)
     || !id || (command === 'record' ? !file : file !== undefined))
-    throw Error('Usage: node tools/effect-intent.mjs init|validate|prepare|check category/effect [--root path]\n       node tools/effect-intent.mjs record category/effect completed-review.json [--root path]');
+    throw Error('Usage: node tools/effect-intent.mjs init|validate|prepare|check category/effect [--root path] [--variant SHA256]\n       node tools/effect-intent.mjs record category/effect completed-review.json [--root path] [--variant SHA256]');
   let result;
   if (command === 'init') result = { ...createIntentBrief(root, id), notice: 'Unfilled draft. Not an artistic or physical approval.' };
   if (command === 'validate') { readIntentBrief(root, id); result = { status: 'brief-structure-valid', notice: 'Only authored fields/time ranges were checked. Render and inspect next.' }; }
-  if (command === 'prepare') result = prepareIntentReview(root, id);
-  if (command === 'record') result = recordIntentReview(root, id, resolve(file));
+  if (command === 'prepare') result = prepareIntentReview(root, id, variant);
+  if (command === 'record') result = recordIntentReview(root, id, resolve(file), variant);
   if (command === 'check') {
-    const checked = requireIntentReview(root, id);
+    const checked = requireIntentReview(root, id, undefined, variant);
     result = { status: 'matching-reviewer-record', reviewer: checked.review.reviewer, userApproval: checked.review.userApproval,
       notice: 'Record/evidence hashes match. This is not automatic aesthetic/physics certification; share re-renders to check current output.' };
   }

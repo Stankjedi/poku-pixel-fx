@@ -1,0 +1,58 @@
+{
+  "schema": "poku.recipe-example-render/v1",
+  "ids": [
+    "melee/tempered-crescent",
+    "melee/socket-ribbon-slash",
+    "lightning/focused-arc",
+    "explosions/layered-detonation",
+    "fire/folded-flame",
+    "arcane/depth-portal"
+  ],
+  "samples": [
+    [
+      0.2,
+      0.55,
+      0.95,
+      1.5
+    ],
+    [
+      0.17,
+      0.3,
+      0.45,
+      0.65
+    ],
+    [
+      0.1,
+      0.3,
+      0.6,
+      1
+    ],
+    [
+      0.22,
+      0.4,
+      0.8,
+      1.4
+    ],
+    [
+      0,
+      0.65,
+      1.4,
+      2.25
+    ],
+    [
+      0,
+      0.75,
+      1.5,
+      2.25
+    ]
+  ],
+  "nativeSize": [
+    320,
+    180
+  ],
+  "review": {
+    "fullSpeedObserved": false,
+    "approval": "not-recorded",
+    "note": "Generated evidence is not an approval. Record actual observations separately."
+  }
+}

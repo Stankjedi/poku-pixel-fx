@@ -1,0 +1,98 @@
+[
+  {
+    "name": "Native clusters",
+    "note": "Three connected shade masses",
+    "nativeSize": [
+      32,
+      32
+    ]
+  },
+  {
+    "name": "Selective contour",
+    "note": "Lit edge opens; shadow remains one cell",
+    "nativeSize": [
+      32,
+      32
+    ]
+  },
+  {
+    "name": "Object dither",
+    "note": "Explicit coverage pattern, never implicit alpha policy",
+    "nativeSize": [
+      32,
+      32
+    ]
+  },
+  {
+    "name": "Palette cycle",
+    "note": "Index order animates without moving pixels",
+    "nativeSize": [
+      32,
+      32
+    ]
+  },
+  {
+    "name": "Authored AA",
+    "note": "Only palette-approved edge substitutions",
+    "nativeSize": [
+      32,
+      32
+    ]
+  },
+  {
+    "name": "Subpixel keys",
+    "note": "Highlight weight changes between held native cels",
+    "nativeSize": [
+      32,
+      32
+    ]
+  },
+  {
+    "name": "Optical correction",
+    "note": "Small native face marks, authored for one size tier",
+    "nativeSize": [
+      32,
+      32
+    ]
+  },
+  {
+    "name": "Metal normal",
+    "note": "Height-derived normals choose discrete metal ramp colors",
+    "nativeSize": [
+      32,
+      32
+    ]
+  },
+  {
+    "name": "Glass ramp",
+    "note": "Narrow specular band plus independent linear emission",
+    "nativeSize": [
+      32,
+      32
+    ]
+  },
+  {
+    "name": "Woven cloth",
+    "note": "Object-anchored repeating material brush",
+    "nativeSize": [
+      32,
+      32
+    ]
+  },
+  {
+    "name": "Stone cluster",
+    "note": "Seeded three-cell grain; no temporal reseeding",
+    "nativeSize": [
+      32,
+      32
+    ]
+  },
+  {
+    "name": "Hatch brush",
+    "note": "Explicitly selected diagonal shade texture",
+    "nativeSize": [
+      32,
+      32
+    ]
+  }
+]

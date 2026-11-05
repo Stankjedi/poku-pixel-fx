@@ -1,13 +1,16 @@
 // Shared by the tools: find effects, render their frames, lay frames out, write PNG, GIF and MP4.
 
 import { readdirSync, existsSync, statSync, writeFileSync, mkdirSync } from "node:fs";
-import { join, dirname, relative, sep, isAbsolute } from "node:path";
+import { join, dirname, relative, sep, isAbsolute, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { AtlasMetadata } from "../../src/render/export.js";
-const { createFrame, clearFrame, createFx, createAct, actBounds, actTiming, composite, painterFor, drawActor, stockActor, backdrop, actorAlphaOf, sceneCameraOffset, transformImpactContact2D, defineRestorationTiming2D, enableHDRLight } = await import(new URL("../../../build/core/index.js", import.meta.url).href);
+import type { AtlasMetadata, AssetSocket } from "../../src/render/export.js";
+import type { PixelTransform2D } from "../../src/core/sprite-raster.js";
+const { createFrame, clearFrame, createFx, createAct, actBounds, actSpan, actTiming, composite, painterFor, drawActor, stockActor, backdrop, actorAlphaOf, sceneCameraOffset, transformImpactContact2D, defineRestorationTiming2D, enableHDRLight } = await import(new URL("../../../build/core/index.js", import.meta.url).href);
 const { rasterText, textWidth } = await import(new URL("../../../build/core/font.js", import.meta.url).href);
+const { pixelTransform2D } = await import(new URL("../../../build/core/sprite-raster.js", import.meta.url).href);
 import { encodePNG } from "./png.mjs";
-const { resolveEffectExport, exportLayout2D, frameDurationMs, edgeFade, separateFrameLayers, atlasMetadata } = await import(new URL("../../../build/render/export.js", import.meta.url).href);
+const { resolveEffectExport, resolveActExport, exportLayout2D, frameDurationMs, edgeFade, separateFrameLayers, atlasMetadata,
+  transformExportSockets, transformExportContacts } = await import(new URL("../../../build/render/export.js", import.meta.url).href);
 export { frameDurationMs, edgeFade };
 
 
@@ -20,12 +23,23 @@ export interface RenderOptions {
   /** Capture straight color/coverage and unclamped linear RGB emission for game assets. */
   layers?: boolean;
   edgeFade?: number | false;
+  /** Internal project finishing hooks; resolved data, not these functions, is serialized. */
+  postprocess?: (frame: any, time: number, index: number, context?: {
+    objectToWorld?: PixelTransform2D; cameraOffset?: readonly [number, number]; allowEmptyMasks?: readonly string[];
+    space?: 'world-2d' | 'screen-only';
+  }) => void;
+  finalizeRGBA?: (rgba: Uint8ClampedArray) => void;
+  compose?: (frame: any, rgba: Uint8ClampedArray, background: any) => Uint8ClampedArray;
+  hdr?: boolean;
+  /** Saved projects explicitly control actor inclusion; legacy bare effect sheets retain their default. */
+  assetActor?: boolean;
 }
 export interface FrameData {
   t: number; color: Uint8ClampedArray; clear: Uint8ClampedArray; frozen?: boolean;
   raw?: Uint32Array; light?: Uint32Array;
-  layers?: { color: Uint8ClampedArray; emission: Float32Array };
+  layers?: { color: Uint8ClampedArray; emission: Float32Array; radiance?: Float32Array; occlusion?: Float32Array };
   camera?: Record<string, unknown>; pivot?: number[];
+  durationMs?: number; sockets?: Record<string, AssetSocket>;
 }
 export interface RenderInfo {
   w: number; h: number; fps: number; n: number; margin?: number; pivot?: number[];
@@ -35,7 +49,16 @@ export interface RenderInfo {
 export interface RenderSequence extends RenderInfo { frames: Iterable<FrameData> }
 export interface RenderResult extends RenderInfo { frames: FrameData[] }
 
+/** Preserve unprocessed source cells while a screen-locked preview receives its camera offset. */
+function copyRenderSurface(source: any, target: any) {
+  target.color.set(source.color); target.light.set(source.light);
+  if (target.hdrLight && source.hdrLight) target.hdrLight.set(source.hdrLight);
+  target.semanticMasks = Object.fromEntries(Object.entries(source.semanticMasks ?? {}).map(([name, mask]) => [name, (mask as Uint8Array).slice()]));
+}
+
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+/** Installed CLI writes to its caller's workspace; direct checkout scripts retain their existing root. */
+export const WORKSPACE = process.env.POKU_WORKSPACE ? resolve(process.env.POKU_WORKSPACE) : ROOT;
 export const FX_DIR = join(ROOT, "src", "fx");
 export const BUILT_FX_DIR = join(ROOT, "build", "fx");
 
@@ -92,17 +115,21 @@ export function renderSequence(fx: EffectData, opts: RenderOptions = {}): Render
   const options: Record<string, any> = { ...plan.options, ...(opts.cameraMotion !== undefined ? { cameraMotion: opts.cameraMotion } : {}) };
   const facts = createFx(fx.mod, options);
   return {
-    w, h, fps, n, margin: opts.margin ?? 0, pivot, settings: plan.settings,
-    contacts: facts.contacts.map((c: any) => transformImpactContact2D(c, { flip: options.flip, angle: options.angle })),
+    w, h, fps, n, margin: opts.margin ?? 0, pivot,
+    settings: opts.assetActor ? { ...plan.settings, actor: !!meta.actor && opts.actor !== false } : plan.settings,
+    contacts: transformExportContacts(facts.contacts, options),
     frames: {
       *[Symbol.iterator](): Generator<FrameData> {
         const inst = createFx(fx.mod, options);
         const actor = meta.actor && opts.actor !== false ? inst.options.actor ?? stockActor() : null;
         const bare = createFrame(w, h, ox, oy), shown = actor ? createFrame(w, h, ox, oy) : bare;
-        if (opts.layers) { enableHDRLight(bare); if (shown !== bare) enableHDRLight(shown); }
+        if (opts.layers || opts.hdr) { enableHDRLight(bare); if (shown !== bare) enableHDRLight(shown); }
         const bgKind = opts.bg ?? meta.bg, bg = bgKind === "none" ? null : backdrop(bgKind, w, h, y - oy);
+        const cameraPreview = opts.postprocess && bg !== null ? createFrame(w, h, ox, oy) : undefined;
+        if (cameraPreview && (opts.layers || opts.hdr)) enableHDRLight(cameraPreview);
         for (let i = 0; i < n; i++) {
           if (i > 0) inst.update(1 / fps);
+          if (opts.postprocess) { (bare as any).semanticMasks = Object.create(null); if (shown !== bare) (shown as any).semanticMasks = Object.create(null); }
           clearFrame(bare); inst.draw(bare);
           if (shown !== bare) {
             clearFrame(shown); inst.draw(shown, "back");
@@ -110,15 +137,28 @@ export function renderSequence(fx: EffectData, opts: RenderOptions = {}): Render
               actorAlphaOf(fx.mod, meta.loop ? inst.t % meta.duration : Math.min(inst.t, meta.duration), inst.options));
             inst.draw(shown, "front");
           }
+          const [sx, sy] = sceneCameraOffset(inst.shake, false, bg === null);
+          const visibleFrame = cameraPreview && (sx || sy) ? cameraPreview : shown;
+          if (visibleFrame !== shown) copyRenderSurface(shown, visibleFrame);
+          const actual = inst.options, objectToWorld = pixelTransform2D(actual.x ?? x, actual.y ?? y, actual.angle ?? 0, !!actual.flip);
+          opts.postprocess?.(bare, inst.t, i, { objectToWorld, cameraOffset: [0, 0] });
+          if (shown !== bare) opts.postprocess?.(shown, inst.t, i, { objectToWorld, cameraOffset: [0, 0] });
+          if (visibleFrame !== shown) opts.postprocess?.(visibleFrame, inst.t, i, { objectToWorld, cameraOffset: [sx, sy] });
           edgeFade(bare, plan.settings.edgeFade);
           if (shown !== bare) edgeFade(shown, plan.settings.edgeFade);
-          const visible = composite(shown, new Uint8ClampedArray(w * h * 4), bg);
-          const [sx, sy] = sceneCameraOffset(inst.shake, false, bg === null);
-          const clear = shown === bare && bg === null ? visible : composite(bare, new Uint8ClampedArray(w * h * 4), null);
+          if (visibleFrame !== shown) edgeFade(visibleFrame, plan.settings.edgeFade);
+          const compose = opts.compose ?? composite;
+          const visible = compose(visibleFrame, new Uint8ClampedArray(w * h * 4), bg);
+          const asset = opts.assetActor ? shown : bare;
+          const clear = shown === asset && bg === null ? visible : compose(asset, new Uint8ClampedArray(w * h * 4), null);
+          if (!opts.compose) { opts.finalizeRGBA?.(visible); if (clear !== visible) opts.finalizeRGBA?.(clear); }
+          const sourceSockets = fx.mod.socketsAt?.(i / fps, options);
+          const sockets = transformExportSockets(sourceSockets, meta.origin, pivot, options);
           yield {
             t: i / fps, color: sx || sy ? shifted(visible, w, h, sx, sy) : visible, clear,
-            ...(opts.diagnostics ? { raw: bare.color.slice(), light: bare.light.slice() } : {}),
-            ...(opts.layers ? { layers: separateFrameLayers(bare) } : {}),
+            ...(opts.diagnostics ? { raw: asset.color.slice(), light: asset.light.slice() } : {}),
+            ...(opts.layers ? { layers: separateFrameLayers(asset) } : {}),
+            ...(sockets ? { sockets } : {}),
           };
         }
       },
@@ -142,33 +182,42 @@ export function renderActSequence(fx: EffectData, opts: RenderOptions = {}): Ren
   const options: Record<string, any> = { ...source, x: X, y: Y, ...(opts.seed !== undefined ? { seed: opts.seed } : {}),
     ...(opts.cameraMotion !== undefined ? { cameraMotion: opts.cameraMotion } : {}) };
   const counter = createAct(fx.mod, options);
-  const seconds = opts.seconds ?? (meta.loop ? meta.duration * 2 - counter.t : 8), hold = meta.loop ? 0 : opts.hold ?? 0.3;
-  if (!Number.isFinite(seconds) || seconds < 0 || !Number.isFinite(hold) || hold < 0)
-    throw new RangeError("Scene duration and end hold must be finite and non-negative");
-  const max = Math.round(seconds * fps), held = Math.ceil(fps * hold);
-  // Count simulation updates without rasterizing. Atlas layout needs an exact frame count,
-  // including hit-stop frames; this does not retain any RGBA sequence.
-  let steps = 0;
-  for (; steps < max && !counter.done(); steps++) counter.update(1 / fps);
-  const n = 1 + steps + held, bgKind = opts.bg ?? meta.bg;
+  const plan = resolveActExport(fx.mod as any, counter, { fps, seconds: opts.seconds, hold: opts.hold });
+  const { n, held, seconds, truncated } = plan, bgKind = opts.bg ?? meta.bg;
   return {
     w, h, fps, n, pivot: layout.pivot,
-    contacts: counter.fx.contacts.map((c: any) => transformImpactContact2D(c, { flip: options.flip, angle: options.angle })),
+    contacts: transformExportContacts(counter.fx.contacts, options),
     settings: { output: "acted-scene", fps, seed: options.seed ?? meta.options?.seed, loop: !!meta.loop,
       background: bgKind === "none" ? "transparent" : bgKind, actor: opts.actor !== false, target: opts.target !== false,
-      cameraMotion: bgKind !== "none" && options.cameraMotion !== 0, edgeFade: 0, hold, seconds,
+      cameraMotion: bgKind !== "none" && options.cameraMotion !== 0, edgeFade: 0, hold: held / fps, seconds,
+      truncated, termination: plan.termination,
+      lastTime: plan.lastTime, outputDuration: plan.duration,
       options: Object.fromEntries(Object.entries({ ...(meta.options ?? {}), ...source }).filter(([key, value]) => key !== "actorAdapter" && typeof value !== "function")) },
     frames: {
       *[Symbol.iterator](): Generator<FrameData> {
         const frame = createFrame(w, h, ox, oy), bg = bgKind === "none" ? null : backdrop(bgKind, w, h, Y - oy);
-        if (opts.layers) enableHDRLight(frame);
+        if (opts.layers || opts.hdr) enableHDRLight(frame);
+        const cameraPreview = opts.postprocess && bg !== null ? createFrame(w, h, ox, oy) : undefined;
+        if (cameraPreview && (opts.layers || opts.hdr)) enableHDRLight(cameraPreview);
         const act = createAct(fx.mod, options);
         for (let i = 0; i < n; i++) {
           if (i > 0) act.update(1 / fps);
+          if (opts.postprocess) (frame as any).semanticMasks = Object.create(null);
           clearFrame(frame); act.draw(frame, { body: opts.actor !== false, target: opts.target !== false });
-          const rgba = composite(frame, new Uint8ClampedArray(w * h * 4), bg), [sx, sy] = sceneCameraOffset(act.shake, false, bg === null);
-          yield { t: act.t, frozen: act.frozen, color: sx || sy ? shifted(rgba, w, h, sx, sy) : rgba,
-            clear: bg === null ? rgba : composite(frame, new Uint8ClampedArray(w * h * 4), null),
+          const [sx, sy] = sceneCameraOffset(act.shake, false, bg === null), actual = act.fx.options;
+          const visibleFrame = cameraPreview && (sx || sy) ? cameraPreview : frame;
+          if (visibleFrame !== frame) copyRenderSurface(frame, visibleFrame);
+          const objectToWorld = pixelTransform2D(actual.x ?? X, actual.y ?? Y, actual.angle ?? 0, !!actual.flip);
+          opts.postprocess?.(frame, act.t, i, { objectToWorld, cameraOffset: [0, 0] });
+          if (visibleFrame !== frame) opts.postprocess?.(visibleFrame, act.t, i, { objectToWorld, cameraOffset: [sx, sy] });
+          const compose = opts.compose ?? composite;
+          const rgba = compose(visibleFrame, new Uint8ClampedArray(w * h * 4), bg);
+          const clear = bg === null ? rgba : compose(frame, new Uint8ClampedArray(w * h * 4), null);
+          if (!opts.compose) { opts.finalizeRGBA?.(rgba); if (clear !== rgba) opts.finalizeRGBA?.(clear); }
+          const sockets = transformExportSockets(fx.mod.socketsAt?.(act.t, actual), meta.origin,
+            [(actual.x ?? X) - ox, (actual.y ?? Y) - oy], actual);
+          yield { t: act.t, frozen: act.frozen, color: sx || sy ? shifted(rgba, w, h, sx, sy) : rgba, clear,
+            ...(sockets ? { sockets } : {}),
             ...(opts.diagnostics ? { raw: frame.color.slice(), light: frame.light.slice() } : {}),
             ...(opts.layers ? { layers: separateFrameLayers(frame) } : {}) };
         }
@@ -326,10 +375,13 @@ export function createSpriteSheet(fx: EffectData, r: RenderInfo, name: string, i
       if (f.frozen) (json.meta.pokuFx.frozenFrames ??= []).push(index);
       if (f.camera) (json.meta.pokuFx.cameraSamples ??= [])[index] = f.camera;
       if (f.pivot) (json.meta.pokuFx.pivotSamples ??= [])[index] = f.pivot;
+      if (f.sockets) (json.meta.pokuFx.socketSamples ??= [])[index] = f.sockets;
+      if (f.durationMs !== undefined) json.frames[index].duration = f.durationMs;
       count++;
     },
     result() {
       if (count !== r.n) throw new RangeError(`Expected ${r.n} atlas frames, received ${count}`);
+      json.meta.pokuFx.durationMs = json.frames.reduce((n, f) => n + f.duration, 0);
       return { png: img.png(), json };
     },
   };

@@ -1,6 +1,8 @@
 # Optional WebGL2 compositing
 
-POKU can use WebGL2 for the **final legacy color/light/background composite and presentation**. Effect updates, particle simulation, `Painter` drawing, authored pixel cells and source buffers remain on the CPU. This is not GPU particle simulation, a GPU rasterizer, WebGPU compute, or a replacement for the cinematic/HDR/bloom compositor.
+This document describes the existing **WebGL2 legacy compositor only**. The additional WebGPU cinematic renderer, DrawIR raster batches, cosmetic particle compute and native wgpu player are documented in [GPU rendering](GPU_RENDERING.md).
+
+POKU can use WebGL2 for the **final legacy color/light/background composite and presentation**. In this WebGL2 path, effect updates, particle simulation, `Painter` drawing, authored pixel cells and source buffers remain on the CPU. Select the separate WebGPU APIs for compute, DrawIR drawing and cinematic/HDR/bloom finishing.
 
 WebGL2 was chosen for an incremental browser path using the existing buffers. Existing APIs, CPU defaults, effect behavior, PNG/JSON export and Aseprite workflows remain unchanged. This implementation does not claim a measured speedup; small canvases can be faster on the CPU once uploads and presentation are included.
 

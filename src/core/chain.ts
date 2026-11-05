@@ -7,11 +7,16 @@ export interface ChainCue extends Omit<EffectOptions, "x" | "y"> {
   fx: EffectModule; t?: number; until?: number; x?: CuePosition; y?: CuePosition;
   /** Smooth fade durations in seconds, measured inside the cue's active window. */
   fadeIn?: number; fadeOut?: number;
+  /** Conservative effect-local bounds INCLUDING any body outside meta.size; omit when unknown. */
+  cullBounds?: {x:number;y:number;width:number;height:number};
+  /** Optical halo, in local pixels. Culling never skips simulation or event updates. */
+  cullHalo?:number;
 }
 interface CueInstance {
   fx: EffectModule; t: number; until: number; x: CuePosition; y: CuePosition;
   fadeIn: number; fadeOut: number; opts: EffectOptions;
   inst: ReturnType<typeof createFx> | null; over: boolean;
+  cullBounds?: ChainCue['cullBounds'];cullHalo:number;
 }
 export interface ChainPainter extends EffectDrawContext { frame: Frame }
 export type PoseKey = [number, Record<string, any>, string?];
@@ -32,13 +37,14 @@ const fade = (elapsed: number, duration: number) => {
  */
 export function chain(cues: ChainCue[]) {
   return (o: Record<string, any>) => {
-    const list: CueInstance[] = cues.map(({ fx, t = 0, until = Infinity, x = 0, y = 0, fadeIn = 0, fadeOut = 0, ...opts }, i) => {
+    const list: CueInstance[] = cues.map(({ fx, t = 0, until = Infinity, x = 0, y = 0, fadeIn = 0, fadeOut = 0,cullBounds,cullHalo=0, ...opts }, i) => {
       if (!Number.isFinite(t) || t < 0 || !(until >= t) || (!Number.isFinite(until) && until !== Infinity)
         || !Number.isFinite(fadeIn) || fadeIn < 0 || !Number.isFinite(fadeOut) || fadeOut < 0)
         throw new RangeError("Cue times and fades must be non-negative; until must follow t");
+      if(!Number.isFinite(cullHalo)||cullHalo<0||cullBounds&&(!Object.values(cullBounds).every(Number.isFinite)||cullBounds.width<0||cullBounds.height<0))throw new RangeError('Invalid conservative cue bounds');
       const end = fx.meta?.loop ? until : Math.min(until, t + (fx.meta?.duration ?? 1));
       const options = { ...(o.palette === undefined ? {} : { palette: o.palette }), ...opts, seed: opts.seed ?? (o.seed ?? 1) + i };
-      return { fx, t, until: end, x, y, fadeIn, fadeOut, opts: options,
+      return { fx, t, until: end, x, y, fadeIn, fadeOut, opts: options,cullBounds,cullHalo,
         inst: t === 0 && end > 0 ? createFx(fx, options) : null, over: end <= t };
     });
     let t = 0, timeError = 0;
@@ -48,6 +54,17 @@ export function chain(cues: ChainCue[]) {
         if (!c.inst || c.over) continue;
         c.inst.options.x = at(c.x);
         c.inst.options.y = at(c.y);
+        if(c.cullBounds){
+          const b=c.cullBounds,h=c.cullHalo,a=c.inst.options.angle??0,cs=Math.cos(a),sn=Math.sin(a),sign=c.inst.options.flip?-1:1;
+          let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
+          for(let k=0;k<4;k++){
+            const x=(k&1?b.x+b.width+h:b.x-h)*sign,y=k&2?b.y+b.height+h:b.y-h;
+            const lx=(c.inst.options.x??0)+x*cs-y*sn,ly=(c.inst.options.y??0)+x*sn+y*cs;
+            const sx=p.tx+lx*p.fx*p.cs-ly*p.sn,sy=p.ty+lx*p.fx*p.sn+ly*p.cs;
+            left=Math.min(left,sx);right=Math.max(right,sx);top=Math.min(top,sy);bottom=Math.max(bottom,sy);
+          }
+          if(right<=p.frame.ox||bottom<=p.frame.oy||left>=p.frame.ox+p.frame.w||top>=p.frame.oy+p.frame.h)continue;
+        }
         const enter = c.fadeIn > 0 ? fade(t - c.t, c.fadeIn) : 1;
         const leave = c.fadeOut > 0 ? fade(c.until - t, c.fadeOut) : 1;
         c.inst.draw(p.frame, layer, { tx: p.tx, ty: p.ty, fx: p.fx, cs: p.cs, sn: p.sn,

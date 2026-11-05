@@ -1,8 +1,127 @@
-var __defProp = Object.defineProperty;
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
+import {
+  CinematicFrameRenderer,
+  PlaybackClock,
+  integerViewport
+} from "./chunks/chunk-QRRJDY7M.js";
+import {
+  encodeRGBAPNG
+} from "./chunks/chunk-OHTBDYQJ.js";
+import {
+  finishProjectRGBA,
+  postprocessProjectFrame
+} from "./chunks/chunk-IXDL6S4B.js";
+import {
+  createProject,
+  parseProject,
+  serializeProject
+} from "./chunks/chunk-JIMPAKU2.js";
+import {
+  CinematicCompositor,
+  SRGB_TO_LINEAR,
+  blendOver,
+  channelToLinear,
+  enableHDRLight
+} from "./chunks/chunk-T3JNBT34.js";
+import {
+  __export
+} from "./chunks/chunk-WSFCRVEQ.js";
+
+// src/render/profile3d.ts
+var EFFECT_IDS_3D = ["frost", "slash", "blackhole", "wind", "windOriginal", "shatter", "flame", "lightning", "water", "voidrift", "meteor", "laser", "shield"];
+var windLights = [
+  { position: [-2.1, 3.5, 1.7], radius: 7, color: "#70efff", intensity: 1.65, specular: 0.5, rim: 0.25 },
+  { position: [2.4, 2.1, -1.8], radius: 6, color: "#8b9dff", intensity: 1.15, specular: 0.38, rim: 0.22 }
+];
+var rigs = {
+  blackhole: [
+    { position: [-2.3, 3.3, 1.5], radius: 6.5, color: "#ff874b", intensity: 1.8, specular: 0.5, rim: 0.25 },
+    { position: [2.5, 1.9, -2.2], radius: 5.5, color: "#7b56ff", intensity: 1.35, specular: 0.42, rim: 0.32 }
+  ],
+  frost: [
+    { position: [-2.2, 2.8, 2], radius: 7.1, color: "#6fe5ff", intensity: 1.9, specular: 0.55, rim: 0.32 },
+    { position: [2.2, 1.3, -1.8], radius: 6.5, color: "#9d79ff", intensity: 1.05, specular: 0.36 }
+  ],
+  slash: [
+    { position: [-1.2, 3.2, 1.8], radius: 7, color: "#96ccff", intensity: 1.6, specular: 0.6 },
+    { position: [2.6, 2, -1.8], radius: 6.4, color: "#eb82ff", intensity: 1.4, specular: 0.42, rim: 0.3 }
+  ],
+  shatter: [
+    { position: [-2.2, 4, 2], radius: 7, color: "#91e8fa", intensity: 1.2, specular: 0.6 },
+    { position: [2, 2, -2], radius: 6, color: "#486dc4", intensity: 0.6, specular: 0.3 }
+  ],
+  windOriginal: windLights
 };
+var layout = {
+  frost: [1, 0.75],
+  slash: [1, 1.4],
+  blackhole: [1.36, 1.12],
+  wind: [1.18, 2.35],
+  windOriginal: [1.18, 2.35],
+  shatter: [1.2, 1.1],
+  flame: [1.65, 1.95],
+  lightning: [1.35, 2.6],
+  water: [1.28, 1.05],
+  voidrift: [1.3, 2.5],
+  meteor: [0.98, 2.3],
+  laser: [1.45, 1.2],
+  shield: [1.45, 2.1]
+};
+var copy = (value) => JSON.parse(JSON.stringify(value));
+function createRenderProfile3D(effectId, overrides = {}) {
+  if (!EFFECT_IDS_3D.includes(effectId)) throw new RangeError(`Unknown 3D profile: ${effectId}`);
+  const id = effectId, [zoom2, targetY] = layout[id], wind = id === "wind" || id === "windOriginal";
+  const base = {
+    version: 1,
+    effectId: id,
+    camera: { yaw: 0.68, elevation: 28 * Math.PI / 180, zoom: zoom2, target: [0, targetY, 0], projection: "orthographic" },
+    lights: copy(rigs[id] ?? []),
+    lighting: { ambientOcclusion: { radius: 3, bias: 0.1, intensity: 0.34 } },
+    cinematic: {
+      bloom: { threshold: 0.12, knee: 0.2, intensity: 1.1, levels: 4 },
+      toneMap: "aces",
+      exposure: 1.3,
+      saturation: 1.12,
+      contrast: 1.05,
+      vignette: 0.07,
+      chromaticFringe: 0.55
+    },
+    background: id === "blackhole" ? "#05030d" : wind ? "#061222" : "#0a1525",
+    grid: id !== "blackhole" && !wind,
+    cameraMotion: true,
+    nativeSize: id === "flame" ? [192, 144] : id === "meteor" ? [260, 180] : [320, 220]
+  };
+  const profile2 = {
+    ...base,
+    ...copy(overrides),
+    version: 1,
+    effectId: id,
+    camera: { ...base.camera, ...copy(overrides.camera ?? {}) },
+    cinematic: { ...base.cinematic, ...copy(overrides.cinematic ?? {}) }
+  };
+  validateRenderProfile3D(profile2);
+  return profile2;
+}
+function validateRenderProfile3D(value) {
+  if (!value || typeof value !== "object") throw new TypeError("Render profile must be an object");
+  const p = value;
+  if (p.version !== 1 || !EFFECT_IDS_3D.includes(p.effectId)) throw new RangeError("Unsupported render profile version/effect");
+  if (!Array.isArray(p.nativeSize) || p.nativeSize.length !== 2 || !p.nativeSize.every((n) => Number.isSafeInteger(n) && n > 0 && n <= 16384)) throw new RangeError("Profile nativeSize must contain two positive dimensions up to 16384");
+  if (!p.camera || ![p.camera.yaw, p.camera.elevation, p.camera.zoom].every(Number.isFinite) || p.camera.zoom <= 0) throw new RangeError("Invalid profile camera");
+  if (p.camera.target && (p.camera.target.length !== 3 || !p.camera.target.every(Number.isFinite))) throw new RangeError("Invalid camera target");
+  if (p.camera.projection && !["perspective", "orthographic"].includes(p.camera.projection)) throw new RangeError("Invalid projection");
+  if (p.camera.perspective !== void 0 && !Number.isFinite(p.camera.perspective)) throw new RangeError("Invalid camera perspective");
+  if (!Array.isArray(p.lights) || p.lights.some((l) => !l || !Array.isArray(l.position) || l.position.length !== 3 || !l.position.every(Number.isFinite) || !Number.isFinite(l.radius) || l.radius <= 0 || !Number.isFinite(l.intensity) || l.intensity < 0)) throw new RangeError("Invalid profile light");
+  if (!p.cinematic || !p.lighting || typeof p.grid !== "boolean" || typeof p.cameraMotion !== "boolean") throw new TypeError("Incomplete render profile");
+  for (const [name, n] of Object.entries(p.cinematic)) if (typeof n === "number" && (!Number.isFinite(n) || n < 0)) throw new RangeError(`Invalid cinematic ${name}`);
+  if (p.cinematic.toneMap && !["aces", "reinhard", "none"].includes(p.cinematic.toneMap)) throw new RangeError("Invalid tone mapper");
+  if (p.cinematic.bloom && Object.values(p.cinematic.bloom).some((n) => typeof n !== "number" || !Number.isFinite(n) || n < 0)) throw new RangeError("Invalid bloom settings");
+  if (p.background !== null && !(typeof p.background === "number" && Number.isInteger(p.background)) && !(typeof p.background === "string" && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(p.background))) throw new RangeError("Invalid background");
+}
+function parseRenderProfile3D(json) {
+  const p = JSON.parse(json);
+  validateRenderProfile3D(p);
+  return copy(p);
+}
 
 // src/3d/math.ts
 var TAU3 = Math.PI * 2;
@@ -52,30 +171,6 @@ var Rng3D = class {
   }
 };
 
-// src/render/coverage.ts
-function blendOver(destination, source, opacity) {
-  const alpha = Math.min(1, Math.max(0, opacity)) * (source >>> 24) / 255;
-  if (!(alpha > 0)) return destination;
-  if (alpha >= 1) return source >>> 0;
-  if (destination >>> 24 === 0) {
-    const byteAlpha = Math.round(alpha * 255);
-    return byteAlpha ? (byteAlpha << 24 | source & 16777215) >>> 0 : 0;
-  }
-  const behind = (destination >>> 24) / 255 * (1 - alpha);
-  const outAlpha = alpha + behind;
-  const r = Math.round(((source & 255) * alpha + (destination & 255) * behind) / outAlpha);
-  const g = Math.round(((source >>> 8 & 255) * alpha + (destination >>> 8 & 255) * behind) / outAlpha);
-  const b = Math.round(((source >>> 16 & 255) * alpha + (destination >>> 16 & 255) * behind) / outAlpha);
-  return (Math.round(outAlpha * 255) << 24 | b << 16 | g << 8 | r) >>> 0;
-}
-
-// src/render/linear.ts
-var SRGB_TO_LINEAR = Float32Array.from({ length: 256 }, (_, i) => {
-  const s = i / 255;
-  return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-});
-var channelToLinear = (color, offset) => SRGB_TO_LINEAR[color >>> offset & 255];
-
 // src/3d/surface.ts
 var pack = (r, g, b) => {
   const value = Math.min(255, Math.max(0, r)) | 0 | (Math.min(255, Math.max(0, g)) | 0) << 8 | (Math.min(255, Math.max(0, b)) | 0) << 16;
@@ -104,6 +199,19 @@ var SurfaceFragments3D = class {
   screenHDR;
   surfaceLight;
   surfaceHDR;
+  layers;
+  maxFragments = Infinity;
+  metrics = {
+    submitted: 0,
+    accepted: 0,
+    rejected: 0,
+    opaque: 0,
+    transparent: 0,
+    maxLayersPerPixel: 0,
+    resolves: 0,
+    recomposedFragments: 0,
+    budgetExceeded: false
+  };
   reset() {
     this.heads?.fill(0);
     this.tails?.fill(0);
@@ -115,6 +223,51 @@ var SurfaceFragments3D = class {
     if (!this.frame.hdrLight) {
       this.baseHDR = this.screenHDR = this.surfaceHDR = void 0;
     }
+    this.layers?.fill(0);
+    this.metrics = {
+      submitted: 0,
+      accepted: 0,
+      rejected: 0,
+      opaque: 0,
+      transparent: 0,
+      maxLayersPerPixel: 0,
+      resolves: 0,
+      recomposedFragments: 0,
+      budgetExceeded: false
+    };
+  }
+  configure(budget = {}) {
+    const n = budget.maxFragments ?? Infinity;
+    if (n !== Infinity && (!Number.isSafeInteger(n) || n < 1)) throw new RangeError("maxFragments must be a positive integer");
+    this.maxFragments = n;
+  }
+  diagnostics() {
+    const arrays = [
+      this.next,
+      this.z,
+      this.colors,
+      this.alphas,
+      this.depthWrites,
+      this.energy,
+      this.heads,
+      this.tails,
+      this.layers,
+      this.baseColor,
+      this.baseLight,
+      this.baseDepth,
+      this.baseHDR,
+      this.screenLight,
+      this.screenHDR,
+      this.surfaceLight,
+      this.surfaceHDR
+    ];
+    return Object.freeze({
+      ...this.metrics,
+      arenaCapacity: this.capacity,
+      arenaBytes: arrays.reduce((n, a) => n + (a?.byteLength ?? 0), 0),
+      activeFragments: this.layers?.reduce((sum, count) => sum + count, 0) ?? 0,
+      budget: this.maxFragments === Infinity ? null : this.maxFragments
+    });
   }
   prepare() {
     if (!this.heads) {
@@ -124,6 +277,7 @@ var SurfaceFragments3D = class {
       this.baseColor = new Uint32Array(n);
       this.baseLight = new Uint32Array(n);
       this.baseDepth = new Float32Array(n);
+      this.layers = new Uint32Array(n);
     }
     if (this.frame.hdrLight && !this.baseHDR) this.baseHDR = new Float32Array(this.frame.w * this.frame.h * 3);
     if (this.count + 1 < this.capacity) return;
@@ -182,11 +336,13 @@ var SurfaceFragments3D = class {
     );
   }
   resolve(i) {
+    this.metrics.resolves++;
     this.frame.color[i] = this.baseColor[i];
     const light = this.baseLight[i], j = i * 3, hdr = this.baseHDR;
     this.writeLight(i, light & 255, light >>> 8 & 255, light >>> 16 & 255, hdr?.[j] ?? 0, hdr?.[j + 1] ?? 0, hdr?.[j + 2] ?? 0);
     let depth = this.baseDepth[i];
     for (let k = this.heads[i]; k; k = this.next[k]) {
+      this.metrics.recomposedFragments++;
       const e = k * 6;
       this.over(i, this.colors[k], this.alphas[k], this.energy[e], this.energy[e + 1], this.energy[e + 2], this.energy[e + 3], this.energy[e + 4], this.energy[e + 5]);
       if (this.depthWrites[k]) depth = Math.max(depth, this.z[k]);
@@ -213,10 +369,20 @@ var SurfaceFragments3D = class {
   /** Preintegrated coverage/emission for custom raster materials (e.g. volume rays). */
   layer(i, depth, color, alpha, lr, lg, lb, hr, hg, hb, depthWrite = true) {
     const z = Math.fround(depth), opacity = alpha * (color >>> 24) / 255;
-    if (opacity <= 0 || z < this.opaqueDepth(i)) return false;
+    this.metrics.submitted++;
+    const emissiveOnly = !depthWrite && Math.max(lr, lg, lb, hr, hg, hb) > 0;
+    if (opacity <= 0 && !emissiveOnly || z < this.opaqueDepth(i)) {
+      this.metrics.rejected++;
+      return false;
+    }
     let head = this.heads?.[i] ?? 0;
     if (opacity >= 1 && depthWrite) {
-      while (head && this.z[head] <= z) head = this.next[head];
+      this.metrics.accepted++;
+      this.metrics.opaque++;
+      while (head && this.z[head] <= z) {
+        head = this.next[head];
+        if (this.layers) this.layers[i]--;
+      }
       if (head) {
         this.heads[i] = head;
         this.baseColor[i] = (color | 4278190080) >>> 0;
@@ -231,13 +397,23 @@ var SurfaceFragments3D = class {
         this.resolve(i);
       } else {
         if (this.heads) this.heads[i] = this.tails[i] = 0;
+        if (this.layers) this.layers[i] = 0;
         this.frame.color[i] = (color | 4278190080) >>> 0;
         this.frame.depth[i] = z;
         this.writeLight(i, lr, lg, lb, hr, hg, hb);
       }
       return true;
     }
+    if (this.count >= this.maxFragments) {
+      this.metrics.rejected++;
+      this.metrics.budgetExceeded = true;
+      throw new RangeError(`Exact transparency fragment budget exceeded (${this.maxFragments}); reduce overlap or bake this effect`);
+    }
     this.prepare();
+    this.metrics.accepted++;
+    this.metrics.transparent++;
+    this.layers[i]++;
+    this.metrics.maxLayersPerPixel = Math.max(this.metrics.maxLayersPerPixel, this.layers[i]);
     if (!head) {
       this.baseColor[i] = this.frame.color[i];
       this.baseLight[i] = this.light()[i];
@@ -331,6 +507,7 @@ var SurfaceFragments3D = class {
     this.heads?.fill(0);
     this.tails?.fill(0);
     this.count = 0;
+    this.layers?.fill(0);
     if (this.surfaceLight) this.surfaceLight.set(this.frame.light);
     if (this.surfaceHDR && this.frame.hdrLight) this.surfaceHDR.set(this.frame.hdrLight);
     this.screenLight?.fill(0);
@@ -406,6 +583,7 @@ var Painter3D = class {
   ringDepth;
   ringPixels = [];
   surfaces;
+  transparency = { mode: "exact" };
   constructor(frame2, camera = DEFAULT_CAMERA_3D) {
     this.frame = frame2;
     this.surfaces = surfacesFor3D(frame2);
@@ -432,6 +610,19 @@ var Painter3D = class {
   set alphaMode(mode) {
     this.frame.alphaMode = mode;
   }
+  /** Applies only to this painter and restores the previous policy even if the callback throws. */
+  withTransparency(policy, draw) {
+    if (!["exact", "cutout", "additive"].includes(policy.mode) || policy.cutoff !== void 0 && (!Number.isFinite(policy.cutoff) || policy.cutoff < 0 || policy.cutoff > 1))
+      throw new RangeError("Invalid transparency policy");
+    const previous = this.transparency;
+    this.transparency = policy;
+    try {
+      draw(this);
+    } finally {
+      this.transparency = previous;
+    }
+    return this;
+  }
   project(point, out) {
     const x = point[0] - this.origin[0], y = point[1] - this.origin[1], z = point[2] - this.origin[2];
     const u = x * this.cy - z * this.sy, v = x * this.sy + z * this.cy;
@@ -452,6 +643,28 @@ var Painter3D = class {
     const opacity = clamp3(alpha) * (color >>> 24) / 255;
     if (opacity <= 0 || dither && opacity < 1 && opacity <= BAYER4[(y & 3) << 2 | x & 3]) return;
     const i = y * this.frame.w + x;
+    if (this.transparency.mode === "cutout") {
+      if (opacity < (this.transparency.cutoff ?? 0.5)) return;
+      this.surfaces.put(i, depth, (color | 4278190080) >>> 0, 1, emission, emissionColor);
+      return;
+    }
+    if (this.transparency.mode === "additive") {
+      const k = Math.max(0, emission) * opacity;
+      this.surfaces.layer(
+        i,
+        depth,
+        0,
+        0,
+        (emissionColor & 255) * k,
+        (emissionColor >>> 8 & 255) * k,
+        (emissionColor >>> 16 & 255) * k,
+        channelToLinear(emissionColor, 0) * k,
+        channelToLinear(emissionColor, 8) * k,
+        channelToLinear(emissionColor, 16) * k,
+        false
+      );
+      return;
+    }
     this.surfaces.put(i, depth, dither ? (color | 4278190080) >>> 0 : color, dither ? 1 : clamp3(alpha), emission, emissionColor);
   }
   /** A custom material sample using the same surface coverage and depth as primitives. */
@@ -753,8 +966,8 @@ var Painter3D = class {
       if (!Number.isFinite(q) || q <= 0 || q >= 1 || r < 0.5 || worldY < 0.02) continue;
       const i = y * w + x;
       if (depth[i] > surface) continue;
-      const profile = Math.sin(q * Math.PI * 2) * Math.sin(q * Math.PI);
-      const shift = profile * amount, sx = Math.floor(x + 0.5 + dx / r * shift), sy = Math.floor(y + 0.5 + dy / r * shift);
+      const profile2 = Math.sin(q * Math.PI * 2) * Math.sin(q * Math.PI);
+      const shift = profile2 * amount, sx = Math.floor(x + 0.5 + dx / r * shift), sy = Math.floor(y + 0.5 + dy / r * shift);
       if (sx < 0 || sx >= w || sy < 0 || sy >= h) continue;
       const j = sy * w + sx;
       if (depth[j] > surface) continue;
@@ -2194,228 +2407,6 @@ var CinematicLighting3D = class {
   }
 };
 
-// src/render/cinematic.ts
-var clamp01 = (x) => Math.max(0, Math.min(1, x));
-var channel = channelToLinear;
-var toSRGB = (v) => {
-  const x = clamp01(v);
-  return Math.round(255 * (x <= 31308e-7 ? x * 12.92 : 1.055 * x ** (1 / 2.4) - 0.055));
-};
-var tone = (v, mode) => {
-  const x = Math.max(0, v);
-  if (mode === "none") return x;
-  if (mode === "reinhard") return x / (1 + x);
-  return clamp01(x * (2.51 * x + 0.03) / (x * (2.43 * x + 0.59) + 0.14));
-};
-var CinematicCompositor = class {
-  w = 0;
-  h = 0;
-  base = new Float32Array(0);
-  emission = new Float32Array(0);
-  extracted = new Float32Array(0);
-  alpha = new Float32Array(0);
-  levels = [];
-  prepare(w, h, count) {
-    if (w !== this.w || h !== this.h) {
-      this.w = w;
-      this.h = h;
-      this.base = new Float32Array(w * h * 3);
-      this.emission = new Float32Array(w * h * 3);
-      this.extracted = new Float32Array(w * h * 3);
-      this.alpha = new Float32Array(w * h);
-      this.levels = [];
-    }
-    let lw = w, lh = h;
-    for (let i = 0; i < count; i++) {
-      lw = Math.max(1, Math.ceil(lw / 2));
-      lh = Math.max(1, Math.ceil(lh / 2));
-      if (!this.levels[i] || this.levels[i].w !== lw || this.levels[i].h !== lh) {
-        this.levels[i] = {
-          w: lw,
-          h: lh,
-          data: new Float32Array(lw * lh * 3),
-          scratch: new Float32Array(lw * lh * 3)
-        };
-      }
-    }
-    this.levels.length = count;
-  }
-  buildBloom(threshold, knee) {
-    const e = this.emission, extract = this.extracted;
-    const k = Math.max(1e-6, knee);
-    for (let i = 0; i < e.length; i += 3) {
-      const brightness = Math.max(e[i], e[i + 1], e[i + 2]);
-      const above = Math.max(0, brightness - threshold);
-      const q = Math.max(0, Math.min(2 * k, brightness - threshold + k));
-      const soft = q * q / (4 * k);
-      const scale = brightness > 0 ? Math.min(1, Math.max(above, soft) / brightness) : 0;
-      extract[i] = e[i] * scale;
-      extract[i + 1] = e[i + 1] * scale;
-      extract[i + 2] = e[i + 2] * scale;
-    }
-    let source = extract;
-    let sw = this.w, sh = this.h;
-    for (const level of this.levels) {
-      const { w, h, data, scratch } = level;
-      for (let y = 0; y < h; y++) {
-        const y0 = Math.min(sh - 1, y * 2), y1 = Math.min(sh - 1, y0 + 1);
-        for (let x = 0; x < w; x++) {
-          const x0 = Math.min(sw - 1, x * 2), x1 = Math.min(sw - 1, x0 + 1);
-          const a = (y0 * sw + x0) * 3, b = (y0 * sw + x1) * 3;
-          const c = (y1 * sw + x0) * 3, d = (y1 * sw + x1) * 3;
-          const o = (y * w + x) * 3;
-          for (let ch2 = 0; ch2 < 3; ch2++)
-            data[o + ch2] = (source[a + ch2] + source[b + ch2] + source[c + ch2] + source[d + ch2]) * 0.25;
-        }
-      }
-      const weights = [1, 4, 6, 4, 1];
-      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-        const o = (y * w + x) * 3;
-        for (let ch2 = 0; ch2 < 3; ch2++) {
-          let sum = 0;
-          for (let tap = -2; tap <= 2; tap++) {
-            const xx = Math.max(0, Math.min(w - 1, x + tap));
-            sum += data[(y * w + xx) * 3 + ch2] * weights[tap + 2];
-          }
-          scratch[o + ch2] = sum / 16;
-        }
-      }
-      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-        const o = (y * w + x) * 3;
-        for (let ch2 = 0; ch2 < 3; ch2++) {
-          let sum = 0;
-          for (let tap = -2; tap <= 2; tap++) {
-            const yy = Math.max(0, Math.min(h - 1, y + tap));
-            sum += scratch[(yy * w + x) * 3 + ch2] * weights[tap + 2];
-          }
-          data[o + ch2] = sum / 16;
-        }
-      }
-      source = data;
-      sw = w;
-      sh = h;
-    }
-  }
-  sample(level, x, y, ch2) {
-    const xx = Math.max(0, Math.min(level.w - 1, x));
-    const yy = Math.max(0, Math.min(level.h - 1, y));
-    const x0 = Math.floor(xx), y0 = Math.floor(yy);
-    const x1 = Math.min(level.w - 1, x0 + 1), y1 = Math.min(level.h - 1, y0 + 1);
-    const tx = xx - x0, ty = yy - y0, d = level.data, w = level.w;
-    const a = d[(y0 * w + x0) * 3 + ch2] * (1 - tx) + d[(y0 * w + x1) * 3 + ch2] * tx;
-    const b = d[(y1 * w + x0) * 3 + ch2] * (1 - tx) + d[(y1 * w + x1) * 3 + ch2] * tx;
-    return a * (1 - ty) + b * ty;
-  }
-  /**
-   * Resolve packed color + emissive buffers to RGBA, without modifying the input.
-   * Pass a reusable output byte array; it is safe to reuse the same compositor each frame.
-   * Bloom operates on explicit emission, not bright opaque art, to preserve painted detail.
-   */
-  render(frame2, out, options = {}) {
-    const { w, h, color, light } = frame2, n = w * h;
-    if (out.length < n * 4) throw new RangeError("Output RGBA buffer is too small");
-    if (color.length < n || light.length < n) throw new RangeError("Invalid frame buffers");
-    if (options.radiance && options.radiance.length < n * 3) throw new RangeError("HDR radiance buffer is too small");
-    if (options.legacyLight && options.legacyLight.length < n) throw new RangeError("Additional packed light buffer is too small");
-    if (frame2.hdrLight && frame2.hdrLight.length < n * 3) throw new RangeError("HDR emission buffer is too small");
-    if (options.occlusion && options.occlusion.length < n) throw new RangeError("Occlusion buffer is too small");
-    const bloom = options.bloom === false ? null : options.bloom ?? {};
-    const count = bloom ? Math.max(1, Math.min(6, Math.floor(bloom.levels ?? 4))) : 0;
-    this.prepare(w, h, count);
-    const bg = options.background ?? null;
-    const opaque = bg !== null, flat = typeof bg === "number";
-    const lightStrength = Math.max(0, options.lightStrength ?? 1);
-    const extra = options.radiance, nativeHDR = frame2.hdrLight, legacy = options.legacyLight, ao = options.occlusion;
-    for (let i = 0; i < n; i++) {
-      const j = i * 3, c = color[i], l = light[i], a = (c >>> 24) / 255;
-      const k = opaque ? flat ? bg : bg[i] : 0;
-      const shade = ao ? clamp01(ao[i]) : 1;
-      this.alpha[i] = opaque ? 1 : a;
-      for (let ch2 = 0; ch2 < 3; ch2++) {
-        const shift = ch2 * 8, v = channel(c, shift);
-        this.base[j + ch2] = (opaque ? v * a + channel(k, shift) * (1 - a) : v * a) * shade;
-        this.emission[j + ch2] = ((nativeHDR ? nativeHDR[j + ch2] : channel(l, shift)) + (legacy ? channel(legacy[i], shift) : 0)) * lightStrength + (extra?.[j + ch2] ?? 0);
-      }
-    }
-    if (bloom && n) this.buildBloom(Math.max(0, bloom.threshold ?? 0.16), Math.max(0, bloom.knee ?? 0.18));
-    const mapper = options.toneMap ?? "aces", exposure = Math.max(0, options.exposure ?? 1.15);
-    const highlightColor = clamp01(options.highlightColor ?? 0);
-    const saturation = Math.max(0, options.saturation ?? 1.08);
-    const contrast = Math.max(0, options.contrast ?? 1.04);
-    const vignette = clamp01(options.vignette ?? 0.08);
-    const bloomIntensity = Math.max(0, bloom?.intensity ?? 0.9);
-    const fringe = Math.max(0, options.chromaticFringe ?? 0.45);
-    const cx = (w - 1) * 0.5, cy = (h - 1) * 0.5;
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const i = y * w + x, j = i * 3;
-      const nx = (x - cx) / Math.max(1, cx), ny = (y - cy) / Math.max(1, cy);
-      const edge = Math.min(1, (nx * nx + ny * ny) * 0.5);
-      const fringeX = nx * fringe, fringeY = ny * fringe;
-      let r = this.base[j] + this.emission[j], g = this.base[j + 1] + this.emission[j + 1];
-      let b = this.base[j + 2] + this.emission[j + 2];
-      if (bloom) {
-        let stride = 2, rr = 0, gg = 0, bb = 0;
-        const normalizer = (1 - 0.58 ** this.levels.length) / (1 - 0.58);
-        let weight = 1 / normalizer;
-        for (const level of this.levels) {
-          const px = (x + 0.5) / stride - 0.5, py = (y + 0.5) / stride - 0.5;
-          rr += this.sample(level, px + fringeX / stride, py + fringeY / stride, 0) * weight;
-          gg += this.sample(level, px, py, 1) * weight;
-          bb += this.sample(level, px - fringeX / stride, py - fringeY / stride, 2) * weight;
-          weight *= 0.58;
-          stride *= 2;
-        }
-        r += rr * bloomIntensity;
-        g += gg * bloomIntensity;
-        b += bb * bloomIntensity;
-      }
-      let alpha = this.alpha[i];
-      if (!opaque) alpha = Math.max(alpha, clamp01(Math.max(r, g, b) * 0.85));
-      const invA = alpha > 0 ? 1 / alpha : 0;
-      if (highlightColor > 0 && mapper !== "none") {
-        r = r * exposure * invA;
-        g = g * exposure * invA;
-        b = b * exposure * invA;
-        const peak = Math.max(r, g, b), onset = clamp01((peak - 1) / 3);
-        const preserve = highlightColor * onset * onset * (3 - 2 * onset);
-        if (preserve > 0) {
-          const scale = tone(peak, mapper) / peak;
-          r = tone(r, mapper) * (1 - preserve) + r * scale * preserve;
-          g = tone(g, mapper) * (1 - preserve) + g * scale * preserve;
-          b = tone(b, mapper) * (1 - preserve) + b * scale * preserve;
-        } else {
-          r = tone(r, mapper);
-          g = tone(g, mapper);
-          b = tone(b, mapper);
-        }
-      } else {
-        r = tone(r * exposure * invA, mapper);
-        g = tone(g * exposure * invA, mapper);
-        b = tone(b * exposure * invA, mapper);
-      }
-      const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-      const fade = 1 - vignette * edge * edge;
-      r = (luminance + (r - luminance) * saturation - 0.18) * contrast + 0.18;
-      g = (luminance + (g - luminance) * saturation - 0.18) * contrast + 0.18;
-      b = (luminance + (b - luminance) * saturation - 0.18) * contrast + 0.18;
-      const o = i * 4;
-      out[o] = toSRGB(r * fade);
-      out[o + 1] = toSRGB(g * fade);
-      out[o + 2] = toSRGB(b * fade);
-      out[o + 3] = Math.round(alpha * 255);
-    }
-    return out;
-  }
-};
-
-// src/render/hdr.ts
-function enableHDRLight(frame2) {
-  const count = frame2.w * frame2.h * 3;
-  if (!frame2.hdrLight || frame2.hdrLight.length !== count)
-    frame2.hdrLight = new Float32Array(count);
-  return frame2;
-}
-
 // src/3d/fragments.ts
 function transformFragment3D(point, position, rotation, scale = 1) {
   const [rx, ry, rz] = rotation, sx = Math.sin(rx), cx = Math.cos(rx), sy = Math.sin(ry), cy = Math.cos(ry), sz = Math.sin(rz), cz = Math.cos(rz);
@@ -2756,7 +2747,17 @@ function drawVolume3D(p, bounds, field, options = {}) {
       lr += (c & 255) * light;
       lg += (c >>> 8 & 255) * light;
       lb += (c >>> 16 & 255) * light;
-      if (f.hdrLight && light > 0) {
+      if (sample.emissionRGB) {
+        const e = sample.emissionRGB;
+        if (e.length !== 3 || !e.every((v2) => Number.isFinite(v2) && v2 >= 0)) throw new RangeError("Volume emissionRGB must be finite nonnegative linear RGB");
+        const encode = (v2) => 255 * (v2 <= 31308e-7 ? v2 * 12.92 : 1.055 * v2 ** (1 / 2.4) - 0.055);
+        lr += encode(Math.max(0, e[0])) * weight - (c & 255) * light;
+        lg += encode(Math.max(0, e[1])) * weight - (c >>> 8 & 255) * light;
+        lb += encode(Math.max(0, e[2])) * weight - (c >>> 16 & 255) * light;
+        hr += Math.max(0, e[0]) * weight;
+        hg += Math.max(0, e[1]) * weight;
+        hb += Math.max(0, e[2]) * weight;
+      } else if (f.hdrLight && light > 0) {
         hr += channelToLinear(c, 0) * light;
         hg += channelToLinear(c, 8) * light;
         hb += channelToLinear(c, 16) * light;
@@ -2808,6 +2809,12 @@ var VolumeGrid3D = class {
   materials;
   uniformMaterials;
   hasEmission = false;
+  rgbEmission;
+  rgbCells;
+  hasRGBEmission = false;
+  sampleIndices = new Float64Array(8);
+  sampleWeights = new Float64Array(8);
+  outputRGB = [0, 0, 0];
   inverse;
   output = { density: 0, color: 0, emission: 0 };
   constructor(bounds, cellSize = 0.16) {
@@ -2828,6 +2835,9 @@ var VolumeGrid3D = class {
     this.data.fill(0);
     this.materials.fill(0);
     this.hasEmission = false;
+    this.hasRGBEmission = false;
+    this.rgbEmission?.fill(0);
+    this.rgbCells?.fill(0);
     let i = 0;
     for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++, i += 5) {
       const sample = field(min[0] + x / this.inverse[0], min[1] + y / this.inverse[1], min[2] + z / this.inverse[2]);
@@ -2840,6 +2850,15 @@ var VolumeGrid3D = class {
       if (!this.hasEmission) this.materials[i / 5] = Number.isFinite(this.data[i + 1] + this.data[i + 2] + this.data[i + 3]) ? (c | 4278190080) >>> 0 : 1;
       this.data[i + 4] = Number.isFinite(sample.emission) ? Math.max(0, sample.emission ?? 0) * d : 0;
       if (this.data[i + 4] > 0) this.hasEmission = true;
+      if (sample.emissionRGB) {
+        this.rgbEmission ??= new Float32Array(this.materials.length * 3);
+        this.rgbCells ??= new Uint8Array(this.materials.length);
+        if (sample.emissionRGB.length !== 3 || !sample.emissionRGB.every((v) => Number.isFinite(v) && v >= 0)) throw new RangeError("Volume emissionRGB must be finite nonnegative linear RGB");
+        this.rgbCells[i / 5] = 1;
+        const j = i / 5 * 3;
+        for (let ch2 = 0; ch2 < 3; ch2++) this.rgbEmission[j + ch2] = Math.max(0, sample.emissionRGB[ch2]) * d;
+        this.hasRGBEmission = true;
+      }
     }
     const row = nx * 5, plane = nx * ny * 5, data = this.data;
     for (let z = 0; z < nz - 1; z++) for (let y = 0; y < ny - 1; y++) for (let x = 0; x < nx - 1; x++) {
@@ -2884,6 +2903,35 @@ var VolumeGrid3D = class {
     }
     const emission = this.hasEmission || !Number.isFinite(density) ? data[i0 + 4] * w0 + data[i1 + 4] * w1 + data[i2 + 4] * w2 + data[i3 + 4] * w3 + data[i4 + 4] * w4 + data[i5 + 4] * w5 + data[i6 + 4] * w6 + data[i7 + 4] * w7 : 0;
     this.output.emission = emission / density;
+    delete this.output.emissionRGB;
+    if (this.hasRGBEmission && this.rgbEmission) {
+      const indices = this.sampleIndices, weights = this.sampleWeights;
+      indices[0] = i0;
+      indices[1] = i1;
+      indices[2] = i2;
+      indices[3] = i3;
+      indices[4] = i4;
+      indices[5] = i5;
+      indices[6] = i6;
+      indices[7] = i7;
+      weights[0] = w0;
+      weights[1] = w1;
+      weights[2] = w2;
+      weights[3] = w3;
+      weights[4] = w4;
+      weights[5] = w5;
+      weights[6] = w6;
+      weights[7] = w7;
+      for (let ch2 = 0; ch2 < 3; ch2++) {
+        let value = 0;
+        for (let k = 0; k < 8; k++) {
+          const address = indices[k], rgb2 = this.rgbEmission[address / 5 * 3 + ch2];
+          value += (this.rgbCells?.[address / 5] ? rgb2 : data[address + 4] > 0 && data[address] > 0 ? channelToLinear((4278190080 | Math.round(data[address + 3] / data[address]) << 16 | Math.round(data[address + 2] / data[address]) << 8 | Math.round(data[address + 1] / data[address])) >>> 0, ch2 * 8) * data[address + 4] : 0) * weights[k];
+        }
+        this.outputRGB[ch2] = value / density;
+      }
+      this.output.emissionRGB = this.outputRGB;
+    }
     return this.output;
   };
 };
@@ -3105,20 +3153,20 @@ function drawDischarge3D(painter2, channels, options = {}) {
   const color = (t) => palette[Math.round(clamp3(t) * (palette.length - 1))];
   if (radius <= 0 || stroke <= 0 && residual <= 0 || progress <= 0) return;
   for (let c = channels.length - 1; c >= 0; c--) {
-    const channel2 = channels[c], revealed = (progress - channel2.rootDistance) * channels[0].length / channel2.length;
+    const channel = channels[c], revealed = (progress - channel.rootDistance) * channels[0].length / channel.length;
     if (revealed <= 0) continue;
-    const forkDecay = channel2.generation === 0 ? 1 : stroke ** (0.35 * channel2.generation);
-    for (let i = 1; i < channel2.points.length; i++) {
-      const from = channel2.distances[i - 1], to = channel2.distances[i];
+    const forkDecay = channel.generation === 0 ? 1 : stroke ** (0.35 * channel.generation);
+    for (let i = 1; i < channel.points.length; i++) {
+      const from = channel.distances[i - 1], to = channel.distances[i];
       if (from >= revealed) break;
-      const u = (from + Math.min(to, revealed)) * 0.5, taper = channel2.generation === 0 ? 0.82 + 0.18 * (1 - u) : 1 - 0.68 * u;
+      const u = (from + Math.min(to, revealed)) * 0.5, taper = channel.generation === 0 ? 0.82 + 0.18 * (1 - u) : 1 - 0.68 * u;
       const conductance = 0.86 + 0.14 * Math.sin(i * 1.91 + c * 2.73) ** 2;
-      const energy = (stroke * forkDecay + residual * 0.35) * channel2.strength * taper * conductance;
+      const energy = (stroke * forkDecay + residual * 0.35) * channel.strength * taper * conductance;
       if (energy < 0.025) continue;
-      const start = channel2.points[i - 1], end = revealed < to ? mix(start, channel2.points[i], clamp3((revealed - from) / (to - from))) : channel2.points[i];
-      const width2 = radius * (0.52 + stroke * 0.75) * channel2.strength * taper;
-      const tone2 = channel2.generation === 0 ? 0.18 + Math.sqrt(energy) * 0.82 : 0.12 + Math.sqrt(energy) * 0.7;
-      painter2.line(start, end, width2, color(tone2), 1, emission * energy);
+      const start = channel.points[i - 1], end = revealed < to ? mix(start, channel.points[i], clamp3((revealed - from) / (to - from))) : channel.points[i];
+      const width2 = radius * (0.52 + stroke * 0.75) * channel.strength * taper;
+      const tone = channel.generation === 0 ? 0.18 + Math.sqrt(energy) * 0.82 : 0.12 + Math.sqrt(energy) * 0.7;
+      painter2.line(start, end, width2, color(tone), 1, emission * energy);
     }
   }
 }
@@ -3145,7 +3193,7 @@ function create8(options) {
   const height2 = clamp3(Number.isFinite(options.height) ? options.height : 6.2, 2, 8);
   const intensity = clamp3(Number.isFinite(options.intensity) ? options.intensity : 1, 0, 2);
   const palette = options.palette.length ? options.palette : meta8.options.palette;
-  const tone2 = (u) => palette[Math.round(u * (palette.length - 1))];
+  const tone = (u) => palette[Math.round(u * (palette.length - 1))];
   const origin = [-1.8, height2, -0.6], contact = [0.8, 0.05, 0.3];
   const channels = createDischarge3D({ start: origin, end: contact, seed: options.seed, branches: options.branching, roughness: 0.23, detail: 5 });
   const rng = new Rng3D(options.seed ^ 1779033703), sparks = new Particles3D(0.035, 100);
@@ -3161,7 +3209,7 @@ function create8(options) {
       while (nextStroke < LIGHTNING_STROKES_3D.length && t + 1e-9 >= LIGHTNING_STROKES_3D[nextStroke]) {
         for (let i = 0; i < (nextStroke ? 12 : 22); i++) {
           const a = rng.range(0, TAU3), speed = rng.range(0.7, 2.8);
-          sparks.spawn({ position: contact, velocity: [Math.cos(a) * speed, rng.range(1.2, 3.4), Math.sin(a) * speed], life: rng.range(0.13, 0.48), radius: rng.range(0.015, 0.035), color: tone2(i % 3 ? 0.8 : 1), style: "spark", gravity: 8, drag: 1.7, emission: 0.1 * intensity });
+          sparks.spawn({ position: contact, velocity: [Math.cos(a) * speed, rng.range(1.2, 3.4), Math.sin(a) * speed], life: rng.range(0.13, 0.48), radius: rng.range(0.015, 0.035), color: tone(i % 3 ? 0.8 : 1), style: "spark", gravity: 8, drag: 1.7, emission: 0.1 * intensity });
         }
         nextStroke++;
       }
@@ -3176,8 +3224,8 @@ function create8(options) {
       const connection = smooth3(0.35, 0.61, t) * (1 - smooth3(0.66, 0.84, t));
       for (let i = 0; i < streamers.length; i++) drawDischarge3D(p, streamers[i], { progress: connection * (1.2 - i * 0.1), stroke: pulse * 0.55, residual: connection * 0.48, radius: 0.025, palette, emission: 0.07 * intensity });
       if (pulse > 0.025) {
-        p.point(contact, 0.035 + pulse * 0.07, tone2(1), 1, pulse * 0.3 * intensity);
-        p.glow(contact, 0.25 + 0.2 * pulse, tone2(0.8), pulse * 0.1 * intensity);
+        p.point(contact, 0.035 + pulse * 0.07, tone(1), 1, pulse * 0.3 * intensity);
+        p.glow(contact, 0.25 + 0.2 * pulse, tone(0.8), pulse * 0.1 * intensity);
       }
       sparks.draw(p);
     }
@@ -3560,9 +3608,9 @@ function create10(options) {
     const offset = side > 0 ? 17 : 0, n = lerp3(teeth[offset + slot], teeth[offset + slot + 1], f);
     const breathing = 1 + Math.sin(t * 2.4 + v * 5) * 0.035;
     const tear = [0, 0.16, 0.4, 0.64, 0.5, 0.78, 0.92, 0.72, 0.86, 1, 0.7, 0.79, 0.55, 0.28, 0.4, 0.1, 0];
-    const profile = lerp3(tear[slot], tear[slot + 1], f);
+    const profile2 = lerp3(tear[slot], tear[slot + 1], f);
     return world([
-      0.28 * Math.sin(v * 7.6 + 0.5) + side * (0.02 + (1.48 * profile * breathing + n * taper) * o),
+      0.28 * Math.sin(v * 7.6 + 0.5) + side * (0.02 + (1.48 * profile2 * breathing + n * taper) * o),
       0.22 + 5.3 * v,
       0.2 * Math.sin(v * 6.4 + t * 0.65) + side * 0.18 * Math.sin(v * 8 + t * 0.8) * taper * o
     ]);
@@ -3728,9 +3776,9 @@ function createImpactTerrain3D(seed2 = 1, size = 1) {
   for (let z = 0; z < n; z++) for (let x = 0; x < n; x++) {
     const a = z * (n + 1) + x, b = a + 1, c = a + n + 1, d = c + 1, at = vertices[a];
     if (Math.hypot(at[0], at[2]) > 5.65 * size) continue;
-    const tone2 = rng.range(-0.028, 0.028);
+    const tone = rng.range(-0.028, 0.028);
     faces.push([a, c, b], [b, c, d]);
-    tones.push(tone2, tone2 * 0.7);
+    tones.push(tone, tone * 0.7);
     if (x % 3 === 0 && z % 2 === 0 || z % 3 === 0 && x % 2 === 0) marks.push([a, x % 3 === 0 ? c : b]);
   }
   return { vertices, faces, tones, size, marks };
@@ -4116,11 +4164,11 @@ function drawCoherentBeam3D(p, frame2, options = {}) {
   const emission = clamp3(finite4(options.emission, 0.32), 0, 4);
   if (head <= tail || radius <= 0 || power <= 0) return;
   const palette = options.palette?.length ? options.palette : LASER_PALETTE_3D;
-  const tone2 = (fraction) => palette[Math.round(fraction * (palette.length - 1))];
+  const tone = (fraction) => palette[Math.round(fraction * (palette.length - 1))];
   const a = beamPoint3D(frame2, tail), b = beamPoint3D(frame2, head), alpha = Math.min(1, power);
-  p.line(a, b, radius * 3.1, tone2(0.46), alpha * 0.18, emission * power * 0.28);
-  p.line(a, b, radius * 1.8, tone2(0.66), alpha * 0.88, emission * power * 0.6);
-  p.line(a, b, radius, tone2(1), alpha, emission * power);
+  p.line(a, b, radius * 3.1, tone(0.46), alpha * 0.18, emission * power * 0.28);
+  p.line(a, b, radius * 1.8, tone(0.66), alpha * 0.88, emission * power * 0.6);
+  p.line(a, b, radius, tone(1), alpha, emission * power);
 }
 
 // src/3d/effects/coherent-laser.ts
@@ -4267,7 +4315,7 @@ function create12(options) {
   const bounded = (value, fallback, lo, hi) => clamp3(Number.isFinite(value) ? value : fallback, lo, hi);
   const length = bounded(options.length, 9, 2, 10), width2 = bounded(options.width, 0.065, 0.025, 0.16);
   const intensity = bounded(options.intensity, 1, 0, 2), palette = options.palette.length ? options.palette : meta12.options.palette;
-  const tone2 = (fraction) => palette[Math.round(fraction * (palette.length - 1))];
+  const tone = (fraction) => palette[Math.round(fraction * (palette.length - 1))];
   const beam = createBeamFrame3D([-length / 2, 1.8, 0], [length / 2, 1.8, 0]);
   const rng = new Rng3D(options.seed);
   const impact = createLaserMetalContact3D(beam, { seed: options.seed, scale: options.impactScale, intensity, palette: options.impactPalette, targetVisible: options.targetVisible, timing: LASER_TIMING_3D });
@@ -4293,10 +4341,10 @@ function create12(options) {
       if (charging > 1e-3) {
         for (let i = 0; i < 3; i++) {
           const radius = (0.55 - i * 0.12) * (1 - e.charge * 0.54) + e.power * 0.055;
-          collar(p, -0.017 + i * 0.042, radius, (0.25 + i * 0.2) * charging * shut, tone2(i === 2 ? 0.85 : 0.66), t * (i % 2 ? -1 : 1) * 0.7, t < 0.3 ? smooth3(0.04, 0.3, t) : 1);
+          collar(p, -0.017 + i * 0.042, radius, (0.25 + i * 0.2) * charging * shut, tone(i === 2 ? 0.85 : 0.66), t * (i % 2 ? -1 : 1) * 0.7, t < 0.3 ? smooth3(0.04, 0.3, t) : 1);
         }
-        p.point(beam.start, 0.04 + e.charge * 0.08, tone2(1), Math.min(1, charging * 1.7), 0.2 * intensity);
-        p.glow(beam.start, 0.54 + charging * 0.2, tone2(0.66), charging * 0.18 * intensity);
+        p.point(beam.start, 0.04 + e.charge * 0.08, tone(1), Math.min(1, charging * 1.7), 0.2 * intensity);
+        p.glow(beam.start, 0.54 + charging * 0.2, tone(0.66), charging * 0.18 * intensity);
       }
       for (const mote of gather) {
         const q = (t - mote.offset) / mote.life;
@@ -4304,8 +4352,8 @@ function create12(options) {
         const radius = mote.radius * (1 - q) ** 1.7, a = mote.angle + q * 0.3, alpha = Math.sin(q * Math.PI);
         const at = beamPoint3D(beam, mote.axial * (1 - q), Math.cos(a) * radius, Math.sin(a) * radius);
         const tail = beamPoint3D(beam, mote.axial * (1 - q + 0.1), Math.cos(a) * (radius + 0.12), Math.sin(a) * (radius + 0.12));
-        p.line(tail, at, 0.013, tone2(0.66), alpha * 0.65, 0.02 * intensity);
-        p.point(at, 0.018, tone2(0.85), alpha, 0.04 * intensity);
+        p.line(tail, at, 0.013, tone(0.66), alpha * 0.65, 0.02 * intensity);
+        p.point(at, 0.018, tone(0.85), alpha, 0.04 * intensity);
       }
       if (e.power > 0) {
         const power = e.power * (0.96 + Math.sin(t * 21) * 0.025 + ignition * 0.08);
@@ -4313,9 +4361,9 @@ function create12(options) {
         for (let i = 0; i < 3; i++) {
           const u = ((t - LASER_TIMING_3D.fire) * 2.3 + i / 3) % 1;
           if (u <= e.tail || u >= e.head) continue;
-          p.line(beamPoint3D(beam, Math.max(e.tail, u - 0.045)), beamPoint3D(beam, u), width2 * 1.14, tone2(1), 0.9, 0.32 * intensity);
+          p.line(beamPoint3D(beam, Math.max(e.tail, u - 0.045)), beamPoint3D(beam, u), width2 * 1.14, tone(1), 0.9, 0.32 * intensity);
         }
-        if (e.head < 1) p.point(beamPoint3D(beam, e.head), width2 * 1.8, tone2(1), 1, 0.3 * intensity);
+        if (e.head < 1) p.point(beamPoint3D(beam, e.head), width2 * 1.8, tone(1), 1, 0.3 * intensity);
       }
       impact.contact(p, t);
     }
@@ -4496,7 +4544,7 @@ function drawShieldSurface3D(p, surface, options) {
     arenas.set(surface, arena);
   }
   prepareArena(arena, surface, aperture, options.impacts ?? [], options.time);
-  const palette = options.palette?.length ? options.palette : SHIELD_PALETTE_3D, tone2 = (q) => palette[Math.round(clamp3(q) * (palette.length - 1))];
+  const palette = options.palette?.length ? options.palette : SHIELD_PALETTE_3D, tone = (q) => palette[Math.round(clamp3(q) * (palette.length - 1))];
   const emission = clamp3(Number.isFinite(options.emission ?? 0.2) ? options.emission ?? 0.2 : 0.2, 0, 4);
   const { normals, responses, points, projected, faceDepth, order } = arena;
   const position = (node, offset, out) => {
@@ -4515,7 +4563,7 @@ function drawShieldSurface3D(p, surface, options) {
   for (const face of order) {
     const node = VERTICES + face, n = normals[node], crest = responses[node * 3], contact = responses[node * 3 + 1];
     const edge = smooth3(0.82, capCos, dot3(n, surface.normal)), lit = clamp3(dot3(n, FACE_LIGHT));
-    const color = tone2(0.12 + lit * 0.12 + edge * 0.04 + Math.min(0.34, crest * 0.12 + contact * 0.3));
+    const color = tone(0.12 + lit * 0.12 + edge * 0.04 + Math.min(0.34, crest * 0.12 + contact * 0.3));
     const a = meshIndices[face * 3], b = meshIndices[face * 3 + 1], c = meshIndices[face * 3 + 2], alpha = (0.48 + edge * 0.14 + crest * 0.18) * visibility;
     if (p.triangleProjected) p.triangleProjected(projected[a], projected[b], projected[c], color, alpha, contact * emission * 0.06);
     else p.triangle(points[a], points[b], points[c], color, alpha, contact * emission * 0.06);
@@ -4530,7 +4578,7 @@ function drawShieldSurface3D(p, surface, options) {
     let active = -1;
     for (const cell of edge.cells) if (arena.radiusSquared[cell] <= r2) active = Math.max(active, Math.min(1, responses[cell * 3] * 2 + responses[cell * 3 + 1] * 1.4));
     if (active < 0) continue;
-    const color = tone2(0.28 + active * 0.45), alpha = (0.13 + active * 0.58) * visibility, light = active * emission * 0.28;
+    const color = tone(0.28 + active * 0.45), alpha = (0.13 + active * 0.58) * visibility, light = active * emission * 0.28;
     if (p.lineProjected) p.lineProjected(projected[edge.a], projected[edge.b], 0.014, color, alpha, light);
     else p.line(points[edge.a], points[edge.b], 0.014, color, alpha, light);
   }
@@ -4540,7 +4588,7 @@ function drawShieldSurface3D(p, surface, options) {
     arena.lipProjected[i] = p.project(arena.lipPoints[i], arena.lipProjected[i]);
   }
   for (let i = 0; i < SIDES; i++) {
-    const j = (i + 1) % SIDES, n = normals[rim + i], color = tone2(0.52 + Math.max(0, dot3(n, LIP_LIGHT)) * 0.1 + Math.min(0.3, responses[(rim + i) * 3]));
+    const j = (i + 1) % SIDES, n = normals[rim + i], color = tone(0.52 + Math.max(0, dot3(n, LIP_LIGHT)) * 0.1 + Math.min(0.3, responses[(rim + i) * 3]));
     if (p.lineProjected) p.lineProjected(arena.lipProjected[i], arena.lipProjected[j], 0.028, color, visibility * 0.86, emission * visibility * 0.3);
     else p.line(arena.lipPoints[i], arena.lipPoints[j], 0.028, color, visibility * 0.86, emission * visibility * 0.3);
   }
@@ -4566,7 +4614,7 @@ var meta13 = {
 };
 function create13(options) {
   const radius = clamp3(Number.isFinite(options.radius) ? options.radius : 2.8, 1.2, 3.4), intensity = clamp3(Number.isFinite(options.intensity) ? options.intensity : 1, 0, 2);
-  const palette = options.palette?.length ? options.palette : meta13.options.palette, tone2 = (q) => palette[Math.round(clamp3(q) * (palette.length - 1))];
+  const palette = options.palette?.length ? options.palette : meta13.options.palette, tone = (q) => palette[Math.round(clamp3(q) * (palette.length - 1))];
   const surface = createShieldSurface3D([0.6, radius + 0.4, 0.65], [0.14, 0, 1], radius * 1.22, radius);
   const activeSurface = { ...surface };
   const impacts = SHIELD_TIMING_3D.hits.map((at, i) => ({ at, normal: shieldNormal3D(surface, [-0.27, 0.38, -0.04][i] * radius, [0.24, -0.19, 0.03][i] * radius), strength: [0.9, 0.72, 1.2][i] }));
@@ -4611,8 +4659,8 @@ function create13(options) {
         const contact = Math.exp(-age * 22), ringAge = age;
         if (contact > 0.01) {
           const at = shieldPoint3D(surface, hit.normal, -0.15 * Math.exp(-age * 13) + 0.035);
-          p.point(at, 0.065 + contact * 0.07, tone2(1), contact, 0.3 * intensity);
-          p.glow(at, 0.54, tone2(0.8), contact * 0.4 * intensity);
+          p.point(at, 0.065 + contact * 0.07, tone(1), contact, 0.3 * intensity);
+          p.glow(at, 0.54, tone(0.8), contact * 0.4 * intensity);
         }
         for (let echo = 0; echo < 2; echo++) {
           const age2 = ringAge - echo * 0.11;
@@ -4623,7 +4671,7 @@ function create13(options) {
             const a = ring[k], b = ring[k + 1];
             if (!a || !b) continue;
             const da = impacts.reduce((d, h) => d + shieldResponse3D(surface, a, h, time).displacement, 0), db = impacts.reduce((d, h) => d + shieldResponse3D(surface, b, h, time).displacement, 0);
-            p.line(shieldPoint3D(surface, a, da + 0.036), shieldPoint3D(surface, b, db + 0.036), echo ? 0.018 : 0.032, tone2(echo ? 0.62 : 0.86), strength * 0.9, strength * intensity * 0.16);
+            p.line(shieldPoint3D(surface, a, da + 0.036), shieldPoint3D(surface, b, db + 0.036), echo ? 0.018 : 0.032, tone(echo ? 0.62 : 0.86), strength * 0.9, strength * intensity * 0.16);
           }
         }
       }
@@ -4671,39 +4719,38 @@ var dragging = false;
 var prevX = 0;
 var prevY = 0;
 var seed = meta3.options.seed;
+var projectOptions = {};
+var projectName = "";
+var loadedProject;
+var previewProject = createProject({ id: "3d/preview", kind: "3d" });
+var selectedFps = () => loadedProject?.fps ?? 30;
+var presentationClock = new PlaybackClock(meta3.duration, true);
+presentationClock.playing = true;
 var cinematic = new CinematicCompositor();
 var worldLights = new CinematicLighting3D();
-var windRig = [
-  { position: [-2.1, 3.5, 1.7], radius: 7, color: "#70efff", intensity: 1.65, specular: 0.5, rim: 0.25 },
-  { position: [2.4, 2.1, -1.8], radius: 6, color: "#8b9dff", intensity: 1.15, specular: 0.38, rim: 0.22 }
-];
-var rigs = {
-  blackhole: [
-    { position: [-2.3, 3.3, 1.5], radius: 6.5, color: "#ff874b", intensity: 1.8, specular: 0.5, rim: 0.25 },
-    { position: [2.5, 1.9, -2.2], radius: 5.5, color: "#7b56ff", intensity: 1.35, specular: 0.42, rim: 0.32 }
-  ],
-  frost: [
-    { position: [-2.2, 2.8, 2], radius: 7.1, color: "#6fe5ff", intensity: 1.9, specular: 0.55, rim: 0.32 },
-    { position: [2.2, 1.3, -1.8], radius: 6.5, color: "#9d79ff", intensity: 1.05, specular: 0.36 }
-  ],
-  slash: [
-    { position: [-1.2, 3.2, 1.8], radius: 7, color: "#96ccff", intensity: 1.6, specular: 0.6 },
-    { position: [2.6, 2, -1.8], radius: 6.4, color: "#eb82ff", intensity: 1.4, specular: 0.42, rim: 0.3 }
-  ],
-  shatter: [
-    { position: [-2.2, 4, 2], radius: 7, color: "#91e8fa", intensity: 1.2, specular: 0.6 },
-    { position: [2, 2, -2], radius: 6, color: "#486dc4", intensity: 0.6, specular: 0.3 }
-  ],
-  flame: [],
-  lightning: [],
-  water: [],
-  meteor: [],
-  laser: [],
-  shield: [],
-  voidrift: [],
-  wind: [],
-  windOriginal: windRig
-};
+var profile = createRenderProfile3D(selected);
+var cinematicRenderer = null;
+var exactPixels = true;
+var rendererRequest = 0;
+async function selectRenderer() {
+  const token = ++rendererRequest;
+  cinematicRenderer?.dispose();
+  cinematicRenderer = null;
+  const backend = document.querySelector("#backend").value === "webgpu" ? "webgpu" : "cpu";
+  try {
+    const candidate = await CinematicFrameRenderer.create(offscreen, { backend, onStatus: (s) => {
+      document.querySelector("#renderer-status").textContent = JSON.stringify(s);
+    } });
+    if (token !== rendererRequest) {
+      candidate.dispose();
+      return;
+    }
+    cinematicRenderer = candidate;
+    dirty = true;
+  } catch (error) {
+    document.querySelector("#renderer-status").textContent = `CPU \xB7 ${String(error)}`;
+  }
+}
 function syncLabels() {
   document.querySelector("#pxText").textContent = `${pixel}\xD7`;
   document.querySelector("#elText").textContent = `${Math.round(elevation * 180 / Math.PI)}\xB0`;
@@ -4712,25 +4759,18 @@ function syncLabels() {
 function chooseEffect(name) {
   dirty = true;
   selected = name;
-  if (name === "frost") instance = createFx3D(frost_nova_exports, { seed });
-  else if (name === "voidrift") instance = createFx3D(void_rift_exports, { seed });
-  else if (name === "shield") instance = createFx3D(energy_shield_exports, { seed });
-  else if (name === "laser") instance = createFx3D(coherent_laser_exports, { seed });
-  else if (name === "meteor") instance = createFx3D(meteor_impact_exports, { seed });
-  else if (name === "water") instance = createFx3D(crown_splash_exports, { seed });
-  else if (name === "lightning") instance = createFx3D(forked_lightning_exports, { seed });
-  else if (name === "flame") instance = createFx3D(thermal_plume_exports, { seed });
-  else if (name === "shatter") instance = createFx3D(ice_shatter_exports, { seed });
-  else if (name === "slash") instance = createFx3D(arc_slash_exports, { seed });
-  else if (name === "wind") instance = createFx3D(wind_rasenshuriken_exports, { seed });
-  else if (name === "windOriginal") instance = createFx3D(wind_rasenshuriken_legacy_exports, { seed });
-  else instance = createFx3D(black_hole_exports, { seed });
+  profile = createRenderProfile3D(name);
+  instance = createFx3D(effects[name], { ...projectOptions, seed });
+  presentationClock.duration = loadedProject?.seconds ?? instance.meta.duration;
+  presentationClock.reset();
+  document.querySelector("#timeline").max = String(presentationClock.duration);
+  document.querySelector("#timeline").step = String(1 / selectedFps());
   status.textContent = instance.meta.description;
+  profileFields();
 }
 function resize() {
   const box = screen.getBoundingClientRect();
-  const sample = Math.max(pixel, box.width / (selected === "flame" ? 192 : selected === "meteor" ? 260 : 400), box.height / (selected === "flame" ? 144 : selected === "meteor" ? 180 : 300));
-  const w = Math.max(96, Math.ceil(box.width / sample)), h = Math.max(72, Math.ceil(box.height / sample));
+  const [w, h] = profile.nativeSize;
   const dpr = Math.min(3, window.devicePixelRatio || 1);
   const cw = Math.max(1, Math.round(box.width * dpr)), ch2 = Math.max(1, Math.round(box.height * dpr));
   if (width === w && height === h && canvas.width === cw && canvas.height === ch2) return;
@@ -4752,47 +4792,49 @@ function render() {
   enableHDRLight(frame);
   const isBlackHole = selected === "blackhole";
   const isWind = selected === "wind" || selected === "windOriginal";
-  const baseCamera = {
-    yaw,
-    elevation,
-    zoom: zoom * (selected === "shield" ? 1.45 : selected === "laser" ? 1.45 : selected === "meteor" ? 0.98 : selected === "voidrift" ? 1.3 : isBlackHole ? 1.36 : isWind ? 1.18 : selected === "shatter" ? 1.2 : selected === "flame" ? 1.65 : selected === "lightning" ? 1.35 : selected === "water" ? 1.28 : 1),
-    target: [0, selected === "shield" ? 2.1 : selected === "laser" ? 1.2 : selected === "meteor" ? 2.3 : selected === "voidrift" ? 2.5 : selected === "water" ? 1.05 : selected === "lightning" ? 2.6 : selected === "flame" ? 1.95 : selected === "shatter" ? 1.1 : selected === "slash" ? 1.4 : isBlackHole ? 1.12 : isWind ? 2.35 : 0.75, 0]
-  };
-  const camera = reducedMotion.matches ? baseCamera : instance.camera(baseCamera);
-  painter.setCamera(camera).begin(isBlackHole ? "#05030d" : isWind ? "#061222" : "#0a1525");
-  if (!isBlackHole && !isWind) painter.grid(8, 1);
+  const baseCamera = { ...profile.camera, yaw, elevation, zoom: zoom * profile.camera.zoom };
+  const camera = reducedMotion.matches || !profile.cameraMotion ? baseCamera : instance.camera(baseCamera);
+  painter.setCamera(camera).begin(profile.background ?? 0);
+  if (profile.grid) painter.grid(8, 1);
   instance.draw(painter);
+  const project = loadedProject ?? previewProject;
+  frame.semanticMasks = void 0;
+  postprocessProjectFrame(frame, project, instance.t, Math.floor(instance.t * selectedFps() + 1e-6), { space: "screen-only" });
   if (glow) {
-    const lighting = worldLights.evaluate(frame, camera, rigs[selected], {
-      ambientOcclusion: { radius: 3, bias: 0.1, intensity: 0.34 }
-    });
-    cinematic.render(frame, image.data, {
-      radiance: lighting.radiance,
-      occlusion: lighting.occlusion,
-      bloom: { threshold: 0.12, knee: 0.2, intensity: 1.1, levels: 4 },
-      toneMap: "aces",
-      exposure: 1.3,
-      saturation: 1.12,
-      contrast: 1.05,
-      vignette: 0.07,
-      chromaticFringe: 0.55
-    });
-  } else compositeFrame3D(frame, image.data, 0);
-  offCtx.putImageData(image, 0, 0);
+    const lighting = worldLights.evaluate(frame, camera, profile.lights, profile.lighting);
+    const options = { ...profile.cinematic, radiance: lighting.radiance, occlusion: lighting.occlusion, ...project.pixelStyle?.finalColorPolicy === "palette-locked" ? { finalPalette: project.pixelStyle.palette } : {} };
+    if (cinematicRenderer) cinematicRenderer.render(frame, options);
+    else {
+      cinematic.render(frame, image.data, options);
+      finishProjectRGBA(image.data, project);
+      offCtx.putImageData(image, 0, 0);
+    }
+  } else {
+    compositeFrame3D(frame, image.data, 0);
+    finishProjectRGBA(image.data, project);
+    offCtx.putImageData(image, 0, 0);
+  }
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#050811";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const v = integerViewport(width, height, canvas.width, canvas.height);
+  const scale = Math.min(v.scale, Math.max(1, Math.round(pixel * (devicePixelRatio || 1))));
+  if (exactPixels) ctx.drawImage(offscreen, Math.floor((canvas.width - width * scale) / 2), Math.floor((canvas.height - height * scale) / 2), width * scale, height * scale);
+  else ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height);
+  const rendererStatus = cinematicRenderer?.status;
+  document.querySelector("#renderer-status").textContent = rendererStatus ? `${rendererStatus.backend.toUpperCase()} \xB7 ${rendererStatus.adapter?.software ? "\uC18C\uD504\uD2B8\uC6E8\uC5B4 \uC5B4\uB311\uD130 \xB7 " : ""}${rendererStatus.reason ?? rendererStatus.state}` : "CPU cinematic";
   dirty = false;
 }
 function animation(now) {
-  const dt = Math.min(0.05, Math.max(0, (now - last) / 1e3));
-  last = now;
-  if (!paused) {
-    instance.update(dt);
-    if (instance.done()) instance.restart();
-  }
+  presentationClock.playing = !paused;
+  const tick = presentationClock.tick(now, !document.hidden);
+  const time = Math.min(presentationClock.duration, Math.floor(presentationClock.time * selectedFps() + 1e-6) / selectedFps());
+  if (tick.wrapped || time < instance.t) instance.restart();
+  if (time > instance.t) instance.update(time - instance.t);
   if (!paused || dirty) render();
   readout.textContent = `${instance.t.toFixed(2)} / ${instance.meta.duration.toFixed(2)} s`;
   stage.textContent = instance.stage();
+  document.querySelector("#timeline").value = String(presentationClock.time);
   requestAnimationFrame(animation);
 }
 function button(id, handler) {
@@ -4800,6 +4842,7 @@ function button(id, handler) {
 }
 button("#replay", () => {
   instance.restart();
+  presentationClock.reset();
   paused = false;
   dirty = true;
   last = performance.now();
@@ -4807,25 +4850,39 @@ button("#replay", () => {
 });
 button("#pause", () => {
   paused = !paused;
+  presentationClock.suspend();
   last = performance.now();
   dirty = true;
   document.querySelector("#pause").textContent = paused ? "\u25B6 PLAY" : "\u2161 PAUSE";
 });
 button("#seed", () => {
+  const kept = profile;
   seed = Math.imul(seed, 1664525) + 1013904223 >>> 0;
   chooseEffect(selected);
+  profile = kept;
   syncLabels();
+  profileFields();
 });
 button("#save", () => {
-  const a = document.createElement("a");
-  a.href = canvas.toDataURL("image/png");
-  a.download = `poku-3d-${selected}-${instance.t.toFixed(2)}.png`;
-  a.click();
+  void (async () => {
+    render();
+    const rgba = cinematicRenderer && glow ? await cinematicRenderer.capture() : image.data;
+    const a = document.createElement("a"), url = URL.createObjectURL(await encodeRGBAPNG(width, height, rgba));
+    a.href = url;
+    a.download = `poku-3d-${selected}-${instance.t.toFixed(2)}.png`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1e3);
+  })().catch((error) => {
+    status.textContent = String(error);
+  });
 });
 document.querySelector("#effect").addEventListener("change", (e) => {
   const value = e.target.value;
   if (Object.prototype.hasOwnProperty.call(effects, value)) {
     const key = value;
+    projectOptions = {};
+    projectName = "";
+    loadedProject = void 0;
     seed = effects[key].meta.options.seed;
     chooseEffect(key);
     syncLabels();
@@ -4873,9 +4930,10 @@ canvas.addEventListener("wheel", (e) => {
   dirty = true;
 }, { passive: false });
 window.addEventListener("keydown", (e) => {
-  if (e.code === "Space" && !(e.target instanceof HTMLInputElement)) {
+  if (e.code === "Space" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)) {
     e.preventDefault();
     instance.restart();
+    presentationClock.reset();
     paused = false;
     dirty = true;
     last = performance.now();
@@ -4883,7 +4941,7 @@ window.addEventListener("keydown", (e) => {
   }
 });
 document.addEventListener("visibilitychange", () => {
-  last = performance.now();
+  presentationClock.suspend();
   dirty = true;
 });
 new ResizeObserver(() => {
@@ -4895,6 +4953,110 @@ window.addEventListener("resize", () => {
 reducedMotion.addEventListener("change", () => {
   dirty = true;
 });
+document.querySelector("#backend").addEventListener("change", () => {
+  void selectRenderer();
+});
+document.querySelector("#exact").addEventListener("change", (e) => {
+  exactPixels = e.target.checked;
+  dirty = true;
+});
+function currentProject() {
+  const output = { ...profile, camera: { ...profile.camera, yaw, elevation, zoom: zoom * profile.camera.zoom } };
+  return createProject({ ...loadedProject, id: loadedProject?.id ?? `3d/${selected === "windOriginal" ? "wind-original" : selected}`, name: projectName || effects[selected].meta.name || selected, kind: "3d", seed, fps: selectedFps(), bg: profile.background === null ? "none" : "dark", options: projectOptions, renderProfile: output });
+}
+button("#project", () => {
+  const project = currentProject();
+  const url = URL.createObjectURL(new Blob([serializeProject(project)], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${selected}.poku.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1e3);
+});
+function profileFields() {
+  const e = document.querySelector("#exposure");
+  if (!e) return;
+  e.value = String(profile.cinematic.exposure ?? 1);
+  document.querySelector("#bloom").value = String(profile.cinematic.bloom && profile.cinematic.bloom.intensity || 0);
+  document.querySelector("#grid").checked = profile.grid;
+  document.querySelector("#camera-motion").checked = profile.cameraMotion;
+  document.querySelector("#profile-json").value = JSON.stringify(profile, null, 2);
+}
+function openProject(project) {
+  if (project.kind !== "3d" || !project.renderProfile) throw new Error("3D RenderProfile\uC774 \uD3EC\uD568\uB41C \uD504\uB85C\uC81D\uD2B8\uB97C \uC120\uD0DD\uD558\uC138\uC694.");
+  const loaded = parseRenderProfile3D(JSON.stringify(project.renderProfile));
+  seed = project.seed;
+  projectOptions = project.options;
+  projectName = project.name;
+  loadedProject = project;
+  chooseEffect(loaded.effectId);
+  profile = loaded;
+  yaw = profile.camera.yaw;
+  elevation = profile.camera.elevation;
+  zoom = 1;
+  document.querySelector("#effect").value = selected;
+  elevationSlider.value = String(elevation * 180 / Math.PI);
+  paused = true;
+  dirty = true;
+  syncLabels();
+  profileFields();
+}
+button("#open-project", () => document.querySelector("#project-file").click());
+document.querySelector("#project-file").onchange = async (event) => {
+  try {
+    const file = event.target.files?.[0];
+    if (file) openProject(parseProject(await file.text()));
+  } catch (error) {
+    status.textContent = String(error);
+  }
+};
+document.querySelector("#timeline").oninput = (event) => {
+  paused = true;
+  presentationClock.seek(Number(event.target.value));
+  dirty = true;
+};
+for (const [id, delta] of [["#previous", -1], ["#next", 1]]) button(id, () => {
+  paused = true;
+  presentationClock.step(delta, selectedFps());
+  dirty = true;
+});
+document.querySelector("#exposure").oninput = (event) => {
+  profile.cinematic.exposure = Number(event.target.value);
+  dirty = true;
+};
+document.querySelector("#bloom").oninput = (event) => {
+  profile.cinematic.bloom = { ...profile.cinematic.bloom, intensity: Number(event.target.value) };
+  dirty = true;
+};
+document.querySelector("#grid").onchange = (event) => {
+  profile.grid = event.target.checked;
+  dirty = true;
+};
+document.querySelector("#camera-motion").onchange = (event) => {
+  profile.cameraMotion = event.target.checked;
+  dirty = true;
+};
+button("#apply-profile", () => {
+  try {
+    const loaded = parseRenderProfile3D(document.querySelector("#profile-json").value);
+    openProject(createProject({ ...currentProject(), renderProfile: loaded }));
+  } catch (error) {
+    status.textContent = String(error);
+  }
+});
+button("#refresh-profile", () => {
+  document.querySelector("#profile-json").value = JSON.stringify(currentProject().renderProfile, null, 2);
+});
+addEventListener("pagehide", () => cinematicRenderer?.dispose());
 chooseEffect(selected);
 syncLabels();
+try {
+  const saved = sessionStorage.getItem("poku-studio-3d-project");
+  if (saved) {
+    sessionStorage.removeItem("poku-studio-3d-project");
+    openProject(parseProject(saved));
+  }
+} catch (error) {
+  status.textContent = String(error);
+}
 requestAnimationFrame(animation);

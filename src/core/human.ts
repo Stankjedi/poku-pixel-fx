@@ -1,3 +1,4 @@
+import { blitSprite2D } from './sprite-raster.js';
 /** Pure 2D human construction. No projected meshes and no per-part black outlines.
  * Bones are solved in continuous space; only the final painted clusters snap to pixels.
  */
@@ -34,6 +35,10 @@ export interface HumanStyle {
   cloth?: readonly [string, string, string];
   trousers?: readonly [string, string, string];
   outline?: string | null;
+  /** Shared CharacterIdentity palettes; defaults retain the existing studies byte for byte. */
+  skinRamp?: readonly [string,string,string,string];
+  hairRamp?: readonly [string,string,string];
+  shoeRamp?: readonly [string,string,string];
 }
 export interface HumanPose {
   /** Root displacement in canonical 96px coordinates. */
@@ -87,7 +92,8 @@ function validate(style:HumanStyle,pose:HumanPose){
   for(const [key,allowed] of Object.entries({view:['front','three-quarter','side','back'],facing:['right','left'],build:['slender','regular','broad'],skin:Object.keys(SKIN),hair:['crop','bob','curls','swept','bun','shaved','ponytail','parted'],faceShape:['oval','round','square','long'],facialHair:['none','beard'],hairColor:Object.keys(HAIR),outfit:['shirt','tunic','jacket','sleeveless','sweater','overalls']})){
     const value=(style as Record<string,unknown>)[key];if(value!==undefined&&!allowed.includes(value as string))throw new RangeError(`Unknown human ${key}: ${value}`);
   }
-  for(const key of ['cloth','trousers'] as const){const v=style[key];if(v!==undefined&&(!Array.isArray(v)||v.length!==3||!Array.from(v).every(colorValid)))throw new TypeError(`${key} must contain three #rgb or #rrggbb colors`);}
+  if(style.skinRamp!==undefined&&(!Array.isArray(style.skinRamp)||style.skinRamp.length!==4||!style.skinRamp.every(colorValid)))throw new TypeError('skinRamp needs four hex colors');
+  for(const key of ['cloth','trousers','hairRamp','shoeRamp'] as const){const v=style[key];if(v!==undefined&&(!Array.isArray(v)||v.length!==3||!Array.from(v).every(colorValid)))throw new TypeError(`${key} must contain three #rgb or #rrggbb colors`);}
   if(style.outline!==undefined&&style.outline!==null&&!colorValid(style.outline))throw new TypeError('outline must be null or a #rgb or #rrggbb color');
   if(pose.fists!==undefined&&typeof pose.fists!=='boolean')throw new TypeError('fists must be boolean');
   for(const key of ['leftElbow','rightElbow','leftKnee','rightKnee'] as const){const v=pose[key];if(v!==undefined&&v!==-1&&v!==1)throw new RangeError(`${key} must be -1 or 1`);}
@@ -209,9 +215,9 @@ export function renderHuman2D(style: HumanStyle = {}, pose: HumanPose = {}): Hum
   const pad=Math.ceil((style.hair==='ponytail'?23:style.faceShape&&style.faceShape!=='oval'?17:14)*s)+3,x=Math.floor(Math.min(...joints.map(p=>p[0])))-pad,y=Math.floor(Math.min(...joints.map(p=>p[1])))-pad;
   const w=Math.ceil(Math.max(...joints.map(p=>p[0])))-x+pad+1,h=Math.ceil(Math.max(...joints.map(p=>p[1])))-y+pad+1;
   if(w*h>1_000_000)throw new RangeError('Human pose exceeds the 1 million pixel sprite budget');
-  const {frame,painter:p}=characterScratch(w,h,x,y),skin=characterPalette(SKIN[style.skin??'warm']),hair=characterPalette(HAIR[style.hairColor??'dark']);
+  const {frame,painter:p}=characterScratch(w,h,x,y),skin=characterPalette(style.skinRamp??SKIN[style.skin??'warm']),hair=characterPalette(style.hairRamp??HAIR[style.hairColor??'dark']);
   const cloth=characterPalette(style.cloth??['#34556d','#507e91','#7aa6aa']),pants=characterPalette(style.trousers??['#3c414f','#545966','#727981']);
-  const shoe=characterPalette(['#3b3034','#57413a','#78604a']),outfit=style.outfit??'shirt',hairStyle=style.hair??'swept';
+  const shoe=characterPalette(style.shoeRamp??['#3b3034','#57413a','#78604a']),outfit=style.outfit??'shirt',hairStyle=style.hair??'swept';
   if(r.view!=='front'){paintHumanView2D(p,style,r,{skin,hair,cloth,pants,shoe});} else {
   const P=(v:HumanPoint[],color:number)=>p.poly(v.map(q=>[Math.round(q[0]),Math.round(q[1])]),color);
   const line=(v:HumanPoint[],color:number)=>p.polyline(v.map(q=>[Math.round(q[0]),Math.round(q[1])]),color);
@@ -322,6 +328,11 @@ export function renderHuman2D(style: HumanStyle = {}, pose: HumanPose = {}): Hum
 /** Draw using the engine's Painter transform and placement; returns the reusable sprite/mask. */
 export function drawHuman2D(p: Painter, style: HumanStyle = {}, pose: HumanPose = {}): HumanSprite {
   const sprite=renderHuman2D(style,pose);
-  for(let y=0;y<sprite.h;y++)for(let x=0;x<sprite.w;x++){const c=sprite.pixels[y*sprite.w+x];if(c)p.px(sprite.x+x,sprite.y+y,c);}
+  blitSprite2D(p,sprite);
   return sprite;
+}
+
+/** Independent role palettes used by the shared identity and material authoring APIs. */
+export function humanPalettes2D(style:HumanStyle={}):{skin:[string,string,string,string];hair:[string,string,string];cloth:[string,string,string];trousers:[string,string,string];shoe:[string,string,string]}{
+  validate(style,{});return{skin:[...(style.skinRamp??SKIN[style.skin??'warm'])] as [string,string,string,string],hair:[...(style.hairRamp??HAIR[style.hairColor??'dark'])] as [string,string,string],cloth:[...(style.cloth??['#34556d','#507e91','#7aa6aa'])] as [string,string,string],trousers:[...(style.trousers??['#3c414f','#545966','#727981'])] as [string,string,string],shoe:[...(style.shoeRamp??['#3b3034','#57413a','#78604a'])] as [string,string,string]};
 }
