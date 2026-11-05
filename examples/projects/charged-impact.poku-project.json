@@ -1,0 +1,32 @@
+{
+  "schema": "poku.project/v1",
+  "id": "arcane/charged-impact",
+  "name": "Charged Impact · two-cue sequence",
+  "kind": "sequence",
+  "seed": 17,
+  "fps": 30,
+  "bg": "dark",
+  "actor": false,
+  "target": false,
+  "cameraMotion": 0,
+  "options": {},
+  "layers": {},
+  "edits": [],
+  "notes": "The explosion cue starts at the lightning source's authored 0.32 s contact marker, then clears after its cooling tail. Native stills show that the existing lightning channel is already connected earlier; this example demonstrates cue scheduling and remains provisional for art-direction timing. Both sources remain independently editable.",
+  "intentRef": "../../authoring/arcane/charged-impact.intent.json",
+  "renderProfile": {
+    "mode": "cinematic",
+    "cinematic": { "bloom": { "threshold": 0.12, "knee": 0.2, "intensity": 0.55, "levels": 3 }, "toneMap": "aces", "exposure": 1 }
+  },
+  "sequence": {
+    "schema": "poku.sequence/v1",
+    "duration": 2.72,
+    "loop": false,
+    "size": [384, 224],
+    "origin": [192, 190],
+    "cues": [
+      { "id": "strike", "source": { "kind": "catalog", "id": "lightning/focused-arc" }, "at": 0, "x": -155, "y": 0 },
+      { "id": "response", "source": { "kind": "catalog", "id": "explosions/layered-detonation" }, "at": 0.32, "x": -110, "y": 0 }
+    ]
+  }
+}

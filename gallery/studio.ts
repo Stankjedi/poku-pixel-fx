@@ -1,6 +1,7 @@
 import { createProject, createRecipePack, parseProject, serializeProject, cloneJSON, type ResolvedProject } from '../src/authoring/project.js';
 import { createProjectRuntime, type ProjectFrameSample } from '../src/authoring/runtime.js';
-import { createRecipeSpec, resolveRecipe, RECIPE_KINDS, RECIPE_LAYERS, RECIPE_PARAMETERS, type RecipeKind, type RecipeLayer } from '../src/authoring/recipes.js';
+import { createRecipeSpec, resolveRecipe, recipeParameters, retimeRecipeSpec, RECIPE_KINDS, RECIPE_LAYERS, type RecipeKind, type RecipeLayer } from '../src/authoring/recipes.js';
+import { createSequenceSpec } from '../src/authoring/sequence.js';
 import { catalogEntries, searchEffects, loadCatalogEffect } from '../src/authoring/registry.js';
 import { EditHistory } from '../src/authoring/history.js';
 import { PlaybackClock, integerViewport } from '../src/authoring/clock.js';
@@ -8,9 +9,10 @@ import { observationsFromReview } from '../src/authoring/review.js';
 import { createTimingCurve, type TimingCurveKey } from '../src/core/timing-curve.js';
 import { hex, toHex } from '../src/core/color.js';
 import { createPixelStyleProfile2D } from '../src/core/pixel-style.js';
+import { PIXEL_PALETTE_PRESETS } from '../src/core/pixel-quantize.js';
+import { resolveAtlasExportSettings } from '../src/render/export.js';
 import { diagnosePixelSprite2D, diagnosePixelMotion2D } from '../src/core/pixel-tools.js';
 import { createStudioCharacter2D, createCharacterAsset2D, setCharacterSocketKey2D, sampleCharacterSocketTrack2D, type CharacterAsset2D, type CharacterSocketKey2D } from '../src/core/character-asset.js';
-import { characterClipTime2D } from '../src/core/character-animation.js';
 import { createCharacterIdentity2D, renderCharacterPortrait2D } from '../src/core/character-identity.js';
 import { pixelTransform2D, invertPixelTransform2D, transformPixelPoint2D } from '../src/core/sprite-raster.js';
 import { CinematicFrameRenderer } from '../src/render/webgpu.js';
@@ -68,8 +70,10 @@ async function setProject(next:unknown,mode:'commit'|'history'|'reset'='commit',
 }
 async function mutate(change:(p:ResolvedProject)=>void){const next=cloneJSON(project);change(next);await setProject(next);}
 async function setupRenderer(){
-  const generation=++renderGeneration;gpu?.dispose();gpu=undefined;
-  if(select('backend').value!=='webgpu')return;
+  const generation=++renderGeneration;
+  if(select('backend').value!=='webgpu'){gpu?.dispose();gpu=undefined;return;}
+  // Parameter/export edits reuse the current device and pipelines. Resize occurs on render.
+  if(gpu&&gpu.status.state!=='disposed')return;
   const created=await CinematicFrameRenderer.create(native,{backend:'webgpu'});
   if(generation!==renderGeneration){created.dispose();return;}gpu=created;dirty=true;
   if(created.status.backend==='cpu')status(`CPU로 렌더링 중 · ${created.status.reason??'WebGPU를 사용할 수 없습니다'}`);
@@ -145,6 +149,13 @@ document.addEventListener('visibilitychange',()=>clock.suspend());
 function labelControl(container:HTMLElement,title:string,control:HTMLElement){const label=text('label',title);label.append(control);container.append(label);return label;}
 function choice(container:HTMLElement,label:string,values:readonly string[],value:string,change:(value:string)=>void){const control=document.createElement('select');for(const v of values){const option=text('option',v) as HTMLOptionElement;option.value=v;control.append(option);}control.value=value;control.addEventListener('change',()=>change(control.value));labelControl(container,label,control);return control;}
 function numberControl(container:HTMLElement,label:string,value:number,min:number,max:number,change:(value:number)=>void){const control=document.createElement('input');Object.assign(control,{type:'number',min:String(min),max:String(max),value:String(value)});control.addEventListener('change',()=>{if(control.checkValidity())change(Number(control.value));else control.reportValidity();});labelControl(container,label,control);return control;}
+function sequenceConversionIssue():string{
+  if(project.kind==='act')return 'ACT 배우와 hit-stop은 개별 캐릭터·효과 cue로 구성해야 합니다.';
+  if(project.edits.length||project.pixelStyle?.pixelTracks?.length)return '프레임 좌표에 저장한 픽셀 수정은 합성 canvas에서 위치가 달라질 수 있습니다. 원본 프로젝트를 저장하고 수정 전 효과에서 시퀀스를 시작하세요.';
+  if(runtime?.mod.meta.actor&&project.actor)return '함께 표시하는 배우는 독립 캐릭터 cue로 추가해야 합니다. 현재 프로젝트를 저장하고 캐릭터 포함을 끈 효과에서 시퀀스를 시작하세요.';
+  if(runtime&&(!runtime.duration||!runtime.loop&&runtime.duration>runtime.mod.meta.duration+1e-9))return '0초 화면 또는 원본 수명 이후의 마지막 프레임 홀드는 cue로 자동 변환할 수 없습니다. 원본 동작 길이에서 시퀀스를 시작하세요.';
+  return '';
+}
 function renderControls(){
   $('project-name').textContent=project.name;button('undo').disabled=!history.canUndo;button('redo').disabled=!history.canRedo;
   input('seed').value=String(project.seed);input('fps').value=String(project.fps);input('duration').value=String(runtime!.duration);
@@ -152,9 +163,14 @@ function renderControls(){
   $<HTMLTextAreaElement>('intent').value=project.notes;input('intent-ref').value=project.intentRef??'';
   $<HTMLTextAreaElement>('project-json').value=serializeProject(project);
   const ps=project.pixelStyle;select('color-policy').value=ps?.finalColorPolicy??'cinematic';select('alpha-policy').value=ps?.alpha??'coverage';select('outline-policy').value=ps?.outline??'none';select('dither-anchor').value=ps?.dither?.anchor??'object';
+  select('color-quantization').value=ps?.quantization??'nearest';select('dither-pattern').value=ps?.dither?.pattern??'bayer4';input('color-dither-strength').value=String(ps?.colorDitherStrength??1);select('palette-preset').value='custom';
+  const atlas=resolveAtlasExportSettings({trim:true,...project.exportSettings});select('atlas-size').value=String(atlas.maxTextureSize);input('atlas-padding').value=String(atlas.padding);input('atlas-extrude').value=String(atlas.extrude);input('atlas-trim').checked=atlas.trim;input('atlas-deduplicate').checked=atlas.deduplicate;
   select('backend').value=project.renderProfile?.backend==='webgpu'?'webgpu':'cpu';
+  const conversionIssue=sequenceConversionIssue();button('new-sequence').disabled=project.kind==='sequence'||!!conversionIssue;
+  button('new-sequence').textContent=conversionIssue?'현재 프로젝트의 시퀀스 변환 제한':'+ 현재 효과로 시퀀스 제작';button('new-sequence').title=conversionIssue;
+  let conversionNote=$('sequence-conversion-note');if(!conversionNote){conversionNote=text('p','');conversionNote.id='sequence-conversion-note';button('new-sequence').after(conversionNote);}conversionNote.hidden=!conversionIssue;conversionNote.textContent=conversionIssue;
   $('target-label').hidden=project.kind!=='character';
-  renderParameters();renderLayers();renderPath();renderCurve();renderCharacter();renderMarkers();
+  renderParameters();renderLayers();renderPath();renderCurve();renderCharacter();renderSequence();renderPalette();renderMarkers();search();
 }
 function renderParameters(){
   const container=$('parameters');container.replaceChildren();
@@ -178,9 +194,9 @@ function renderParameters(){
     return;
   }
   const values=project.recipe!.parameters,groups=new Map<string,HTMLElement>();
-  for(const parameter of RECIPE_PARAMETERS){
+  for(const parameter of recipeParameters(project.recipe as any)){
     let group=groups.get(parameter.group??'일반');if(!group){group=document.createElement('fieldset');group.append(text('legend',parameter.group??'일반'));groups.set(parameter.group??'일반',group);container.append(group);}
-    const update=(value:unknown)=>attempt(()=>mutate(p=>{p.recipe!.parameters[parameter.key]=value;if(parameter.key==='palette')p.options.palette=value;if(parameter.key==='travel'&&p.recipe!.kind==='thrown-blade'&&Number(value)+.94>p.recipe!.duration){scaleDuration(p,Number(value)+.94);}}));
+    const update=(value:unknown)=>attempt(()=>mutate(p=>{p.recipe!.parameters[parameter.key]=value;if(parameter.key==='palette')p.options.palette=value;if(parameter.key==='travel'&&p.recipe!.kind==='thrown-blade'){const required=Number(value)+.94*(p.recipe!.timeScale??1);if(required>p.recipe!.duration){const ratio=required/p.recipe!.duration;for(const keys of Object.values(p.recipe!.tracks) as TimingCurveKey[][])for(const key of keys as {time:number;velocity?:number}[]){key.time*=ratio;if(key.velocity!==undefined)key.velocity/=ratio;}p.recipe!.duration=required;p.seconds=required;}}}));
     if(parameter.type==='number'){
       const slider=document.createElement('input'),value=text('span',`${values[parameter.key]} ${parameter.unit??''}`);Object.assign(slider,{type:'range',min:String(parameter.min),max:String(parameter.max),step:String(parameter.step??1),value:String(values[parameter.key])});
       slider.dataset.parameter=parameter.key;const label=labelControl(group,parameter.label,slider);label.prepend(value);slider.oninput=()=>{value.textContent=`${slider.value} ${parameter.unit??''}`;};slider.onchange=()=>update(Number(slider.value));
@@ -191,7 +207,8 @@ function renderParameters(){
   }
 }
 function scaleDuration(p:ResolvedProject,seconds:number){
-  if(p.recipe){const scale=seconds/p.recipe.duration;p.recipe.duration=seconds;for(const keys of Object.values(p.recipe.tracks) as TimingCurveKey[][])for(const key of keys as {time:number}[])key.time*=scale;}
+  if(p.recipe)p.recipe=retimeRecipeSpec(p.recipe as any,seconds);
+  if(p.sequence)p.sequence.duration=seconds;
   p.seconds=seconds;
 }
 function renderLayers(){
@@ -201,6 +218,36 @@ function renderLayers(){
     const row=document.createElement('div'),checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=project.recipe!.layers[layer]!==false;
     labelControl(row,layerNames[layer],checkbox);checkbox.onchange=()=>attempt(()=>mutate(p=>{p.recipe!.layers[layer]=p.layers[layer]=checkbox.checked;}));
     const solo=text('button','단독') as HTMLButtonElement;solo.onclick=()=>attempt(()=>mutate(p=>{const isSolo=RECIPE_LAYERS.every(l=>p.recipe!.layers[l]===(l===layer));for(const l of RECIPE_LAYERS)p.recipe!.layers[l]=p.layers[l]=isSolo||l===layer;}));row.append(solo);container.append(row);
+  }
+}
+function renderPalette(){
+  const container=$('palette-swatches');container.replaceChildren();
+  for(const [i,color] of (project.pixelStyle?.palette??[]).entries()){
+    const swatch=document.createElement('input');swatch.type='color';swatch.value=toHex(color).slice(0,7);swatch.title=`팔레트 ${i+1}`;
+    swatch.onchange=()=>attempt(()=>mutate(p=>{p.pixelStyle!.palette[i]=hex(swatch.value)>>>0;}));container.append(swatch);
+  }
+}
+function renderSequence(){
+  const container=$('sequence-controls');container.replaceChildren();if(project.kind!=='sequence')return;
+  container.append(text('h2','효과 시퀀스'),text('p','왼쪽 라이브러리의 + 버튼으로 효과를 추가하세요. 같은 앞/뒤 레이어 안에서 목록 순서로 겹칩니다.'));
+  const spec=project.sequence!,loop=document.createElement('input');loop.type='checkbox';loop.checked=spec.loop;
+  loop.onchange=()=>attempt(()=>mutate(p=>{p.sequence!.loop=loop.checked;}));labelControl(container,'시퀀스 반복',loop);
+  const auto=text('button','마지막 효과까지 길이 자동 맞춤') as HTMLButtonElement;auto.onclick=()=>attempt(()=>mutate(p=>{delete p.sequence!.duration;delete p.seconds;}));container.append(auto);
+  for(const [i,cue] of spec.cues.entries()){
+    const details=document.createElement('details');details.className='sequence-cue';details.open=true;
+    const title=cue.source.kind==='catalog'?cue.source.id:cue.source.kind==='recipe'?cue.source.recipe.kind:cue.source.character.name;
+    details.append(text('summary',`${i+1}. ${title}`));container.append(details);
+    const change=(edit:(c:any)=>void)=>attempt(()=>mutate(p=>{edit(p.sequence!.cues[i]);}));
+    const active=document.createElement('input');active.type='checkbox';active.checked=cue.enabled;active.onchange=()=>change(c=>{c.enabled=active.checked;});labelControl(details,'표시',active);
+    for(const [key,label,min,max] of [['at','시작 (초)',0,3600],['x','X (픽셀)',-4096,4096],['y','Y (픽셀)',-4096,4096],['fadeIn','나타남 (초)',0,60],['fadeOut','사라짐 (초)',0,60]] as const){
+      const n=numberControl(details,label,cue[key],min,max,value=>change(c=>{c[key]=value;}));n.step=key==='x'||key==='y'?'1':'.01';
+    }
+    const duration=document.createElement('input');Object.assign(duration,{type:'number',min:'.01',max:'3600',step:'.01',placeholder:'원본 길이',value:cue.duration===undefined?'':String(cue.duration)});
+    duration.onchange=()=>{if(duration.checkValidity())change(c=>{if(duration.value==='')delete c.duration;else c.duration=Number(duration.value);});else duration.reportValidity();};labelControl(details,'표시 시간 (초)',duration);
+    const angle=numberControl(details,'회전 (도)',cue.angle*180/Math.PI,-3600,3600,value=>change(c=>{c.angle=value*Math.PI/180;}));angle.step='1';
+    const flip=document.createElement('input');flip.type='checkbox';flip.checked=cue.flip;flip.onchange=()=>change(c=>{c.flip=flip.checked;});labelControl(details,'좌우 반전',flip);
+    for(const [label,offset] of [['뒤로',-1],['앞으로',1]] as const){const move=text('button',label) as HTMLButtonElement;move.disabled=i+offset<0||i+offset>=spec.cues.length;move.onclick=()=>attempt(()=>mutate(p=>{const a=p.sequence!.cues;[a[i],a[i+offset]]=[a[i+offset],a[i]];}));details.append(move);}
+    const remove=text('button','효과 제거') as HTMLButtonElement;remove.onclick=()=>attempt(()=>mutate(p=>{p.sequence!.cues.splice(i,1);}));details.append(remove);
   }
 }
 function renderPath(){
@@ -249,6 +296,19 @@ function renderCharacter(){
   }
   const loadout={...asset.loadout,...asset.clips[clip].loadout},layers=[...(asset.layers??[]),...(asset.slots??[]).flatMap(slot=>loadout[slot.id]?asset.equipment![loadout[slot.id]!].layers:[])].filter(layer=>!layer.visibleIn||layer.visibleIn.includes(clip));
   const target=select('edit-target'),oldTarget=target.value;target.replaceChildren();for(const name of ['body',...layers.map(layer=>layer.id)]){const option=text('option',name) as HTMLOptionElement;option.value=name;target.append(option);}target.value=[...target.options].some(o=>o.value===oldTarget)?oldTarget:'body';
+  const rasterLayers=layers.filter(layer=>!layer.generator);
+  if(rasterLayers.length){
+    const details=document.createElement('details');details.append(text('summary','장비 애니메이션 동기화'));container.append(details);
+    for(const layer of rasterLayers){
+      const binding=layer.animations?.[clip],update=(key:string,value:string)=>alter(a=>{const copy=cloneJSON(a);const all=[...(copy.layers??[]),...Object.values(copy.equipment??{}).flatMap(e=>e.layers)];const item=all.find(l=>l.id===layer.id)!;item.animations={...item.animations,[clip]:{...item.animations?.[clip],[key]:value}};if(key==='tag'&&!value||key==='sync'&&value==='source-frame')delete (item.animations[clip] as any).tag;return createCharacterAsset2D(copy);});
+      const body=asset.clips[clip],bodyData=body.kind==='sprite'?body.data??(asset.source.kind==='sprite'?asset.source.clip:undefined):undefined;
+      const modes=bodyData?.frames.length===layer.clip.frames.length?['time','phase','source-frame']:['time','phase'];
+      const sync=choice(details,`${layer.id} · 동기화`,modes,binding?.sync??'time',value=>update('sync',value));
+      for(const option of sync.options)option.textContent=({time:'독립 시간',phase:'몸체 주기 맞춤','source-frame':'몸체 원화 번호'} as Record<string,string>)[option.value];
+      const tags=layer.clip.tags?.map(tag=>tag.name)??[];
+      if(tags.length){const tag=choice(details,`${layer.id} · 태그`,['',...tags],binding?.tag??'',value=>update('tag',value));tag.options[0].textContent='기본 태그';tag.disabled=binding?.sync==='source-frame';}
+    }
+  }
   $('target-label').hidden=false;
   const sockets=document.createElement('input');sockets.id='show-sockets';sockets.type='checkbox';sockets.checked=showSockets;sockets.onchange=()=>{showSockets=sockets.checked;dirty=true;};labelControl(container,'관절·장착점 표시',sockets);
   renderCharacterTimeline(container,asset,clip,alter);
@@ -284,8 +344,8 @@ function renderSocketEditor(container:HTMLElement,asset:CharacterAsset2D,clipNam
   const refresh=text('button','현재 프레임에서 소켓 편집') as HTMLButtonElement,fields=document.createElement('div');details.append(refresh,fields);
   refresh.onclick=()=>{clock.playing=false;clock.seek(Math.floor(clock.time*project.fps+1e-6)/project.fps);dirty=true;populate();};
   function populate(){
-    fields.replaceChildren();const player=runtime!.mod.player,info=player.clipInfo(clipName),clip=asset.clips[clipName],displayTime=Math.floor(clock.time*project.fps+1e-6)/project.fps,celTime=clip.fps?Math.floor(displayTime*clip.fps)/clip.fps:displayTime,t=characterClipTime2D(celTime,info.duration,info.loop).time;
-    const base=player.sample(displayTime,clipName,{ignoreSocketTracks:true}),current=player.sample(displayTime,clipName),names=[...new Set([...Object.keys(base.sockets),...Object.keys(current.sockets),...Object.keys(clip.socketTracks??{})])];if(!names.includes(selectedSocket))selectedSocket=names[0]??'root';
+    fields.replaceChildren();const player=runtime!.mod.player,info=player.clipInfo(clipName),clip=asset.clips[clipName],displayTime=Math.floor(clock.time*project.fps+1e-6)/project.fps;
+    const base=player.sample(displayTime,clipName,{ignoreSocketTracks:true}),current=player.sample(displayTime,clipName),t=current.phaseTime,names=[...new Set([...Object.keys(base.sockets),...Object.keys(current.sockets),...Object.keys(clip.socketTracks??{})])];if(!names.includes(selectedSocket))selectedSocket=names[0]??'root';
     choice(fields,'소켓',names,selectedSocket,value=>{selectedSocket=value;populate();});
     const name=selectedSocket,track=clip.socketTracks?.[name],mode=track?.mode??(base.sockets[name]?newSocketMode:'override'),sampled=track?sampleCharacterSocketTrack2D(track,t):null,baseline=base.sockets[name]??current.sockets[name]??{position:[0,0],basisX:[1,0],basisY:[0,1],visible:true};
     const modeControl=choice(fields,'좌표 기준',['delta','override'],mode,value=>{newSocketMode=value as 'delta'|'override';populate();});modeControl.disabled=!!track;
@@ -315,8 +375,22 @@ function renderMarkers(){
 
 for(const kind of RECIPE_KINDS){const b=document.createElement('button');b.append(text('b',labels[kind][0]),text('span',labels[kind][1]));b.onclick=()=>attempt(()=>setProject(recipeProject(kind),'commit',false));$('recipes').append(b);}
 button('new-character').onclick=()=>attempt(()=>setProject(createProject({id:'characters/wayfarer',name:'Wayfarer',kind:'character',character:createStudioCharacter2D({height:Number(select('new-character-height').value)}),options:{clip:'idle'},bg:'dark',fps:24,actor:false,target:false}),'commit',false));
+button('new-sequence').onclick=()=>attempt(async()=>{
+  if(project.kind==='sequence')return;const issue=sequenceConversionIssue();if(issue)throw new Error(issue);
+  const source:any=project.kind==='recipe'?{kind:'recipe',recipe:project.recipe}:project.kind==='character'?{kind:'character',character:project.character,clip:project.options.clip??project.character!.defaultClip}:{kind:'catalog',id:project.id};
+  const effective={...runtime!.mod.meta.options,...project.options},placement=Object.fromEntries(['x','y','angle','flip','cameraMotion'].filter(key=>effective[key]!==undefined).map(key=>[key,effective[key]]));
+  // Retain the original object transform for final palette patterns and camera policy.
+  // Child layers stay inside the source cue; sequence layer names are cue ids.
+  const settings=Object.fromEntries(['margin','cameraMotion','intentRef','sourceRevision'].filter(key=>(project as any)[key]!==undefined).map(key=>[key,(project as any)[key]]));
+  await setProject(createProject({id:'sequences/composite',name:`${project.name} · 시퀀스`,kind:'sequence',seed:project.seed,fps:project.fps,bg:project.bg,notes:project.notes,actor:false,target:false,options:placement,...settings,...(project.pixelStyle?{pixelStyle:project.pixelStyle}:{}),...(project.renderProfile?{renderProfile:project.renderProfile}:{}),...(project.exportSettings?{exportSettings:project.exportSettings}:{}),sequence:createSequenceSpec({duration:runtime!.duration,loop:runtime!.loop,cues:[{id:'source',source,seed:project.seed,duration:runtime!.duration,options:{...project.options,layers:project.layers,cameraMotion:1},x:0,y:0,angle:0,flip:false}]})}),'commit',false);search();
+});
 $('library-count').textContent=String(catalogEntries.length);
-function search(){const results=$('results');results.replaceChildren();for(const effect of searchEffects(input('search').value,20)){const b=text('button',String(effect.meta.name??effect.id)) as HTMLButtonElement;b.append(text('small',effect.id));b.onclick=()=>attempt(async()=>{const mod=await loadCatalogEffect(effect.id);await setProject(createProject({id:effect.id,name:String(mod.meta.name??effect.id),kind:mod.recipe?'recipe':mod.act?'act':'2d',options:{...mod.meta.options},...(mod.recipe?{recipe:mod.recipe}:{}),fps:30,bg:'dark',intentRef:`authoring/${effect.id}.intent.json`}),'commit',false);});results.append(b);}}
+function search(){const results=$('results');results.replaceChildren();for(const effect of searchEffects(input('search').value,20)){
+  const row=document.createElement('div'),b=text('button',String(effect.meta.name??effect.id)) as HTMLButtonElement;b.append(text('small',effect.id));
+  b.onclick=()=>attempt(async()=>{const mod=await loadCatalogEffect(effect.id);await setProject(createProject({id:effect.id,name:String(mod.meta.name??effect.id),kind:mod.recipe?'recipe':mod.act?'act':'2d',options:{...mod.meta.options},...(mod.recipe?{recipe:mod.recipe}:{}),fps:30,bg:'dark',intentRef:`authoring/${effect.id}.intent.json`}),'commit',false);search();});row.append(b);
+  if(project.kind==='sequence'){const add=text('button','+ 시퀀스에 추가') as HTMLButtonElement;add.onclick=()=>attempt(()=>mutate(p=>{const cue=createSequenceSpec({cues:[{id:`cue-${crypto.randomUUID()}`,source:{kind:'catalog',id:effect.id},at:Math.floor(clock.time*project.fps)/project.fps}]}).cues[0];p.sequence!.cues.push(cue);delete p.seconds;delete p.sequence!.duration;}));row.append(add);}
+  results.append(row);
+}}
 input('search').oninput=search;search();
 
 button('play').onclick=()=>{if(!clock.playing&&clock.time>=clock.duration)clock.reset();clock.playing=!clock.playing;clock.suspend();dirty=true;};
@@ -332,11 +406,15 @@ input('fps').onchange=()=>attempt(()=>mutate(p=>{p.fps=Number(input('fps').value
 input('duration').onchange=()=>attempt(()=>mutate(p=>{scaleDuration(p,Number(input('duration').value));}));
 $<HTMLTextAreaElement>('intent').onchange=()=>attempt(()=>mutate(p=>{p.notes=$<HTMLTextAreaElement>('intent').value;}));
 input('intent-ref').onchange=()=>attempt(()=>mutate(p=>{p.intentRef=input('intent-ref').value;if(p.recipe)p.recipe.intentRef=p.intentRef;}));
-for(const id of ['color-policy','alpha-policy','outline-policy','dither-anchor'])select(id).onchange=()=>attempt(()=>mutate(p=>{
+for(const id of ['color-policy','alpha-policy','outline-policy','dither-anchor','color-quantization','dither-pattern','color-dither-strength'])$(id).onchange=()=>attempt(()=>mutate(p=>{
   const locked=select('color-policy').value==='palette-locked';
   const current=latest?.frame.color,characterColors=current?[...new Set(Array.from(current).filter(c=>c>>>24).map(c=>(c|0xff000000)>>>0))].slice(0,256):[];
   const palette=p.pixelStyle?.palette??(p.recipe?.parameters.palette??(p.kind==='character'&&characterColors.length?characterColors:['#172333','#34526b','#528a94','#83b9ad','#c8e3cf','#fff0d1'])).map((c:string|number)=>hex(c)>>>0);
-  p.pixelStyle=createPixelStyleProfile2D({...p.pixelStyle,nativeResolution:[runtime!.width,runtime!.height],surfaceColors:locked?'indexed':'authored-rgba',palette,quantization:p.pixelStyle?.quantization??'nearest',finalColorPolicy:locked?'palette-locked':'cinematic',emission:p.pixelStyle?.emission??'linear-hdr',alpha:select('alpha-policy').value as any,outline:select('outline-policy').value as any,dither:{...p.pixelStyle?.dither,pattern:p.pixelStyle?.dither?.pattern??'bayer4',anchor:select('dither-anchor').value as any}});
+  p.pixelStyle=createPixelStyleProfile2D({...p.pixelStyle,nativeResolution:[runtime!.width,runtime!.height],surfaceColors:locked?'indexed':'authored-rgba',palette,quantization:select('color-quantization').value as any,colorDitherStrength:Number(input('color-dither-strength').value),finalColorPolicy:locked?'palette-locked':'cinematic',emission:locked?(p.pixelStyle?.emission==='none'?'none':'palette-stepped'):p.pixelStyle?.emission??'linear-hdr',alpha:select('alpha-policy').value as any,outline:select('outline-policy').value as any,dither:{...p.pixelStyle?.dither,pattern:select('dither-pattern').value as any,anchor:select('dither-anchor').value as any}});
+}));
+select('palette-preset').onchange=()=>attempt(()=>mutate(p=>{const palette=PIXEL_PALETTE_PRESETS[select('palette-preset').value];if(!palette)return;p.pixelStyle=createPixelStyleProfile2D({...p.pixelStyle,nativeResolution:[runtime!.width,runtime!.height],palette:[...palette],surfaceColors:'indexed',quantization:p.pixelStyle?.quantization==='ordered'?'ordered':'nearest',finalColorPolicy:'palette-locked',emission:'palette-stepped'});}));
+for(const id of ['atlas-size','atlas-padding','atlas-extrude','atlas-trim','atlas-deduplicate'])$(id).onchange=()=>attempt(()=>mutate(p=>{
+  p.exportSettings=resolveAtlasExportSettings({maxTextureSize:Number(select('atlas-size').value),padding:Number(input('atlas-padding').value),extrude:Number(input('atlas-extrude').value),trim:input('atlas-trim').checked,deduplicate:input('atlas-deduplicate').checked});
 }));
 
 button('undo').onclick=()=>attempt(()=>setProject(history.undo(),'history'));
@@ -355,14 +433,18 @@ input('review-file').onchange=()=>attempt(async()=>{
   if(!observations.length)container.append(text('p','표시할 관찰 기록이 없습니다.'));status('검토 기록을 열었습니다. 기록을 클릭하면 관련 시점으로 이동합니다.');
 });
 
-let stroke:ResolvedProject|undefined,strokeCells=new Set<string>(),strokeId='';
+let stroke:ResolvedProject|undefined,strokeCells=new Set<string>(),strokeId='',strokeLast:[number,number]|undefined;
 function paint(event:PointerEvent){
   if(!stroke||!runtime)return;const rect=stage.getBoundingClientRect(),sx=(event.clientX-rect.left)*stage.width/rect.width,sy=(event.clientY-rect.top)*stage.height/rect.height;
-  const x=Math.floor((sx-view.x)/view.scale),y=Math.floor((sy-view.y)/view.scale);if(x<0||y<0||x>=runtime.width||y>=runtime.height)return;
+  const x=Math.floor((sx-view.x)/view.scale),y=Math.floor((sy-view.y)/view.scale);if(x<0||y<0||x>=runtime.width||y>=runtime.height){strokeLast=undefined;return;}
   const tool=select('brush').value,color=tool==='erase'?null:hex(input('brush-color').value)>>>0,size=Math.max(1,Math.min(16,Number(input('brush-size').value)||1)),scope=select('edit-scope').value,frame=Math.floor(clock.time*project.fps+1e-6);
   const rgb=input('brush-color').value.match(/[\da-f]{2}/gi)!.map(s=>{const v=parseInt(s,16)/255;return (v<=.04045?v/12.92:((v+.055)/1.055)**2.4)*2;});
-  for(let dy=0;dy<size;dy++)for(let dx=0;dx<size;dx++){
-    const px=x+dx,py=y+dy,key=`${px}:${py}`;if(px>=runtime.width||py>=runtime.height||strokeCells.has(key))continue;strokeCells.add(key);
+  // Pointer events may skip many native cells. Join sampled positions on the integer grid.
+  const points:[number,number][]=[];let [ax,ay]=strokeLast??[x,y];const dxLine=Math.abs(x-ax),dyLine=-Math.abs(y-ay),stepX=ax<x?1:-1,stepY=ay<y?1:-1;let error=dxLine+dyLine;
+  for(;;){points.push([ax,ay]);if(ax===x&&ay===y)break;const twice=2*error;if(twice>=dyLine){error+=dyLine;ax+=stepX;}if(twice<=dxLine){error+=dxLine;ay+=stepY;}}
+  strokeLast=[x,y];
+  for(const point of points)for(let dy=0;dy<size;dy++)for(let dx=0;dx<size;dx++){
+    const px=point[0]+dx,py=point[1]+dy,key=`${px}:${py}`;if(px>=runtime.width||py>=runtime.height||strokeCells.has(key))continue;strokeCells.add(key);
     const rawX=px-(latest?.shake[0]??0),rawY=py-(latest?.shake[1]??0);
     if(project.kind==='character'&&(tool==='color'||tool==='erase'||tool==='mask')){
       const asset=stroke.character as CharacterAsset2D,clip=project.options.clip??asset.defaultClip,sample=runtime.mod.player.sample(latest?.time??frame/project.fps,clip),base={id:`stroke-${strokeId}-${key}`,clip,target:select('edit-target').value||'body',...(scope==='frame'?{frame:sample.frameIndex}:{})};
@@ -376,15 +458,14 @@ function paint(event:PointerEvent){
   }
 }
 select('brush').onchange=()=>{$('mask-label').hidden=!['mask','color','erase'].includes(select('brush').value);$('mask-operation-label').hidden=select('brush').value!=='mask';if(select('brush').value!=='none')clock.playing=false;};
-stage.onpointerdown=event=>{if(select('brush').value==='none'||event.button!==0)return;clock.playing=false;render();stroke=cloneJSON(project);strokeCells.clear();strokeId=crypto.randomUUID();drawing=true;stage.setPointerCapture(event.pointerId);paint(event);};
+stage.onpointerdown=event=>{if(select('brush').value==='none'||event.button!==0)return;clock.playing=false;render();stroke=cloneJSON(project);strokeCells.clear();strokeLast=undefined;strokeId=crypto.randomUUID();drawing=true;stage.setPointerCapture(event.pointerId);paint(event);};
 stage.onpointermove=event=>{if(drawing)paint(event);};
 stage.onpointerup=()=>{if(!drawing||!stroke)return;drawing=false;const next=stroke;stroke=undefined;attempt(()=>setProject(next));};
 stage.onpointercancel=()=>{drawing=false;stroke=undefined;dirty=true;};
 
 let exportJob:ReturnType<typeof exportProjectAtlas>|undefined;
 button('export').onclick=()=>attempt(async()=>{if(exportJob)return;clearDownloads();button('export').disabled=true;$('cancel-export').hidden=false;clock.playing=false;
-  const job=exportJob=exportProjectAtlas(cloneJSON(project),message=>status(message));
-  try{const files=await job.promise;for(const file of files)linkFile(file);status(`내보내기 완료 · ${files.length-1}개 파일 · ZIP에 프로젝트와 자산 명세 포함`);}finally{exportJob=undefined;button('export').disabled=false;$('cancel-export').hidden=true;}
+  try{const job=exportJob=exportProjectAtlas(cloneJSON(project),message=>status(message));const files=await job.promise;for(const file of files)linkFile(file);status(`내보내기 완료 · ${files.length-1}개 파일 · ZIP에 프로젝트와 자산 명세 포함`);}finally{exportJob=undefined;button('export').disabled=false;$('cancel-export').hidden=true;}
 });
 button('cancel-export').onclick=()=>exportJob?.cancel();
 const packButton=text('button','레시피 + 제작 메모 저장') as HTMLButtonElement;

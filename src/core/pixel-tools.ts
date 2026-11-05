@@ -53,12 +53,22 @@ export interface PixelPatternContext2D {
   rasterToWorld?:PixelTransform2D; rasterToScreen?:PixelTransform2D;
   objectToWorld?:PixelTransform2D; worldToScreen?:PixelTransform2D;
 }
-export interface DitherOptions2D { anchor:'object'|'world'|'screen'; pattern?:'bayer4'|'dispersed8'; scale?:number; phase?:readonly[number,number] }
-const BAYER4=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5];
+export interface DitherOptions2D { anchor:'object'|'world'|'screen'; pattern?:'bayer2'|'bayer4'|'dispersed8'|'cluster4'; scale?:number; phase?:readonly[number,number] }
+const BAYER2=Object.freeze([0,2,3,1]);
+const BAYER4=Object.freeze([0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5]);
 // Fixed dispersed threshold ordering. No per-frame reseeding and no claim of an optimized noise spectrum.
-const DISPERSED8=[0,32,8,40,2,34,10,42,48,16,56,24,50,18,58,26,12,44,4,36,14,46,6,38,60,28,52,20,62,30,54,22,3,35,11,43,1,33,9,41,51,19,59,27,49,17,57,25,15,47,7,39,13,45,5,37,63,31,55,23,61,29,53,21];
+const DISPERSED8=Object.freeze([0,32,8,40,2,34,10,42,48,16,56,24,50,18,58,26,12,44,4,36,14,46,6,38,60,28,52,20,62,30,54,22,3,35,11,43,1,33,9,41,51,19,59,27,49,17,57,25,15,47,7,39,13,45,5,37,63,31,55,23,61,29,53,21]);
+const CLUSTER4=Object.freeze([12,5,6,13,4,0,1,7,11,3,2,8,15,10,9,14]);
+/** Fixed threshold matrices, shared by alpha coverage and palette-color dithering. */
+export function ditherPattern2D(pattern:DitherOptions2D['pattern']='bayer4'):Readonly<{size:number;values:readonly number[]}>{
+  if(pattern==='bayer2')return{size:2,values:BAYER2};
+  if(pattern==='bayer4')return{size:4,values:BAYER4};
+  if(pattern==='dispersed8')return{size:8,values:DISPERSED8};
+  if(pattern==='cluster4')return{size:4,values:CLUSTER4};
+  throw new RangeError('Unknown dither pattern');
+}
 function patternTransform(options:DitherOptions2D,context:PixelPatternContext2D):PixelTransform2D{
-  if(!['object','world','screen'].includes(options.anchor)||options.pattern!==undefined&&!['bayer4','dispersed8'].includes(options.pattern)||options.phase!==undefined&&(options.phase.length!==2||!options.phase.every(Number.isFinite))||!Number.isFinite(options.scale??1)||(options.scale??1)<=0)throw new RangeError('Invalid pattern coordinates');
+  if(!['object','world','screen'].includes(options.anchor)||options.pattern!==undefined&&!['bayer2','bayer4','dispersed8','cluster4'].includes(options.pattern)||options.phase!==undefined&&(options.phase.length!==2||!options.phase.every(Number.isFinite))||!Number.isFinite(options.scale??1)||(options.scale??1)<=0)throw new RangeError('Invalid pattern coordinates');
   let matrix=context.rasterToObject??IDENTITY_PIXEL_TRANSFORM;
   if(options.anchor!=='object')matrix=context.rasterToWorld??composePixelTransform2D(context.objectToWorld??IDENTITY_PIXEL_TRANSFORM,matrix);
   if(options.anchor==='screen')matrix=context.rasterToScreen??composePixelTransform2D(context.worldToScreen??IDENTITY_PIXEL_TRANSFORM,matrix);
@@ -73,8 +83,13 @@ export function pixelPatternCoordinate2D(x:number,y:number,options:DitherOptions
   return[Math.floor(q[0]/scale+(options.phase?.[0]??0)),Math.floor(q[1]/scale+(options.phase?.[1]??0))];
 }
 export function ditherThreshold2D(x:number,y:number,options:DitherOptions2D,context:PixelPatternContext2D={}):number{
-  const [a,b]=pixelPatternCoordinate2D(x,y,options,context),wide=options.pattern==='dispersed8',n=wide?8:4,xx=((a%n)+n)%n,yy=((b%n)+n)%n;
-  return((wide?DISPERSED8:BAYER4)[yy*n+xx]+.5)/(n*n);
+  const [a,b]=pixelPatternCoordinate2D(x,y,options,context),{size:n,values}=ditherPattern2D(options.pattern),xx=((a%n)+n)%n,yy=((b%n)+n)%n;
+  return(values[yy*n+xx]+.5)/(n*n);
+}
+/** Validate and compose pattern coordinates once per raster, not once per cell. */
+export function createDitherSampler2D(options:DitherOptions2D,context:PixelPatternContext2D={}):(x:number,y:number)=>number{
+  const m=patternTransform(options,context),scale=options.scale??1,px=options.phase?.[0]??0,py=options.phase?.[1]??0,{size:n,values}=ditherPattern2D(options.pattern);
+  return(x,y)=>{const a=Math.floor((m[0]*x+m[2]*y+m[4])/scale+px),b=Math.floor((m[1]*x+m[3]*y+m[5])/scale+py);return(values[((b%n)+n)%n*n+((a%n)+n)%n]+.5)/(n*n);};
 }
 /** Explicit alpha-to-pattern conversion. Coverage alpha is retained unless this operation is requested. */
 export function ditherSprite2D<T extends EditableSprite2D&{x?:number;y?:number}>(source:T,options:DitherOptions2D,context:PixelPatternContext2D={}):T{
@@ -83,11 +98,10 @@ export function ditherSprite2D<T extends EditableSprite2D&{x?:number;y?:number}>
 /** Explicit mutable destination for renderer scratch buffers. Source/destination may alias: every output cell reads only the same source cell. */
 export function ditherSprite2DInto(source:EditableSprite2D&{x?:number;y?:number},out:EditableSprite2D,options:DitherOptions2D,context:PixelPatternContext2D={}):void{
   rasterSize(source);rasterSize(out);if(source.w!==out.w||source.h!==out.h)throw new RangeError('Dither destination must match source dimensions');
-  const m=patternTransform(options,context),scale=options.scale??1,px=options.phase?.[0]??0,py=options.phase?.[1]??0,wide=options.pattern==='dispersed8',n=wide?8:4,table=wide?DISPERSED8:BAYER4;
+  const thresholdAt=createDitherSampler2D(options,context);
   for(let y=0;y<source.h;y++)for(let x=0;x<source.w;x++){
     const i=y*source.w+x,c=source.pixels[i],a=(c>>>24)/255;
-    const sx=(source.x??0)+x+.5,sy=(source.y??0)+y+.5,xx=Math.floor((m[0]*sx+m[2]*sy+m[4])/scale+px),yy=Math.floor((m[1]*sx+m[3]*sy+m[5])/scale+py);
-    const threshold=(table[((yy%n)+n)%n*n+((xx%n)+n)%n]+.5)/(n*n);
+    const threshold=thresholdAt((source.x??0)+x+.5,(source.y??0)+y+.5);
     const keep=!!source.mask.data[i]&&a>threshold;
     out.pixels[i]=keep?opaque(c):0;out.mask.data[i]=keep?1:0;
   }

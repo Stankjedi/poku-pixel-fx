@@ -49,8 +49,10 @@ semantic masks, root displacement, contacts, source/cel frame index, event
 The raster actor excludes detached projectiles. This keeps status effects from
 wrapping a released arrow. `sample.bounds` includes everything that will draw,
 including those projectiles. `player.bounds` is a deliberately conservative
-all-clip envelope. `boundsForClip(name, fps)` caches the union of the actual export
-frame grid with two native cells of padding. An arbitrary time between those
+all-clip envelope. `boundsForClip(name, fps)` caches the union of the export
+cadence and the settled non-loop endpoint, with two native cells of padding.
+Final authored poses therefore cannot extend beyond an envelope that only sampled
+earlier cels. An arbitrary time between those
 frames is not guaranteed to fit a sampled envelope; off-grid previews can inspect
 `sample(time).bounds` or use the conservative envelope.
 
@@ -82,13 +84,32 @@ const authoredActor = createActorAdapter2D({
 Human clips dispatch to the existing analytic action/combat/weapon samplers.
 `key-pose` clips instead store explicit hand/foot targets, pose controls, held keys
 and `hold`, `linear` or `smooth` transitions. Boolean eyelids and IK branch choices
-change at key boundaries; they are not interpolated. Optional `fps` deliberately
-holds the authored raster cadence without changing the simulation clock.
+change at key boundaries; they are not interpolated. Keys are sparse: each
+authored channel keeps its value until its next key. A blink-only key therefore
+does not reset hands, feet or gaze. Numeric controls interpolate between their
+own keys using the outgoing interpolation of that channel's previous key;
+unrelated keys do not restart that interpolation. A channel that has never been
+authored retains the human source's default. Write an explicit default value to
+reset a channel. `compileHumanPoseClip2D` snapshots both inputs and its returned
+metadata, so editing a sample or a metadata copy does not change later seeks.
+
+Optional `fps` deliberately holds the authored raster cadence without changing
+the simulation clock. It quantizes **clip-local** time after cycle normalization:
+a 0.8-second run at 12 authored fps starts at cel zero at 0.8, 1.6 and 2.4 seconds,
+even though one cycle contains 9.6 display intervals. The last cel is naturally
+shorter when a duration is not an exact multiple of the cadence. One-shot clips
+sample their exact endpoint: a procedural final pose settles there and an
+imported non-looping raster disappears there. Timeline events retain their
+authored times and are not shifted to a display cel boundary.
+Samples expose `phaseTime` and `cycle`; use the former when writing a socket,
+face or pose key from the displayed frame instead of recomputing its clock.
 
 The reference asset includes a 12 fps `key-strike` with anticipation, contact,
 recovery and an explicit contact event. Key-pose `contacts` are authored keys
 `{at, left, right}`; absence means unknown/unplanted, not inferred ground contact.
 Facial `faceTrack` keys select `blink` and `gaze` without interpolating topology.
+Their channels also persist independently: a blink change retains the most recent
+authored gaze, and a gaze key does not reopen an explicitly closed eyelid.
 Other face expressions can use frame-specific cluster edits or the portrait API.
 
 ## Equipment and sockets
@@ -139,6 +160,59 @@ appear after the defining layer. Unknown attachment sockets fail explicitly.
 When a defining layer is hidden, or its current cel omits a named socket, its
 published socket becomes invisible so dependent layers hide without a dangling
 attachment error.
+
+### Equipment cels synchronized to a character clip
+
+Raster layers can bind an animation to each named character clip. This supports
+authored clothing/armor cels, separate weapon tags and native animated accessories
+without changing their inventory thumbnail or default playback. The binding is
+part of `CharacterAsset2D`, so it survives save/reload, Studio import, project
+rendering and asset export.
+
+```ts
+const layer = {
+  id: 'sleeve', clip: sleeveSpriteClip, socket: 'root', semantic: 'cloth',
+  options: { tag: 'idle', loop: true },
+  animations: {
+    // Same original frame indexing as the body; unequal body cel durations survive.
+    walk: { sync: 'source-frame' },
+    // Retimes the layer tag's whole sequence to one character run cycle.
+    run: { tag: 'flutter', sync: 'phase' },
+    // Select another tag but keep its own seconds-based clock.
+    idle: { tag: 'glint', sync: 'time' },
+  },
+};
+```
+
+| Mode | Sampling rule | Useful for |
+| --- | --- | --- |
+| `time` (default) | Layer tag and durations use the existing independent clock | Sparkles, looping accessory animations |
+| `phase` | One selected layer sequence fits one character clip duration | A cape or highlight cycle matched to an analytic run |
+| `source-frame` | Layer uses the body's original SpriteClip source index | Hand-authored armor/clothing exported alongside body cels |
+
+`source-frame` requires a sprite character clip and an equal total source-frame
+count. It follows the body tag's reverse/pingpong order and unequal timings
+exactly; the layer's own frame durations and default tag are unused for that
+binding. A binding-specific `tag` is rejected in this mode because it would
+conflict with original source-frame identity. The body and layer canvases may
+have different dimensions and pivots; use the same root canvas/pivot when an
+armor cel was painted over the body. Socket-relative items may use their own
+pivot. Native articulated sword/bow layers cannot use these raster bindings:
+they already follow the active human pose and grip.
+
+Phase synchronization retains the layer sequence's internal relative durations.
+It wraps with a looping body and holds the last selected cel when a non-looping
+procedural pose settles. An invisible/finished sprite body also hides its gear.
+Color, emission and item sockets always use the same chosen cel. A sample's
+`layerFrames` map reports each raster layer's original source index, or `-1` when
+it is hidden; articulated generators do not have a raster entry. Existing cel
+edits remain keyed by the character's `frameIndex`, as before.
+
+`createSynchronizedLanternling2D` in `src/examples/character-studio.ts` is an
+executable example. Its removable crest stays on the corresponding source cel
+during both ordinary walking and a reverse/pingpong return tag, even though the
+crest's own authored durations differ. The original four reference assets are
+unchanged.
 
 ### Persisted socket keys
 
@@ -201,6 +275,9 @@ incompatible constraints it reports the residual instead of silently claiming
 perfect foot locking. It writes a portable root track including the endpoint.
 Looping tracks accumulate their end-to-start displacement. Bake/sample cadence is
 explicit; sub-frame interpolation is still a sampled approximation.
+The same accumulation applies to a key-pose clip's `poses.root` track. Root keys
+start at time zero and use native displacement coordinates; the last position
+holds until the endpoint if no additional endpoint key was authored.
 
 Gameplay events are separate from pure render samples:
 
@@ -291,6 +368,20 @@ frame indexing. New `frameSockets(index)`, `socketAt(name,time)` and
 `frameEmission(index)` getters return copies. Frame socket coordinates are in the
 original source canvas; `socketAt` subtracts the pivot. Optional basis vectors and
 mirror policy are retained with angle/visibility.
+Character sprite clips inherit source playback options per field. For example,
+`source.options.loop:true` remains active when a named clip specifies only
+`options:{tag:'walk'}`; an explicit `loop:false` overrides it. Body clips that
+select tags from the same source share its decoded frames, and the character's
+decoded-cell budget counts that shared source once.
+
+`clip.withOptions({tag:'run',loop:true})` selects another playback view while
+sharing the private decoded color/mask/emission/socket snapshots. It creates only
+a sequence/timing table, not another copy of every raster. Omitted options retain
+their current values; `{tag:undefined}` selects the full untagged sequence.
+`frameAtPhase(phase)` samples normalized sequence time from zero through one,
+including the last cel at exactly one. Negative, non-finite or greater-than-one
+phases return `-1`; this normalized helper does not loop. The existing `frameAt`
+seconds API keeps its half-open visibility interval and explicit looping policy.
 
 `emission` is a row-major array of `width * height * 3` **coverage-weighted linear
 RGB radiance**. It is independent of the color alpha, so an emission-only cell can

@@ -1,59 +1,65 @@
 import {
-  CinematicFrameRenderer,
-  PlaybackClock,
-  integerViewport
-} from "./chunks/chunk-QRRJDY7M.js";
-import {
-  encodeRGBAPNG
-} from "./chunks/chunk-OHTBDYQJ.js";
-import {
   createProjectRuntime,
+  createSequenceSpec,
   projectCinematicOptions
-} from "./chunks/chunk-2BQZ7M7H.js";
+} from "./chunks/chunk-RGE47I3E.js";
 import {
   RECIPE_KINDS,
   RECIPE_LAYERS,
-  RECIPE_PARAMETERS,
-  createRecipeSpec
-} from "./chunks/chunk-PLGU4LXO.js";
+  createRecipeSpec,
+  recipeParameters,
+  retimeRecipeSpec
+} from "./chunks/chunk-J4Q4JDPH.js";
 import {
   catalogEntries,
   loadCatalogEffect,
   searchEffects
-} from "./chunks/chunk-Z3SHPHVH.js";
-import "./chunks/chunk-IXDL6S4B.js";
+} from "./chunks/chunk-YU4ABWEI.js";
+import "./chunks/chunk-6HAS6H5C.js";
 import {
   cloneJSON,
   createProject,
   createRecipePack,
   parseProject,
   serializeProject
-} from "./chunks/chunk-JIMPAKU2.js";
+} from "./chunks/chunk-FLVIEPJE.js";
 import {
-  characterClipTime2D,
+  CinematicFrameRenderer,
+  PlaybackClock,
+  integerViewport
+} from "./chunks/chunk-I4QYMUT2.js";
+import {
+  encodeRGBAPNG
+} from "./chunks/chunk-OHTBDYQJ.js";
+import {
   createAtlasPacker,
   createCharacterAsset2D,
   createCharacterIdentity2D,
   createStudioCharacter2D,
+  extrudeAtlasRegion,
   frameContentBounds,
   frameDurationMs,
   renderCharacterPortrait2D,
   resolveAssetEvents,
+  resolveAtlasExportSettings,
   sampleCharacterSocketTrack2D,
   setCharacterSocketKey2D
-} from "./chunks/chunk-NY4VHNMV.js";
+} from "./chunks/chunk-YQJJU7UN.js";
 import {
   createTimingCurve,
-  hex
-} from "./chunks/chunk-WFSCDWU6.js";
+  hex,
+  toHex
+} from "./chunks/chunk-FEXYTCCO.js";
 import {
+  PIXEL_PALETTE_PRESETS,
   createPixelStyleProfile2D,
   diagnosePixelMotion2D,
   diagnosePixelSprite2D,
   invertPixelTransform2D,
   pixelTransform2D,
   transformPixelPoint2D
-} from "./chunks/chunk-T3JNBT34.js";
+} from "./chunks/chunk-3L2ANF6Q.js";
+import "./chunks/chunk-JQMAFXP4.js";
 import "./chunks/chunk-WSFCRVEQ.js";
 
 // src/authoring/history.ts
@@ -124,11 +130,10 @@ function observationsFromReview(input2) {
 }
 
 // src/version.ts
-var ENGINE_VERSION = "0.4.0";
+var ENGINE_VERSION = "0.5.0";
 
 // gallery/studio-export.ts
 var encoder = new TextEncoder();
-var PAGE = 2048;
 var MAX_BYTES = 128 * 1024 * 1024;
 async function sha256(data) {
   const buffer = data instanceof Blob ? await data.arrayBuffer() : data;
@@ -179,13 +184,17 @@ async function zipFiles(files) {
   return new Blob([...parts, ...directory.map((a) => a.buffer), end.buffer], { type: "application/zip" });
 }
 function exportProjectAtlas(project2, onProgress) {
+  const settings = resolveAtlasExportSettings({ trim: true, ...project2.exportSettings }), PAGE = settings.maxTextureSize;
+  if (PAGE > 2048) throw new RangeError("\uBE0C\uB77C\uC6B0\uC800 atlas\uB294 \uCD5C\uB300 2048\uC785\uB2C8\uB2E4. \uB354 \uD070 \uD398\uC774\uC9C0\uB294 CLI\uC5D0\uC11C \uB0B4\uBCF4\uB0B4\uC138\uC694.");
   const worker = new Worker(new URL("./studio-worker.js", import.meta.url), { type: "module" }), id = 1;
   let cancelled = false, settled = false, finish, fail;
   const promise = new Promise((resolve, reject) => {
     finish = resolve;
     fail = reject;
   });
-  const packer = createAtlasPacker(PAGE, 1), files = [], records = [];
+  const packer = createAtlasPacker(PAGE, settings.padding), files = [], records = [];
+  const duplicates = /* @__PURE__ */ new Map();
+  let reused = 0;
   const renderMode = project2.renderProfile?.mode === "cinematic" ? "cinematic" : "legacy";
   let info, page = -1, pageColor = new Uint8Array(0), pageEmission = new Float32Array(0), bytes = 0;
   const manifest = {
@@ -199,7 +208,7 @@ function exportProjectAtlas(project2, onProgress) {
     pages: [],
     frames: [],
     tags: [],
-    settings: { project: project2, renderMode, renderProfile: { ...project2.renderProfile, mode: renderMode }, assetLayers: "straight color + linear HDR emission", previewBackground: project2.bg },
+    settings: { project: project2, renderMode, renderProfile: { ...project2.renderProfile, mode: renderMode }, atlas: settings, assetLayers: "straight color + linear HDR emission", previewBackground: project2.bg },
     source: { engineVersion: ENGINE_VERSION, rng: "poku-rng/v1", ...project2.sourceRevision ? { sourceRevision: project2.sourceRevision } : {} },
     files: records
   };
@@ -246,21 +255,47 @@ function exportProjectAtlas(project2, onProgress) {
     }
     if (m.type === "error") throw new Error(m.message);
     if (m.type === "frame") {
-      const rgba = new Uint8Array(m.rgba), emission = new Float32Array(m.emission), trim = frameContentBounds(info.width, info.height, rgba, emission), placement = packer.place(trim.w, trim.h);
-      if (placement.page !== page) {
-        await flush();
-        page = placement.page;
-        if (page >= 16) throw new RangeError("\uBE0C\uB77C\uC6B0\uC800 \uB0B4\uBCF4\uB0B4\uAE30\uB294 \uCD5C\uB300 16\uAC1C atlas \uD398\uC774\uC9C0\uC785\uB2C8\uB2E4. CLI\uB97C \uC0AC\uC6A9\uD558\uC138\uC694.");
-        pageColor = new Uint8Array(PAGE * PAGE * 4);
-        pageEmission = new Float32Array(PAGE * PAGE * 3);
+      const rgba = new Uint8Array(m.rgba), emission = new Float32Array(m.emission), trim = settings.trim ? frameContentBounds(info.width, info.height, rgba, emission) : { x: 0, y: 0, w: info.width, h: info.height };
+      let key = "";
+      if (settings.deduplicate) {
+        const data = new Uint8Array(8 + trim.w * trim.h * 16), view2 = new DataView(data.buffer);
+        view2.setUint32(0, trim.w, true);
+        view2.setUint32(4, trim.h, true);
+        let at = 8;
+        for (let y = 0; y < trim.h; y++) for (let x = 0; x < trim.w; x++) {
+          const src = (trim.y + y) * info.width + trim.x + x;
+          data.set(rgba.subarray(src * 4, src * 4 + 4), at);
+          at += 4;
+          for (let c = 0; c < 3; c++) {
+            view2.setFloat32(at, emission[src * 3 + c], true);
+            at += 4;
+          }
+        }
+        key = await sha256(data.buffer);
       }
-      for (let y = 0; y < trim.h; y++) {
-        const source = (y + trim.y) * info.width + trim.x, dest = (placement.rect.y + y) * PAGE + placement.rect.x;
-        pageColor.set(rgba.subarray(source * 4, (source + trim.w) * 4), dest * 4);
-        pageEmission.set(emission.subarray(source * 3, (source + trim.w) * 3), dest * 3);
+      const previous = settings.deduplicate ? duplicates.get(key) : void 0, placement = previous ?? packer.place(trim.w, trim.h);
+      if (previous) reused++;
+      else {
+        if (placement.page !== page) {
+          await flush();
+          page = placement.page;
+          if (page >= 16) throw new RangeError("\uBE0C\uB77C\uC6B0\uC800 \uB0B4\uBCF4\uB0B4\uAE30\uB294 \uCD5C\uB300 16\uAC1C atlas \uD398\uC774\uC9C0\uC785\uB2C8\uB2E4. CLI\uB97C \uC0AC\uC6A9\uD558\uC138\uC694.");
+          pageColor = new Uint8Array(PAGE * PAGE * 4);
+          pageEmission = new Float32Array(PAGE * PAGE * 3);
+        }
+        for (let y = 0; y < trim.h; y++) {
+          const source = (y + trim.y) * info.width + trim.x, dest = (placement.rect.y + y) * PAGE + placement.rect.x;
+          pageColor.set(rgba.subarray(source * 4, (source + trim.w) * 4), dest * 4);
+          pageEmission.set(emission.subarray(source * 3, (source + trim.w) * 3), dest * 3);
+        }
+        if (settings.extrude) {
+          extrudeAtlasRegion(pageColor, PAGE, 4, placement.rect, settings.extrude);
+          extrudeAtlasRegion(pageEmission, PAGE, 3, placement.rect, settings.extrude);
+        }
+        if (settings.deduplicate) duplicates.set(key, placement);
       }
       manifest.frames.push({ ...placement, sourceSize: [info.width, info.height], trimOffset: [trim.x, trim.y], pivot: info.origin, duration: frameDurationMs(m.index, info.fps), time: m.time, frozen: m.frozen, ...m.sockets ? { sockets: m.sockets } : {} });
-      onProgress(`${m.index + 1} / ${info.count} \uD504\uB808\uC784 \xB7 ${page + 1}\uD398\uC774\uC9C0 \xB7 ${Math.round(bytes / 1048576)} MiB`);
+      onProgress(`${m.index + 1} / ${info.count} \uD504\uB808\uC784 \xB7 ${page + 1}\uD398\uC774\uC9C0 \xB7 \uC911\uBCF5 ${reused}\uC7A5 \uC7AC\uC0AC\uC6A9 \xB7 ${Math.round(bytes / 1048576)} MiB`);
       worker.postMessage({ type: "ack", id });
       return;
     }
@@ -438,9 +473,12 @@ async function mutate(change) {
 }
 async function setupRenderer() {
   const generation = ++renderGeneration;
-  gpu?.dispose();
-  gpu = void 0;
-  if (select("backend").value !== "webgpu") return;
+  if (select("backend").value !== "webgpu") {
+    gpu?.dispose();
+    gpu = void 0;
+    return;
+  }
+  if (gpu && gpu.status.state !== "disposed") return;
   const created = await CinematicFrameRenderer.create(native, { backend: "webgpu" });
   if (generation !== renderGeneration) {
     created.dispose();
@@ -612,6 +650,13 @@ function numberControl(container, label, value, min, max, change) {
   labelControl(container, label, control);
   return control;
 }
+function sequenceConversionIssue() {
+  if (project.kind === "act") return "ACT \uBC30\uC6B0\uC640 hit-stop\uC740 \uAC1C\uBCC4 \uCE90\uB9AD\uD130\xB7\uD6A8\uACFC cue\uB85C \uAD6C\uC131\uD574\uC57C \uD569\uB2C8\uB2E4.";
+  if (project.edits.length || project.pixelStyle?.pixelTracks?.length) return "\uD504\uB808\uC784 \uC88C\uD45C\uC5D0 \uC800\uC7A5\uD55C \uD53D\uC140 \uC218\uC815\uC740 \uD569\uC131 canvas\uC5D0\uC11C \uC704\uCE58\uAC00 \uB2EC\uB77C\uC9C8 \uC218 \uC788\uC2B5\uB2C8\uB2E4. \uC6D0\uBCF8 \uD504\uB85C\uC81D\uD2B8\uB97C \uC800\uC7A5\uD558\uACE0 \uC218\uC815 \uC804 \uD6A8\uACFC\uC5D0\uC11C \uC2DC\uD000\uC2A4\uB97C \uC2DC\uC791\uD558\uC138\uC694.";
+  if (runtime?.mod.meta.actor && project.actor) return "\uD568\uAED8 \uD45C\uC2DC\uD558\uB294 \uBC30\uC6B0\uB294 \uB3C5\uB9BD \uCE90\uB9AD\uD130 cue\uB85C \uCD94\uAC00\uD574\uC57C \uD569\uB2C8\uB2E4. \uD604\uC7AC \uD504\uB85C\uC81D\uD2B8\uB97C \uC800\uC7A5\uD558\uACE0 \uCE90\uB9AD\uD130 \uD3EC\uD568\uC744 \uB048 \uD6A8\uACFC\uC5D0\uC11C \uC2DC\uD000\uC2A4\uB97C \uC2DC\uC791\uD558\uC138\uC694.";
+  if (runtime && (!runtime.duration || !runtime.loop && runtime.duration > runtime.mod.meta.duration + 1e-9)) return "0\uCD08 \uD654\uBA74 \uB610\uB294 \uC6D0\uBCF8 \uC218\uBA85 \uC774\uD6C4\uC758 \uB9C8\uC9C0\uB9C9 \uD504\uB808\uC784 \uD640\uB4DC\uB294 cue\uB85C \uC790\uB3D9 \uBCC0\uD658\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. \uC6D0\uBCF8 \uB3D9\uC791 \uAE38\uC774\uC5D0\uC11C \uC2DC\uD000\uC2A4\uB97C \uC2DC\uC791\uD558\uC138\uC694.";
+  return "";
+}
 function renderControls() {
   $("project-name").textContent = project.name;
   button("undo").disabled = !history.canUndo;
@@ -630,14 +675,39 @@ function renderControls() {
   select("alpha-policy").value = ps?.alpha ?? "coverage";
   select("outline-policy").value = ps?.outline ?? "none";
   select("dither-anchor").value = ps?.dither?.anchor ?? "object";
+  select("color-quantization").value = ps?.quantization ?? "nearest";
+  select("dither-pattern").value = ps?.dither?.pattern ?? "bayer4";
+  input("color-dither-strength").value = String(ps?.colorDitherStrength ?? 1);
+  select("palette-preset").value = "custom";
+  const atlas = resolveAtlasExportSettings({ trim: true, ...project.exportSettings });
+  select("atlas-size").value = String(atlas.maxTextureSize);
+  input("atlas-padding").value = String(atlas.padding);
+  input("atlas-extrude").value = String(atlas.extrude);
+  input("atlas-trim").checked = atlas.trim;
+  input("atlas-deduplicate").checked = atlas.deduplicate;
   select("backend").value = project.renderProfile?.backend === "webgpu" ? "webgpu" : "cpu";
+  const conversionIssue = sequenceConversionIssue();
+  button("new-sequence").disabled = project.kind === "sequence" || !!conversionIssue;
+  button("new-sequence").textContent = conversionIssue ? "\uD604\uC7AC \uD504\uB85C\uC81D\uD2B8\uC758 \uC2DC\uD000\uC2A4 \uBCC0\uD658 \uC81C\uD55C" : "+ \uD604\uC7AC \uD6A8\uACFC\uB85C \uC2DC\uD000\uC2A4 \uC81C\uC791";
+  button("new-sequence").title = conversionIssue;
+  let conversionNote = $("sequence-conversion-note");
+  if (!conversionNote) {
+    conversionNote = text("p", "");
+    conversionNote.id = "sequence-conversion-note";
+    button("new-sequence").after(conversionNote);
+  }
+  conversionNote.hidden = !conversionIssue;
+  conversionNote.textContent = conversionIssue;
   $("target-label").hidden = project.kind !== "character";
   renderParameters();
   renderLayers();
   renderPath();
   renderCurve();
   renderCharacter();
+  renderSequence();
+  renderPalette();
   renderMarkers();
+  search();
 }
 function renderParameters() {
   const container = $("parameters");
@@ -691,7 +761,7 @@ function renderParameters() {
     return;
   }
   const values = project.recipe.parameters, groups = /* @__PURE__ */ new Map();
-  for (const parameter of RECIPE_PARAMETERS) {
+  for (const parameter of recipeParameters(project.recipe)) {
     let group = groups.get(parameter.group ?? "\uC77C\uBC18");
     if (!group) {
       group = document.createElement("fieldset");
@@ -702,8 +772,17 @@ function renderParameters() {
     const update = (value) => attempt(() => mutate((p) => {
       p.recipe.parameters[parameter.key] = value;
       if (parameter.key === "palette") p.options.palette = value;
-      if (parameter.key === "travel" && p.recipe.kind === "thrown-blade" && Number(value) + 0.94 > p.recipe.duration) {
-        scaleDuration(p, Number(value) + 0.94);
+      if (parameter.key === "travel" && p.recipe.kind === "thrown-blade") {
+        const required = Number(value) + 0.94 * (p.recipe.timeScale ?? 1);
+        if (required > p.recipe.duration) {
+          const ratio = required / p.recipe.duration;
+          for (const keys of Object.values(p.recipe.tracks)) for (const key of keys) {
+            key.time *= ratio;
+            if (key.velocity !== void 0) key.velocity /= ratio;
+          }
+          p.recipe.duration = required;
+          p.seconds = required;
+        }
       }
     }));
     if (parameter.type === "number") {
@@ -737,11 +816,8 @@ function renderParameters() {
   }
 }
 function scaleDuration(p, seconds) {
-  if (p.recipe) {
-    const scale = seconds / p.recipe.duration;
-    p.recipe.duration = seconds;
-    for (const keys of Object.values(p.recipe.tracks)) for (const key of keys) key.time *= scale;
-  }
+  if (p.recipe) p.recipe = retimeRecipeSpec(p.recipe, seconds);
+  if (p.sequence) p.sequence.duration = seconds;
   p.seconds = seconds;
 }
 function renderLayers() {
@@ -766,6 +842,98 @@ function renderLayers() {
     }));
     row.append(solo);
     container.append(row);
+  }
+}
+function renderPalette() {
+  const container = $("palette-swatches");
+  container.replaceChildren();
+  for (const [i, color] of (project.pixelStyle?.palette ?? []).entries()) {
+    const swatch = document.createElement("input");
+    swatch.type = "color";
+    swatch.value = toHex(color).slice(0, 7);
+    swatch.title = `\uD314\uB808\uD2B8 ${i + 1}`;
+    swatch.onchange = () => attempt(() => mutate((p) => {
+      p.pixelStyle.palette[i] = hex(swatch.value) >>> 0;
+    }));
+    container.append(swatch);
+  }
+}
+function renderSequence() {
+  const container = $("sequence-controls");
+  container.replaceChildren();
+  if (project.kind !== "sequence") return;
+  container.append(text("h2", "\uD6A8\uACFC \uC2DC\uD000\uC2A4"), text("p", "\uC67C\uCABD \uB77C\uC774\uBE0C\uB7EC\uB9AC\uC758 + \uBC84\uD2BC\uC73C\uB85C \uD6A8\uACFC\uB97C \uCD94\uAC00\uD558\uC138\uC694. \uAC19\uC740 \uC55E/\uB4A4 \uB808\uC774\uC5B4 \uC548\uC5D0\uC11C \uBAA9\uB85D \uC21C\uC11C\uB85C \uACB9\uCE69\uB2C8\uB2E4."));
+  const spec = project.sequence, loop = document.createElement("input");
+  loop.type = "checkbox";
+  loop.checked = spec.loop;
+  loop.onchange = () => attempt(() => mutate((p) => {
+    p.sequence.loop = loop.checked;
+  }));
+  labelControl(container, "\uC2DC\uD000\uC2A4 \uBC18\uBCF5", loop);
+  const auto = text("button", "\uB9C8\uC9C0\uB9C9 \uD6A8\uACFC\uAE4C\uC9C0 \uAE38\uC774 \uC790\uB3D9 \uB9DE\uCDA4");
+  auto.onclick = () => attempt(() => mutate((p) => {
+    delete p.sequence.duration;
+    delete p.seconds;
+  }));
+  container.append(auto);
+  for (const [i, cue] of spec.cues.entries()) {
+    const details = document.createElement("details");
+    details.className = "sequence-cue";
+    details.open = true;
+    const title = cue.source.kind === "catalog" ? cue.source.id : cue.source.kind === "recipe" ? cue.source.recipe.kind : cue.source.character.name;
+    details.append(text("summary", `${i + 1}. ${title}`));
+    container.append(details);
+    const change = (edit) => attempt(() => mutate((p) => {
+      edit(p.sequence.cues[i]);
+    }));
+    const active = document.createElement("input");
+    active.type = "checkbox";
+    active.checked = cue.enabled;
+    active.onchange = () => change((c) => {
+      c.enabled = active.checked;
+    });
+    labelControl(details, "\uD45C\uC2DC", active);
+    for (const [key, label, min, max] of [["at", "\uC2DC\uC791 (\uCD08)", 0, 3600], ["x", "X (\uD53D\uC140)", -4096, 4096], ["y", "Y (\uD53D\uC140)", -4096, 4096], ["fadeIn", "\uB098\uD0C0\uB0A8 (\uCD08)", 0, 60], ["fadeOut", "\uC0AC\uB77C\uC9D0 (\uCD08)", 0, 60]]) {
+      const n = numberControl(details, label, cue[key], min, max, (value) => change((c) => {
+        c[key] = value;
+      }));
+      n.step = key === "x" || key === "y" ? "1" : ".01";
+    }
+    const duration = document.createElement("input");
+    Object.assign(duration, { type: "number", min: ".01", max: "3600", step: ".01", placeholder: "\uC6D0\uBCF8 \uAE38\uC774", value: cue.duration === void 0 ? "" : String(cue.duration) });
+    duration.onchange = () => {
+      if (duration.checkValidity()) change((c) => {
+        if (duration.value === "") delete c.duration;
+        else c.duration = Number(duration.value);
+      });
+      else duration.reportValidity();
+    };
+    labelControl(details, "\uD45C\uC2DC \uC2DC\uAC04 (\uCD08)", duration);
+    const angle = numberControl(details, "\uD68C\uC804 (\uB3C4)", cue.angle * 180 / Math.PI, -3600, 3600, (value) => change((c) => {
+      c.angle = value * Math.PI / 180;
+    }));
+    angle.step = "1";
+    const flip = document.createElement("input");
+    flip.type = "checkbox";
+    flip.checked = cue.flip;
+    flip.onchange = () => change((c) => {
+      c.flip = flip.checked;
+    });
+    labelControl(details, "\uC88C\uC6B0 \uBC18\uC804", flip);
+    for (const [label, offset] of [["\uB4A4\uB85C", -1], ["\uC55E\uC73C\uB85C", 1]]) {
+      const move = text("button", label);
+      move.disabled = i + offset < 0 || i + offset >= spec.cues.length;
+      move.onclick = () => attempt(() => mutate((p) => {
+        const a = p.sequence.cues;
+        [a[i], a[i + offset]] = [a[i + offset], a[i]];
+      }));
+      details.append(move);
+    }
+    const remove = text("button", "\uD6A8\uACFC \uC81C\uAC70");
+    remove.onclick = () => attempt(() => mutate((p) => {
+      p.sequence.cues.splice(i, 1);
+    }));
+    details.append(remove);
   }
 }
 function renderPath() {
@@ -902,6 +1070,32 @@ function renderCharacter() {
     target.append(option);
   }
   target.value = [...target.options].some((o) => o.value === oldTarget) ? oldTarget : "body";
+  const rasterLayers = layers.filter((layer) => !layer.generator);
+  if (rasterLayers.length) {
+    const details = document.createElement("details");
+    details.append(text("summary", "\uC7A5\uBE44 \uC560\uB2C8\uBA54\uC774\uC158 \uB3D9\uAE30\uD654"));
+    container.append(details);
+    for (const layer of rasterLayers) {
+      const binding = layer.animations?.[clip], update = (key, value) => alter((a) => {
+        const copy = cloneJSON(a);
+        const all = [...copy.layers ?? [], ...Object.values(copy.equipment ?? {}).flatMap((e) => e.layers)];
+        const item = all.find((l) => l.id === layer.id);
+        item.animations = { ...item.animations, [clip]: { ...item.animations?.[clip], [key]: value } };
+        if (key === "tag" && !value || key === "sync" && value === "source-frame") delete item.animations[clip].tag;
+        return createCharacterAsset2D(copy);
+      });
+      const body = asset.clips[clip], bodyData = body.kind === "sprite" ? body.data ?? (asset.source.kind === "sprite" ? asset.source.clip : void 0) : void 0;
+      const modes = bodyData?.frames.length === layer.clip.frames.length ? ["time", "phase", "source-frame"] : ["time", "phase"];
+      const sync = choice(details, `${layer.id} \xB7 \uB3D9\uAE30\uD654`, modes, binding?.sync ?? "time", (value) => update("sync", value));
+      for (const option of sync.options) option.textContent = { time: "\uB3C5\uB9BD \uC2DC\uAC04", phase: "\uBAB8\uCCB4 \uC8FC\uAE30 \uB9DE\uCDA4", "source-frame": "\uBAB8\uCCB4 \uC6D0\uD654 \uBC88\uD638" }[option.value];
+      const tags = layer.clip.tags?.map((tag) => tag.name) ?? [];
+      if (tags.length) {
+        const tag = choice(details, `${layer.id} \xB7 \uD0DC\uADF8`, ["", ...tags], binding?.tag ?? "", (value) => update("tag", value));
+        tag.options[0].textContent = "\uAE30\uBCF8 \uD0DC\uADF8";
+        tag.disabled = binding?.sync === "source-frame";
+      }
+    }
+  }
   $("target-label").hidden = false;
   const sockets = document.createElement("input");
   sockets.id = "show-sockets";
@@ -1019,8 +1213,8 @@ function renderSocketEditor(container, asset, clipName, alter) {
   };
   function populate() {
     fields.replaceChildren();
-    const player = runtime.mod.player, info = player.clipInfo(clipName), clip = asset.clips[clipName], displayTime = Math.floor(clock.time * project.fps + 1e-6) / project.fps, celTime = clip.fps ? Math.floor(displayTime * clip.fps) / clip.fps : displayTime, t = characterClipTime2D(celTime, info.duration, info.loop).time;
-    const base = player.sample(displayTime, clipName, { ignoreSocketTracks: true }), current = player.sample(displayTime, clipName), names = [.../* @__PURE__ */ new Set([...Object.keys(base.sockets), ...Object.keys(current.sockets), ...Object.keys(clip.socketTracks ?? {})])];
+    const player = runtime.mod.player, info = player.clipInfo(clipName), clip = asset.clips[clipName], displayTime = Math.floor(clock.time * project.fps + 1e-6) / project.fps;
+    const base = player.sample(displayTime, clipName, { ignoreSocketTracks: true }), current = player.sample(displayTime, clipName), t = current.phaseTime, names = [.../* @__PURE__ */ new Set([...Object.keys(base.sockets), ...Object.keys(current.sockets), ...Object.keys(clip.socketTracks ?? {})])];
     if (!names.includes(selectedSocket)) selectedSocket = names[0] ?? "root";
     choice(fields, "\uC18C\uCF13", names, selectedSocket, (value) => {
       selectedSocket = value;
@@ -1111,18 +1305,40 @@ for (const kind of RECIPE_KINDS) {
   $("recipes").append(b);
 }
 button("new-character").onclick = () => attempt(() => setProject(createProject({ id: "characters/wayfarer", name: "Wayfarer", kind: "character", character: createStudioCharacter2D({ height: Number(select("new-character-height").value) }), options: { clip: "idle" }, bg: "dark", fps: 24, actor: false, target: false }), "commit", false));
+button("new-sequence").onclick = () => attempt(async () => {
+  if (project.kind === "sequence") return;
+  const issue = sequenceConversionIssue();
+  if (issue) throw new Error(issue);
+  const source = project.kind === "recipe" ? { kind: "recipe", recipe: project.recipe } : project.kind === "character" ? { kind: "character", character: project.character, clip: project.options.clip ?? project.character.defaultClip } : { kind: "catalog", id: project.id };
+  const effective = { ...runtime.mod.meta.options, ...project.options }, placement = Object.fromEntries(["x", "y", "angle", "flip", "cameraMotion"].filter((key) => effective[key] !== void 0).map((key) => [key, effective[key]]));
+  const settings = Object.fromEntries(["margin", "cameraMotion", "intentRef", "sourceRevision"].filter((key) => project[key] !== void 0).map((key) => [key, project[key]]));
+  await setProject(createProject({ id: "sequences/composite", name: `${project.name} \xB7 \uC2DC\uD000\uC2A4`, kind: "sequence", seed: project.seed, fps: project.fps, bg: project.bg, notes: project.notes, actor: false, target: false, options: placement, ...settings, ...project.pixelStyle ? { pixelStyle: project.pixelStyle } : {}, ...project.renderProfile ? { renderProfile: project.renderProfile } : {}, ...project.exportSettings ? { exportSettings: project.exportSettings } : {}, sequence: createSequenceSpec({ duration: runtime.duration, loop: runtime.loop, cues: [{ id: "source", source, seed: project.seed, duration: runtime.duration, options: { ...project.options, layers: project.layers, cameraMotion: 1 }, x: 0, y: 0, angle: 0, flip: false }] }) }), "commit", false);
+  search();
+});
 $("library-count").textContent = String(catalogEntries.length);
 function search() {
   const results = $("results");
   results.replaceChildren();
   for (const effect of searchEffects(input("search").value, 20)) {
-    const b = text("button", String(effect.meta.name ?? effect.id));
+    const row = document.createElement("div"), b = text("button", String(effect.meta.name ?? effect.id));
     b.append(text("small", effect.id));
     b.onclick = () => attempt(async () => {
       const mod = await loadCatalogEffect(effect.id);
       await setProject(createProject({ id: effect.id, name: String(mod.meta.name ?? effect.id), kind: mod.recipe ? "recipe" : mod.act ? "act" : "2d", options: { ...mod.meta.options }, ...mod.recipe ? { recipe: mod.recipe } : {}, fps: 30, bg: "dark", intentRef: `authoring/${effect.id}.intent.json` }), "commit", false);
+      search();
     });
-    results.append(b);
+    row.append(b);
+    if (project.kind === "sequence") {
+      const add = text("button", "+ \uC2DC\uD000\uC2A4\uC5D0 \uCD94\uAC00");
+      add.onclick = () => attempt(() => mutate((p) => {
+        const cue = createSequenceSpec({ cues: [{ id: `cue-${crypto.randomUUID()}`, source: { kind: "catalog", id: effect.id }, at: Math.floor(clock.time * project.fps) / project.fps }] }).cues[0];
+        p.sequence.cues.push(cue);
+        delete p.seconds;
+        delete p.sequence.duration;
+      }));
+      row.append(add);
+    }
+    results.append(row);
   }
 }
 input("search").oninput = search;
@@ -1177,11 +1393,19 @@ input("intent-ref").onchange = () => attempt(() => mutate((p) => {
   p.intentRef = input("intent-ref").value;
   if (p.recipe) p.recipe.intentRef = p.intentRef;
 }));
-for (const id of ["color-policy", "alpha-policy", "outline-policy", "dither-anchor"]) select(id).onchange = () => attempt(() => mutate((p) => {
+for (const id of ["color-policy", "alpha-policy", "outline-policy", "dither-anchor", "color-quantization", "dither-pattern", "color-dither-strength"]) $(id).onchange = () => attempt(() => mutate((p) => {
   const locked = select("color-policy").value === "palette-locked";
   const current = latest?.frame.color, characterColors = current ? [...new Set(Array.from(current).filter((c) => c >>> 24).map((c) => (c | 4278190080) >>> 0))].slice(0, 256) : [];
   const palette = p.pixelStyle?.palette ?? (p.recipe?.parameters.palette ?? (p.kind === "character" && characterColors.length ? characterColors : ["#172333", "#34526b", "#528a94", "#83b9ad", "#c8e3cf", "#fff0d1"])).map((c) => hex(c) >>> 0);
-  p.pixelStyle = createPixelStyleProfile2D({ ...p.pixelStyle, nativeResolution: [runtime.width, runtime.height], surfaceColors: locked ? "indexed" : "authored-rgba", palette, quantization: p.pixelStyle?.quantization ?? "nearest", finalColorPolicy: locked ? "palette-locked" : "cinematic", emission: p.pixelStyle?.emission ?? "linear-hdr", alpha: select("alpha-policy").value, outline: select("outline-policy").value, dither: { ...p.pixelStyle?.dither, pattern: p.pixelStyle?.dither?.pattern ?? "bayer4", anchor: select("dither-anchor").value } });
+  p.pixelStyle = createPixelStyleProfile2D({ ...p.pixelStyle, nativeResolution: [runtime.width, runtime.height], surfaceColors: locked ? "indexed" : "authored-rgba", palette, quantization: select("color-quantization").value, colorDitherStrength: Number(input("color-dither-strength").value), finalColorPolicy: locked ? "palette-locked" : "cinematic", emission: locked ? p.pixelStyle?.emission === "none" ? "none" : "palette-stepped" : p.pixelStyle?.emission ?? "linear-hdr", alpha: select("alpha-policy").value, outline: select("outline-policy").value, dither: { ...p.pixelStyle?.dither, pattern: select("dither-pattern").value, anchor: select("dither-anchor").value } });
+}));
+select("palette-preset").onchange = () => attempt(() => mutate((p) => {
+  const palette = PIXEL_PALETTE_PRESETS[select("palette-preset").value];
+  if (!palette) return;
+  p.pixelStyle = createPixelStyleProfile2D({ ...p.pixelStyle, nativeResolution: [runtime.width, runtime.height], palette: [...palette], surfaceColors: "indexed", quantization: p.pixelStyle?.quantization === "ordered" ? "ordered" : "nearest", finalColorPolicy: "palette-locked", emission: "palette-stepped" });
+}));
+for (const id of ["atlas-size", "atlas-padding", "atlas-extrude", "atlas-trim", "atlas-deduplicate"]) $(id).onchange = () => attempt(() => mutate((p) => {
+  p.exportSettings = resolveAtlasExportSettings({ maxTextureSize: Number(select("atlas-size").value), padding: Number(input("atlas-padding").value), extrude: Number(input("atlas-extrude").value), trim: input("atlas-trim").checked, deduplicate: input("atlas-deduplicate").checked });
 }));
 button("undo").onclick = () => attempt(() => setProject(history.undo(), "history"));
 button("redo").onclick = () => attempt(() => setProject(history.redo(), "history"));
@@ -1226,18 +1450,40 @@ input("review-file").onchange = () => attempt(async () => {
 var stroke;
 var strokeCells = /* @__PURE__ */ new Set();
 var strokeId = "";
+var strokeLast;
 function paint(event) {
   if (!stroke || !runtime) return;
   const rect = stage.getBoundingClientRect(), sx = (event.clientX - rect.left) * stage.width / rect.width, sy = (event.clientY - rect.top) * stage.height / rect.height;
   const x = Math.floor((sx - view.x) / view.scale), y = Math.floor((sy - view.y) / view.scale);
-  if (x < 0 || y < 0 || x >= runtime.width || y >= runtime.height) return;
+  if (x < 0 || y < 0 || x >= runtime.width || y >= runtime.height) {
+    strokeLast = void 0;
+    return;
+  }
   const tool = select("brush").value, color = tool === "erase" ? null : hex(input("brush-color").value) >>> 0, size = Math.max(1, Math.min(16, Number(input("brush-size").value) || 1)), scope = select("edit-scope").value, frame = Math.floor(clock.time * project.fps + 1e-6);
   const rgb = input("brush-color").value.match(/[\da-f]{2}/gi).map((s) => {
     const v = parseInt(s, 16) / 255;
     return (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4) * 2;
   });
-  for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) {
-    const px = x + dx, py = y + dy, key = `${px}:${py}`;
+  const points = [];
+  let [ax, ay] = strokeLast ?? [x, y];
+  const dxLine = Math.abs(x - ax), dyLine = -Math.abs(y - ay), stepX = ax < x ? 1 : -1, stepY = ay < y ? 1 : -1;
+  let error = dxLine + dyLine;
+  for (; ; ) {
+    points.push([ax, ay]);
+    if (ax === x && ay === y) break;
+    const twice = 2 * error;
+    if (twice >= dyLine) {
+      error += dyLine;
+      ax += stepX;
+    }
+    if (twice <= dxLine) {
+      error += dxLine;
+      ay += stepY;
+    }
+  }
+  strokeLast = [x, y];
+  for (const point of points) for (let dy = 0; dy < size; dy++) for (let dx = 0; dx < size; dx++) {
+    const px = point[0] + dx, py = point[1] + dy, key = `${px}:${py}`;
     if (px >= runtime.width || py >= runtime.height || strokeCells.has(key)) continue;
     strokeCells.add(key);
     const rawX = px - (latest?.shake[0] ?? 0), rawY = py - (latest?.shake[1] ?? 0);
@@ -1266,6 +1512,7 @@ stage.onpointerdown = (event) => {
   render();
   stroke = cloneJSON(project);
   strokeCells.clear();
+  strokeLast = void 0;
   strokeId = crypto.randomUUID();
   drawing = true;
   stage.setPointerCapture(event.pointerId);
@@ -1293,8 +1540,8 @@ button("export").onclick = () => attempt(async () => {
   button("export").disabled = true;
   $("cancel-export").hidden = false;
   clock.playing = false;
-  const job = exportJob = exportProjectAtlas(cloneJSON(project), (message) => status(message));
   try {
+    const job = exportJob = exportProjectAtlas(cloneJSON(project), (message) => status(message));
     const files = await job.promise;
     for (const file of files) linkFile(file);
     status(`\uB0B4\uBCF4\uB0B4\uAE30 \uC644\uB8CC \xB7 ${files.length - 1}\uAC1C \uD30C\uC77C \xB7 ZIP\uC5D0 \uD504\uB85C\uC81D\uD2B8\uC640 \uC790\uC0B0 \uBA85\uC138 \uD3EC\uD568`);

@@ -6,6 +6,7 @@ import { WebGPUDrawRenderer } from '../../build/render/draw-ir-gpu.js';
 import { GpuParticleSystem } from '../../build/render/gpu-particles.js';
 import { renderDrawSceneCPU } from '../../build/render/draw-ir.js';
 import { captureCinematicSequence } from '../../build/render/gpu-capture.js';
+import { drawTileFixtures } from '../fixtures/draw-tiles.mjs';
 
 const results = { browser: navigator.userAgent, webgl2: null, webgpu: null, checks: [], errors: [] };
 const assert = (v, text) => { if (!v) throw new Error(text); results.checks.push(text); };
@@ -43,6 +44,15 @@ async function run() {
     const options = { bloom: { levels: 3 }, background: null }, expected = cpu.render(renderDrawSceneCPU(scene), new Uint8ClampedArray(scene.width * scene.height * 4), options);
     gpu.renderBuffers(draw.render(scene), options); const d = difference(expected, await gpu.capture()); assert(d.max <= 2, `DrawIR CPU/GPU parity: ${JSON.stringify(d)}`);
     draw.render(scene); assert(draw.resources.avoidedUploadBytes > 0, 'Immutable atlas bytes stay resident on the second frame');
+    for (const { name, scene: tileScene } of drawTileFixtures()) {
+      draw.setCulling('none'); gpu.renderBuffers(draw.render(tileScene), { bloom: false }); const direct = await gpu.capture();
+      draw.setCulling('tiled'); gpu.renderBuffers(draw.render(tileScene), { bloom: false }); const tiled = await gpu.capture();
+      assert(difference(direct, tiled).max === 0, `Exact GPU direct/tiled parity: ${name}`);
+      const bins = await draw.inspectCulling();
+      if (name === 'sparse-512') assert(bins.candidatePixelVisits < bins.directPixelVisits * .08, 'Actual sparse GPU bins remove at least 92% of candidate visits');
+      if (name === 'dense-overflow-301') assert(bins.overflowTiles > 0, 'Dense GPU bins fall back to complete rasterization without dropping pixels');
+    }
+    draw.setCulling('tiled');
     particles = await GpuParticleSystem.create(gpu.device, { capacity: 8, seed: 42 });
     const spawn = { position: [10, 10, 1], velocity: [3, -4, 0], gravity: [0, 8, 0], lifetime: 2, radius: 1, color: 0xff4499ff, spread: .6 };
     particles.spawn(spawn); particles.advance(.5); const a = await particles.snapshot(); particles.clear(); particles.spawn(spawn); for (let i = 0; i < 30; i++) particles.advance(1 / 60); const b = await particles.snapshot(); assert(difference(a, b).max === 0, 'Fixed GPU ticks reproduce identical particle state across update partitions');

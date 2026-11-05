@@ -45,11 +45,11 @@ The wrapper owns a separate WebGPU canvas and retains a 2D host context for fall
 
 ## Observability and lifecycle
 
-`status` reports `backend`, `state`, `reason`, optional adapter identity and `timestampQuery`. `adapter.software` is true/false only when the API supplies that fact; `null` means unknown. Initialization failure, device loss or an uncaptured GPU validation/runtime error switches the wrapper to CPU. `retry()` reconstructs renderer resources. Disposal is idempotent and releases textures, buffers, query sets, canvas context and an owned device; an injected device remains owned by its host.
+`status` reports `backend`, `state`, `reason`, optional adapter identity and `timestampQuery`. `adapter.software` is true/false only when the API supplies that fact; `null` means unknown. Initialization failure, device loss or an uncaptured GPU validation/runtime error switches the wrapper to CPU. `retry()` reconstructs renderer resources. Overlapping retries retain only the newest device; disposing while initialization is pending cannot resurrect a GPU renderer. Disposal is idempotent and releases textures, buffers, query sets, canvas context and an owned device; an injected device remains owned by its host.
 
 `timings` reports CPU milliseconds for `prepare`, `upload`, `encode` and `present`, plus the most recently resolved `gpu` timestamp duration and `readback` duration. `gpu` is `null` when unsupported or not yet available; it is not estimated from CPU submit time. Timestamp readback uses a three-slot asynchronous ring. It can lag the current submitted frame. `FrameProfiler` lets a host record its separate update/draw phases and rolling p50/p95 populations.
 
-`resources` reports resident input buffer bytes, per-frame upload bytes/writes, avoided uploads, known render texture bytes, staging bytes and pending captures. These are application allocations, not a driver-wide memory reading. Texture/storage limits and a configured memory budget are checked. Changing native dimensions rebuilds targets; disposing releases them.
+`resources` reports resident input buffer bytes, per-frame upload bytes/writes, avoided uploads, known render texture bytes, staging bytes and pending captures. These are application allocations, not a driver-wide memory reading. Texture/storage limits and a configured memory budget are checked, including capture staging. Unused frame/auxiliary uploads are released when changing paths. Changing native dimensions rebuilds targets; disposing releases them. Resident asset replacement keeps the previous buffer alive if allocation/upload fails, and validates every dirty range before the first write. Accounting reads do not scan the full asset map.
 
 ## DrawIR
 
@@ -82,7 +82,28 @@ Materials distinguish opaque, exact alpha, cutout and additive. Exact alpha sort
 
 ### Batch algorithm and limits
 
-The entire primitive submission is one compute dispatch. Each pixel scans the command batch; the base algorithm is **O(pixels × primitives)**, with additional bounded alpha insertion sorting and additive transmittance evaluation. This is a correctness-oriented batch renderer, not a claim of an optimized hardware triangle rasterizer or a measured speedup. It has no tile binning, automatic LOD, indirect compaction or automatic callback porting. Measure representative scenes on the intended devices before increasing crowd counts.
+The renderer now has two exact paths. `none` performs the original one-dispatch **O(pixels × primitives)** scan. `tiled` first builds conservative **16×16 native-pixel candidate lists on the GPU**, then rasterizes only each tile’s candidates. It accepts already resident particle command buffers; binning does not read command data back to the CPU. Candidate IDs remain in original submission order, preserving equal-depth opaque ownership and alpha ordering. Bounding boxes include a conservative pixel/float margin, and ill-conditioned sprite transforms remain candidates in every tile.
+
+Each tile stores at most **256** command IDs. An overflowing tile scans the entire original batch, preserving every fragment; it does not keep only the first 256. Zero-opacity dead particle slots are omitted. The `auto` default enables bins at 32 primitives and 256 native pixels; smaller submissions retain the direct path. If the tile allocation cannot fit the device/application budget, the renderer uses the exact direct path and reports `resources.cullingReason`. Native Rust uses the same binning/raster WGSL and accepts `drawCulling: 'auto' | 'none' | 'tiled'` in its options.
+
+The candidate-search cost becomes approximately **O(tiles × primitives + pixels × local candidates)**, followed by the existing alpha sorting and additive transmittance work. This is an operation-count model, not a guaranteed speedup: densely overlapping tiles add binning overhead before their complete scan, and GPU occupancy/dispatch cost depends on the adapter. There is no automatic LOD, dropped-particle optimization, hardware triangle rasterizer or automatic callback porting.
+
+```ts
+const draw = await WebGPUDrawRenderer.create(finish.device, 128 * 1024 * 1024, {
+  culling: 'auto',
+});
+draw.setCulling('none'); // controlled baseline, same geometry and material rules
+finish.renderBuffers(draw.render(scene));
+draw.setCulling('tiled');
+finish.renderBuffers(draw.render(scene));
+const stats = await draw.inspectCulling(); // explicit diagnostic readback only
+// candidatePixelVisits is one candidate scan, not elapsed GPU time.
+console.log(stats.candidatePixelVisits, stats.directPixelVisits, stats.overflowTiles);
+```
+
+`resources` includes tile/merge/output allocation bytes, current primitive/alpha counts and the active culling mode. Tile storage is `ceil(width/16) × ceil(height/16) × 257 × 4` bytes. `inspectCulling()` allows one pending bounded inspection, preserves partial edge-tile weighting, and reports a conservative upper bound for binning bound checks. It never runs implicitly during ordinary rendering. Asset buffers, output and merge buffers are included in the configured DrawIR budget; optional bins give way before geometry does. The cinematic renderer has its own budget because it may be shared by other producers.
+
+[GPU Lab](GPU_LAB.md) exposes the real path in the browser, including GPU particles, direct/tiled pixel comparison, a captured-bin inspector, palette-locked output, PNG capture and DrawIR JSON save/open. Existing Studio catalog callbacks continue to author geometry on the CPU.
 
 The total primitive budget is 16,384 after mesh/ribbon expansion. The submitted exact-alpha primitive budget is **64**, conservatively counted across the entire batch before dispatch. Exceeding it throws; no normal compiled submission silently truncates transparent fragments. Opaque, cutout and additive primitives do not consume that alpha budget. Raw GPU command producers must satisfy the same ABI and alpha budget; `renderCommandBuffer` is a producer-facing integration API. `renderDrawSceneCPU()` is an inspectable CPU reference. Float32 GPU arithmetic is not guaranteed to be bit-identical across vendors.
 
@@ -135,7 +156,7 @@ The CLI automatically reads `settings.project.renderProfile.cinematic` and `sett
 
 ```bash
 npm run build
-node --test tests/gpu-advanced.test.mjs
+node --test tests/gpu-advanced.test.mjs tests/gpu-tiles.test.mjs
 cargo fmt --manifest-path native/Cargo.toml --check
 cargo check --manifest-path native/Cargo.toml --all-targets
 cargo test --manifest-path native/Cargo.toml
@@ -144,13 +165,20 @@ GPU_NATIVE_REQUIRED=1 node tools/gpu-native-harness.mjs
 # Optional independent WGSL compute harness:
 python -m pip install wgpu==0.32.0
 GPU_PARTICLE_REQUIRED=1 python tools/gpu-particle-harness.py
+GPU_TILES_REQUIRED=1 python tools/gpu-tiles-harness.py
 # Run these as an ordinary browser-capable user, keeping the sandbox enabled:
 GPU_BROWSER_PATH=/path/to/chromium GPU_REQUIRED=1 node tools/gpu-browser-harness.mjs
 GPU_BROWSER_PATH=/path/to/chromium STUDIO_REQUIRED=1 node tools/studio-browser-harness.mjs
 ```
 
-The browser harness checks actual WebGL2/WebGPU output, odd sizes, transparent/background cases, HDR, DrawIR, resident assets, compute particles, capture ordering and loss. The Studio smoke checks real bundled modules, six recipes, one-frame seeking, character/equipment, pointer brush/undo, JSON save/import, explicitly injected API-unavailability fallback, and worker-generated ZIP hashes/PNG decode. `unavailable` and `failed` are distinct; `*_REQUIRED=1` makes either non-passing result fail CI. These are functional checks, not visual-quality approval.
+The browser harness checks actual WebGL2/WebGPU output, odd sizes, transparent/background cases, HDR, DrawIR, resident assets, compute particles, capture ordering and loss. Tile fixtures include 512 spatially separated primitives, 301 overlapping primitives that force overflow, transformed sprites and boundary geometry, 64 equal-depth alpha primitives, fully offscreen commands and an empty odd-sized frame. Both the browser and native harness run these cases; the standalone Python harness executes the canonical WGSL, compares direct/tiled buffer bytes exactly and captures actual bin counts. Native harness scene count is now 15; historical validation below remains the earlier run until new native evidence is recorded. The Studio smoke checks real bundled modules, six recipes, one-frame seeking, character/equipment, pointer brush/undo, JSON save/import, explicitly injected API-unavailability fallback, and worker-generated ZIP hashes/PNG decode. `unavailable` and `failed` are distinct; `*_REQUIRED=1` makes either non-passing result fail CI. These are functional checks, not visual-quality approval.
 
 Local validation on 2026-11-05 used Rust 1.99.1, wgpu 30.0.1, Python wgpu 0.32.0 and **llvmpipe LLVM 20.1.2 / Mesa 25.2.8 / OpenGL, adapter type CPU**. The native harness passed **9 DrawIR scene cases, one production 3D catalog case, 34 captured frames and 25 CPU/WGSL comparisons, totaling 61,540 RGBA channels with maximum delta 0**. Its acceptance limit is 2 encoded channel values; repeated same-device captures additionally require exact equality. Cases cover shared triangle edges, reordered alpha geometry, one-pixel bloom, palette policy, separate radiance/AO, direct 3D finishing modes and exported-asset timing/socket/events. The catalog case exports four 64×48 frost frames at 4 fps with moving camera, grid, transparent background and trimmed/deduplicated pages, then compares actual native playback against the original preview. Rust formatting, all-target compilation and **7 contract tests** passed. The particle harness executed **64 compute dispatches** and checked partition-independent state/commands, seed/ID variation, exact lifetime ticks and an independent ballistic sum.
 
 The browser executable in the local root environment refused to start with its sandbox enabled. An unprivileged launch was also unavailable in that environment. Browser canvas/presentation and physical GPU validation are therefore **not recorded as locally passed**. CI and target-device runs are separate gates. Software-adapter results establish shader execution and tested pixel contracts, not a speedup, cross-device determinism or production device coverage.
+
+## Tiled DrawIR verification — 2026-11-06
+
+[Captured tile validation](validation/production-2026-11-06-gpu-tiles.json) executed both canonical shaders on **llvmpipe LLVM 20.1.2 / Mesa 25.2.8 / OpenGL, adapter type CPU** using Python wgpu 0.32.0. Across six scene cases and 18 compute dispatches, direct and tiled color, packed-light and linear-HDR buffers matched **exactly** on that adapter (1,061,120 compared bytes). The independent CPU reference differed by at most one encoded color channel value; the maximum HDR difference was 7.46×10⁻⁸.
+
+In the 257×193 sparse fixture with 512 primitives, captured GPU bins reduced one pixel-candidate scan from **25,395,712 to 221,696 visits (99.127%)**, plus at most 113,152 tile-bound checks. All six tiles in the 301-primitive overlap fixture overflowed to the full scan and still matched the direct result exactly. These are measured candidate counts and software-adapter correctness results, **not physical-GPU frame-rate or speedup measurements**. Browser canvas, the interactive GPU Lab and native Rust host compilation remain separate verification targets.

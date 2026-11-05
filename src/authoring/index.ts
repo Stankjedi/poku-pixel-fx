@@ -4,6 +4,7 @@ export * from './history.js';
 export * from './clock.js';
 export * from './cache.js';
 export * from './recipes.js';
+export * from './sequence.js';
 export * from './edits.js';
 export * from './composite.js';
 export * from './character-effect.js';

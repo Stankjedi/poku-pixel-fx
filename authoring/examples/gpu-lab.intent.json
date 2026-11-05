@@ -1,0 +1,43 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "examples/gpu-lab",
+  "intent": {
+    "oneSentence": "분홍과 청록 리본이 작은 결정 코어를 중심으로 돌며 GPU의 픽셀 도형, 깊이와 발광 합성 경로를 보여준다.",
+    "firstRead": "하나의 중심 주위를 도는 연결된 리본과 별도 장식 입자",
+    "mustNotReadAs": "충돌이나 피해 판정이 일어나는 완성된 전투 기술",
+    "useContext": "256×192 네이티브 격자와 정수 배율로 표시하는 GPU Lab의 렌더러 진단 예제. 도형 수와 분포를 바꾸어 같은 출력의 직접/타일 경로를 비교한다."
+  },
+  "readability": {
+    "primaryShape": "작은 각진 코어와 전후면 깊이를 가진 두 개의 궤도 리본",
+    "focalPoint": "중앙 코어의 밝은 면과 이어진 리본의 진행 방향",
+    "depthAndOverlap": "리본의 깊이는 화면의 세로 위치에 따라 바뀌고 코어의 불투명 면이 뒤쪽 부분을 가린다.",
+    "contrast": "큰 흰색 면 대신 청록과 분홍의 제한된 밝은 경계로 형태를 유지한다.",
+    "intendedBackgrounds": ["dark", "transparent checker"],
+    "secondaryDetailBudget": "장식 도형 수는 명시적 부하 설정이며 미적 품질 점수가 아니다. 겹침 프리셋은 일부러 병목을 만드는 진단 화면이다."
+  },
+  "mechanics": {
+    "model": "symbolic-ui",
+    "source": "중앙의 원래 디자인 결정과 사용자가 누르는 장식 입자 버튼",
+    "driver": "동일한 시간 매개변수로 궤도 위치와 깊이를 계산하고 장식 입자는 고정 120Hz GPU 틱으로 진행한다.",
+    "direction": "두 궤도는 반대 방향으로 돌고 버튼으로 발생하는 빛 입자는 코어에서 바깥으로 이동한다.",
+    "weightAndMaterial": "코어는 고체 결정 모양의 불투명 삼각형이며 입자는 별도의 발광 장식이다. 물질 시뮬레이션을 나타내지 않는다.",
+    "causalChain": "지속 궤도는 시간에 따라 회전하고 버튼을 누르면 코어에서 장식 입자가 방출되어 정해진 수명 후 사라진다.",
+    "endingRule": "기본 도형은 6초 위상을 반복하며 장식 입자는 2초의 수명 동안 외향 이동과 감쇠를 이어간다.",
+    "exaggerationAndLimits": "실제 GPU 경로 확인용 예제이다. 물리적 정확성, 전문 아트 완성도 또는 실제 그래픽카드 성능의 증거로 취급하지 않는다."
+  },
+  "timeline": {
+    "durationSeconds": 6,
+    "loop": true,
+    "phases": [
+      {"name": "action", "from": 0, "to": 6, "action": "두 궤도와 분포별 진단 도형이 코어 주위를 회전한다.", "cause": "사용자가 재생하는 진단 시간", "visibleCue": "연속 리본, 깊이에 따른 가림과 명확한 방향"}
+    ],
+    "omittedPhases": {
+      "preparation": "전투 기술이 아닌 지속 렌더러 진단으로 시작 준비가 필요하지 않다.",
+      "response": "별도 충돌과 대상의 피해 반응을 표시하지 않는다.",
+      "ending": "호스트의 재생/일시정지로 제어하는 반복 예제이며 버튼 입자는 각 수명으로 끝난다."
+    }
+  },
+  "references": [
+    {"source": "native/examples/draw-scene.json", "observed": "GPU와 CPU가 같은 DrawIR 명령과 재질을 소비한다.", "application": "재현 가능한 도형 JSON을 저장하고 다시 열 수 있는 브라우저 진단으로 연결한다.", "limits": "기능 시험 예제이며 시각 관찰 결과는 의도서와 별도 기록한다."}
+  ]
+}

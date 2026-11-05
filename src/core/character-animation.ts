@@ -62,25 +62,52 @@ export function characterClipTime2D(time:number,duration:number,loop:boolean):{t
   const local=snapped?0:time-cycle*duration;return{time:Math.max(0,Math.min(duration,local)),cycle};
 }
 
-export interface HumanPoseKey2D { at:number;pose:HumanPose;interpolation?:'hold'|'linear'|'smooth' }
+export interface HumanPoseKey2D {
+  at:number;
+  /** Sparse channels: an omitted control retains its last authored value. */
+  pose:HumanPose;
+  /** Outgoing interpolation for the channels authored on this key. */
+  interpolation?:'hold'|'linear'|'smooth';
+}
 export interface HumanPoseClip2D { duration:number;loop?:boolean;keys:readonly HumanPoseKey2D[];events?:readonly CharacterEvent2D[];root?:readonly {at:number;position:readonly[number,number]}[];contacts?:readonly{at:number;left:boolean;right:boolean}[] }
 const poseScalars=['x','y','lean','gaze'] as const,posePoints=['leftHand','rightHand','leftFoot','rightFoot'] as const;
+const poseDiscrete=['leftElbow','rightElbow','leftKnee','rightKnee','blink','fists','armsFront'] as const;
+/** Last key at or before time; -1 means the channel has not been authored yet. */
+function keyAt<T extends {at:number}>(keys:readonly T[],time:number):number{
+  let low=0,high=keys.length;while(low<high){const mid=(low+high)>>>1;if(keys[mid].at<=time)low=mid+1;else high=mid;}return low-1;
+}
+function poseWeight(a:HumanPoseKey2D,b:HumanPoseKey2D|undefined,time:number):number{
+  if(!b||a.interpolation==='hold')return 0;const u=(time-a.at)/(b.at-a.at);return a.interpolation==='linear'?u:u*u*(3-2*u);
+}
 /** Retains strong keys and explicit holds; booleans and IK branches change only at authored key boundaries. */
 export function compileHumanPoseClip2D(input:HumanPoseClip2D){
+  if(!input||!Number.isFinite(input.duration)||input.duration<=0||!Array.isArray(input.keys)||!input.keys.length||input.keys[0]?.at!==0||input.loop!==undefined&&typeof input.loop!=='boolean')throw new RangeError('Pose clip needs a positive duration and first key at zero');
+  // Validate before JSON snapshotting: NaN/null coordinates must not silently become defaults.
+  input.keys.forEach((k,i)=>{
+    if(!k||!Number.isFinite(k.at)||k.at<0||k.at>input.duration||i>0&&k.at<=input.keys[i-1].at||k.interpolation!==undefined&&!['hold','linear','smooth'].includes(k.interpolation)||!k.pose||typeof k.pose!=='object'||Array.isArray(k.pose))throw new RangeError('Pose keys must be strictly ordered with a valid interpolation');
+    for(const name of poseScalars)if(k.pose[name]!==undefined&&!Number.isFinite(k.pose[name]))throw new RangeError('Pose channels must be finite');
+    for(const name of posePoints){const p=k.pose[name];if(p!==undefined&&(!Array.isArray(p)||p.length!==2||!Array.from(p).every(Number.isFinite)))throw new RangeError('Pose targets need two finite coordinates');}
+    for(const name of ['blink','fists','armsFront'] as const)if(k.pose[name]!==undefined&&typeof k.pose[name]!=='boolean')throw new RangeError('Pose switches must be boolean');
+    humanRig2D({},k.pose);
+  });
+  const inputRoot=input.root??[{at:0,position:[0,0] as const}];
+  if(!Array.isArray(inputRoot)||!inputRoot.length||inputRoot[0]?.at!==0)throw new RangeError('Root motion track must start at zero');
+  inputRoot.forEach((k,i)=>{if(!k||!Number.isFinite(k.at)||k.at<0||k.at>input.duration||!Array.isArray(k.position)||k.position.length!==2||!Array.from(k.position).every(Number.isFinite)||i>0&&k.at<=inputRoot[i-1].at)throw new RangeError('Invalid root motion track');});
+  if(input.contacts!==undefined&&!Array.isArray(input.contacts))throw new RangeError('Authored contact keys must be an array');
+  input.contacts?.forEach((k,i)=>{if(!k||!Number.isFinite(k.at)||k.at<0||k.at>input.duration||typeof k.left!=='boolean'||typeof k.right!=='boolean'||i>0&&k.at<=input.contacts![i-1].at)throw new RangeError('Invalid authored contact keys');});
+  createCharacterEventCursor2D(input.duration,input.events??[],input.loop??false);
   const clip=JSON.parse(JSON.stringify(input)) as HumanPoseClip2D;
-  if(!Number.isFinite(clip.duration)||clip.duration<=0||!clip.keys.length||clip.keys[0].at!==0)throw new RangeError('Pose clip needs a positive duration and first key at zero');
-  clip.keys.forEach((k,i)=>{if(!Number.isFinite(k.at)||k.at<0||k.at>clip.duration||i&&k.at<=clip.keys[i-1].at)throw new RangeError('Pose keys must be strictly ordered');humanRig2D({},k.pose);});
   const root=clip.root??[{at:0,position:[0,0] as const}];
-  root.forEach((k,i)=>{if(!Number.isFinite(k.at)||!k.position.every(Number.isFinite)||i&&k.at<=root[i-1].at)throw new RangeError('Invalid root motion track');});
-  clip.contacts?.forEach((k,i)=>{if(!Number.isFinite(k.at)||k.at<0||k.at>clip.duration||typeof k.left!=='boolean'||typeof k.right!=='boolean'||i>0&&k.at<=clip.contacts![i-1].at)throw new RangeError('Invalid authored contact keys');});
-  return{clip,sample(time:number):{pose:HumanPose;rootMotion:[number,number];contacts:{left:boolean;right:boolean}}{
-    if(!Number.isFinite(time))throw new RangeError('Pose time must be finite');const t=characterClipTime2D(time,clip.duration,clip.loop??false).time;
-    let a=clip.keys[0],b=a;for(const key of clip.keys){if(key.at<=t)a=key;else{b=key;break;}b=a;}
-    let u=b.at>a.at?(t-a.at)/(b.at-a.at):0;if(a.interpolation==='hold')u=0;else if(a.interpolation!=='linear')u=u*u*(3-2*u);
-    const pose:HumanPose={...a.pose};for(const key of poseScalars)if(a.pose[key]!==undefined&&b.pose[key]!==undefined)pose[key]=a.pose[key]!+(b.pose[key]!-a.pose[key]!)*u;
-    for(const key of posePoints){const p=a.pose[key],q=b.pose[key];if(p&&q)pose[key]=[p[0]+(q[0]-p[0])*u,p[1]+(q[1]-p[1])*u];}
-    let r=root[0],s=r;for(const key of root){if(key.at<=t)r=key;else{s=key;break;}s=r;}const v=s.at>r.at?(t-r.at)/(s.at-r.at):0;
-    const contact=clip.contacts?.filter(k=>k.at<=t).at(-1);return{pose,rootMotion:[r.position[0]+(s.position[0]-r.position[0])*v,r.position[1]+(s.position[1]-r.position[1])*v],contacts:{left:contact?.left??false,right:contact?.right??false}};
+  const tracks=new Map([...poseScalars,...posePoints,...poseDiscrete].map(name=>[name,clip.keys.filter(k=>k.pose[name]!==undefined)]));
+  return{get clip():HumanPoseClip2D{return JSON.parse(JSON.stringify(clip));},sample(time:number):{pose:HumanPose;rootMotion:[number,number];contacts:{left:boolean;right:boolean}}{
+    if(!Number.isFinite(time))throw new RangeError('Pose time must be finite');const wrapped=characterClipTime2D(time,clip.duration,clip.loop??false),t=wrapped.time;
+    const pose:HumanPose={};
+    for(const name of poseScalars){const keys=tracks.get(name)!,i=keyAt(keys,t);if(i<0)continue;const a=keys[i],b=keys[i+1],u=poseWeight(a,b,t);pose[name]=a.pose[name]!+((b?.pose[name]??a.pose[name])!-a.pose[name]!)*u;}
+    for(const name of posePoints){const keys=tracks.get(name)!,i=keyAt(keys,t);if(i<0)continue;const a=keys[i],b=keys[i+1],u=poseWeight(a,b,t),p=a.pose[name]!,q=b?.pose[name]??p;pose[name]=[p[0]+(q[0]-p[0])*u,p[1]+(q[1]-p[1])*u];}
+    for(const name of poseDiscrete){const keys=tracks.get(name)!,i=keyAt(keys,t);if(i>=0)Object.assign(pose,{[name]:keys[i].pose[name]});}
+    const ri=keyAt(root,t),r=root[Math.max(0,ri)],s=root[ri+1]??r,v=s.at>r.at?(t-r.at)/(s.at-r.at):0,first=root[0].position,last=root[root.length-1].position;
+    const contacts=clip.contacts??[],contact=contacts[keyAt(contacts,t)];
+    return{pose,rootMotion:[r.position[0]+(s.position[0]-r.position[0])*v+wrapped.cycle*(last[0]-first[0]),r.position[1]+(s.position[1]-r.position[1])*v+wrapped.cycle*(last[1]-first[1])],contacts:{left:contact?.left??false,right:contact?.right??false}};
   }};
 }
 

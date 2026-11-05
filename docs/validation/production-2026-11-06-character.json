@@ -1,0 +1,158 @@
+{
+  "schema": "poku.character-qa/v1",
+  "date": "2026-11-06",
+  "example": "createSynchronizedLanternling2D",
+  "sheet": "docs/previews/production-character-sync.png",
+  "sheetSize": [
+    768,
+    432
+  ],
+  "nativeCharacterHeight": 24,
+  "nativeCaptureSize": [
+    32,
+    32
+  ],
+  "presentationScales": [
+    1,
+    3
+  ],
+  "resampling": "integer nearest-neighbor",
+  "rendering": "Current built CharacterPlayer -> Painter -> legacy compositor; existing surface emission retained",
+  "observations": {
+    "nativeContactSheetObserved": true,
+    "fullSpeedObserved": false,
+    "observer": "character_animation",
+    "notes": [
+      "Inspected the rendered 32-by-32 native captures and exact 3x enlargements for all twelve samples in the sheet.",
+      "The removable crest remains attached above the head in the sampled forward and reverse-pingpong poses. Its displayed source-cel indices match the body in every sample despite the equipment and body having different authored frame durations.",
+      "The enlarged samples retain discrete pixel edges; no filtered blur, cropped appendages, or visibly detached crest appears in these captures.",
+      "A separate static sparse-pose comparison showed the previously authored raised hands and fists retained through a later blink-only key; the previous nearest-key-only behavior relaxed the arms at that same time.",
+      "This is static contact-sheet review of a technical character example. Full-speed motion, GPU rendering, and final artistic quality were not assessed by this review."
+    ]
+  },
+  "checks": {
+    "allVisibleEquipmentCelsMatchBody": true
+  },
+  "frames": [
+    {
+      "clip": "walk",
+      "time": 0,
+      "bodyFrame": 0,
+      "crestFrame": 0,
+      "crestTip": [
+        -1,
+        -22
+      ]
+    },
+    {
+      "clip": "walk",
+      "time": 0.12,
+      "bodyFrame": 1,
+      "crestFrame": 1,
+      "crestTip": [
+        1,
+        -21
+      ]
+    },
+    {
+      "clip": "walk",
+      "time": 0.3,
+      "bodyFrame": 2,
+      "crestFrame": 2,
+      "crestTip": [
+        -1,
+        -22
+      ]
+    },
+    {
+      "clip": "walk",
+      "time": 0.42,
+      "bodyFrame": 3,
+      "crestFrame": 3,
+      "crestTip": [
+        1,
+        -21
+      ]
+    },
+    {
+      "clip": "walk",
+      "time": 0.6,
+      "bodyFrame": 0,
+      "crestFrame": 0,
+      "crestTip": [
+        -1,
+        -22
+      ]
+    },
+    {
+      "clip": "walk",
+      "time": 0.9,
+      "bodyFrame": 2,
+      "crestFrame": 2,
+      "crestTip": [
+        -1,
+        -22
+      ]
+    },
+    {
+      "clip": "return",
+      "time": 0,
+      "bodyFrame": 3,
+      "crestFrame": 3,
+      "crestTip": [
+        1,
+        -21
+      ]
+    },
+    {
+      "clip": "return",
+      "time": 0.18,
+      "bodyFrame": 2,
+      "crestFrame": 2,
+      "crestTip": [
+        -1,
+        -22
+      ]
+    },
+    {
+      "clip": "return",
+      "time": 0.3,
+      "bodyFrame": 1,
+      "crestFrame": 1,
+      "crestTip": [
+        1,
+        -21
+      ]
+    },
+    {
+      "clip": "return",
+      "time": 0.48,
+      "bodyFrame": 0,
+      "crestFrame": 0,
+      "crestTip": [
+        -1,
+        -22
+      ]
+    },
+    {
+      "clip": "return",
+      "time": 0.6,
+      "bodyFrame": 1,
+      "crestFrame": 1,
+      "crestTip": [
+        1,
+        -21
+      ]
+    },
+    {
+      "clip": "return",
+      "time": 0.78,
+      "bodyFrame": 2,
+      "crestFrame": 2,
+      "crestTip": [
+        -1,
+        -22
+      ]
+    }
+  ]
+}

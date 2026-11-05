@@ -48,8 +48,11 @@ async function main() {
       const sheet = flags.sheet ? createSpriteSheet(fx, r, name) : undefined;
       if (flags.layers) layers = createLayerSheet(join(dir, name), fx, r);
       if (flags.bundle) bundle = createAssetBundle(join(dir, name), fx, r, {
-        maxTextureSize: flags["max-texture"] ? +flags["max-texture"] : undefined,
-        padding: flags.padding !== undefined ? +flags.padding : undefined, trim: !!flags.trim, deduplicate: !!flags.deduplicate,
+        ...project?.exportSettings,
+        ...(flags['max-texture']!==undefined?{maxTextureSize:+flags['max-texture']}:{}),
+        ...(flags.padding!==undefined?{padding:+flags.padding}:{}),
+        ...(flags.extrude!==undefined?{extrude:+flags.extrude}:{}),
+        ...(flags.trim?{trim:true}:{}),...(flags.deduplicate?{deduplicate:true}:{}),
         source: { ...(prepared ? { projectSha256: prepared.variant } : {}), ...(project?.sourceRevision ? { sourceRevision: project.sourceRevision } : {}) },
       });
       const k = +(flags.scale ?? Math.max(2, Math.min(8, Math.floor(480 / Math.max(r.w, r.h)))));

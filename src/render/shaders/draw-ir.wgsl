@@ -1,5 +1,5 @@
 // poku-draw/v1. Pixel centers, larger depth is nearer; stable submission ties.
-struct Params { size: vec2u, count: u32, unused: u32 }
+struct Params { size: vec2u, count: u32, tileCapacity: u32 }
 struct Command {
   tag: vec4u, p0: vec4f, p1: vec4f, p2: vec4f,
   material: vec4f, emission: vec4f, asset: vec4u, reserved: vec4u,
@@ -12,6 +12,11 @@ struct Sample { color: vec4f, light: vec3f, depth: f32, blend: u32, optical: boo
 @group(0) @binding(4) var<storage, read_write> colors: array<u32>;
 @group(0) @binding(5) var<storage, read_write> lights: array<u32>;
 @group(0) @binding(6) var<storage, read_write> hdr: array<f32>;
+@group(0) @binding(7) var<storage, read> tiles: array<u32>;
+fn candidate(index: u32, tileOffset: u32, tiled: bool) -> u32 {
+  if (tiled) { return tiles[tileOffset + 1u + index]; }
+  return index;
+}
 fn unpack(c: u32) -> vec4f { return vec4f(f32(c & 255u), f32((c >> 8u) & 255u), f32((c >> 16u) & 255u), f32(c >> 24u)) / 255.0; }
 fn pack(c: vec4f) -> u32 { let v = vec4u(floor(clamp(c, vec4f(0.0), vec4f(1.0)) * 255.0 + vec4f(.5))); return v.x | (v.y << 8u) | (v.z << 16u) | (v.w << 24u); }
 fn srgb(v: vec3f) -> vec3f { let x = max(v, vec3f(0.0)); return select(1.055 * pow(x, vec3f(1.0 / 2.4)) - vec3f(.055), x * 12.92, x <= vec3f(.0031308)); }
@@ -62,15 +67,24 @@ fn sampleDraw(index: u32, pixel: vec2f) -> Sample {
 fn main(@builtin(global_invocation_id) id: vec3u) {
   if (any(id.xy >= params.size)) { return; }
   let pixel = vec2f(id.xy) + vec2f(.5); let output = id.y * params.size.x + id.x;
+  var candidates = params.count; var tileOffset = 0u; var tiled = false;
+  if (params.tileCapacity > 0u) {
+    tileOffset = ((id.y / 16u) * ((params.size.x + 15u) / 16u) + id.x / 16u) * (params.tileCapacity + 1u);
+    let stored = tiles[tileOffset];
+    // An overflowing tile scans every primitive, preserving exact depth/alpha.
+    if (stored <= params.tileCapacity) { candidates = stored; tiled = true; }
+  }
   var nearest = -3.402823e38; var opaqueId = -1; var color = vec4f(0.0); var light = vec3f(0.0); var optical = vec3f(0.0); var additive = vec3f(0.0);
-  for (var i = 0u; i < params.count; i++) {
+  for (var j = 0u; j < candidates; j++) {
+    let i = candidate(j, tileOffset, tiled);
     let s = sampleDraw(i, pixel); if (!s.hit) { continue; }
     if (s.optical) { optical += s.light; }
     if ((s.blend == 0u || s.blend == 2u) && s.depth >= nearest) { nearest = s.depth; opaqueId = i32(i); color = s.color; light = select(s.light, vec3f(0.0), s.optical); }
   }
   var order: array<u32, 64>; var depths: array<f32, 64>; var count = 0u;
   // Hosts enforce <=64 alpha primitives before dispatch, so no fragment can silently overflow.
-  for (var i = 0u; i < params.count; i++) {
+  for (var j = 0u; j < candidates; j++) {
+    let i = candidate(j, tileOffset, tiled);
     let s = sampleDraw(i, pixel); if (!s.hit) { continue; }
     if (s.blend != 1u || s.depth < nearest || (s.depth == nearest && i32(i) <= opaqueId)) { continue; }
     var k = count;
@@ -82,7 +96,8 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     color = vec4f(s.color.rgb * s.color.a + color.rgb * inv, s.color.a + color.a * inv);
     light = select(s.light, vec3f(0.0), s.optical) + light * inv;
   }
-  for (var i = 0u; i < params.count; i++) {
+  for (var j = 0u; j < candidates; j++) {
+    let i = candidate(j, tileOffset, tiled);
     let s = sampleDraw(i, pixel); if (!s.hit || s.blend != 3u || s.optical || s.depth < nearest) { continue; }
     var transmission = 1.0;
     for (var k = 0u; k < count; k++) { if (depths[k] > s.depth || (depths[k] == s.depth && order[k] > i)) { transmission *= 1.0 - sampleDraw(order[k], pixel).color.a; } }

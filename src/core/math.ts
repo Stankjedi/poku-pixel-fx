@@ -9,6 +9,14 @@ export const invLerp = (a: number, b: number, x: number) => (b === a ? 0 : (x - 
 export const remap = (x: number, a0: number, a1: number, b0: number, b1: number) => lerp(b0, b1, invLerp(a0, a1, x));
 export const fract = (x: number) => x - Math.floor(x);
 export const wrap = (x: number, m: number) => ((x % m) + m) % m;
+/** Stable presentation phase at decimal loop boundaries, without changing the simulation clock. */
+export function loopTime(time: number, duration: number): number {
+  if (!Number.isFinite(time) || !Number.isFinite(duration) || duration <= 0) throw new RangeError('Loop time and duration must be finite and duration positive');
+  const cycles = time / duration, nearest = Math.round(cycles);
+  if (Math.abs(cycles - nearest) <= 8 * Number.EPSILON * Math.max(1, Math.abs(cycles))) return 0;
+  const local = time % duration;
+  return local < 0 ? local + duration : local;
+}
 /** Progress 0..1 of t through the window [t0, t1]: 0 before it, 1 after it. */
 export const seg = (t: number, t0: number, t1: number) => clamp((t - t0) / (t1 - t0));
 /** Hermite smoothstep of x between e0 and e1. */

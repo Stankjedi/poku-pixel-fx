@@ -1,0 +1,179 @@
+{
+  "schema": "poku.sequence-qa/v1",
+  "date": "2026-11-06",
+  "status": "provisional",
+  "project": "examples/projects/charged-impact.poku-project.json",
+  "projectSha256": "34e6abb49d675d250bb4d66ef809f26fcb40bf2dc49303d1c4b2214880d2dfad",
+  "intent": "authoring/arcane/charged-impact.intent.json",
+  "intentSha256": "4440b7dd19cb294f4bc060845b5d37eff7927d1ce4c6ac968b0e8d3b1c50a240",
+  "reviewer": {
+    "kind": "agent",
+    "name": "authoring_quality",
+    "mode": "informed-self-review"
+  },
+  "viewed": {
+    "nativeSizeStillFrames": true,
+    "sampledContactSheet": true,
+    "fullSpeedPlayback": false,
+    "backgrounds": [
+      "dark"
+    ]
+  },
+  "rendering": {
+    "command": "node build-tools/tools/render.mjs --project examples/projects/charged-impact.poku-project.json --out .qa/charged-impact --gif --mp4 --scale 1 --zoom 1 --max 12",
+    "engine": "Current compiled project CLI and authoring runtime; stored sequence with original catalog source artwork and project cinematic finishing",
+    "nativeSize": [
+      384,
+      224
+    ],
+    "fps": 30,
+    "declaredDurationSeconds": 2.72,
+    "frameCount": 83,
+    "frameIndexBase": 0,
+    "sampledFrames": [
+      3,
+      10,
+      19,
+      34,
+      54,
+      82
+    ],
+    "sampledTimesSeconds": [
+      0.1,
+      0.3333333333333333,
+      0.6333333333333333,
+      1.1333333333333333,
+      1.8,
+      2.7333333333333334
+    ],
+    "durationNote": "The export contains the terminal sample and its display interval. The 83-frame MP4 lasts 83/30 seconds, beyond the 2.72-second declared cue timeline. GIF centisecond timing is quantized. Media metadata was inspected; motion was not viewed.",
+    "projectChangeAfterCapture": "Only project.notes was corrected after native capture to distinguish the authored contact marker from the observed early channel. Render inputs and captured pixels are unchanged."
+  },
+  "evidence": {
+    "persistentSheet": {
+      "path": "docs/previews/production-charged-impact.png",
+      "size": [
+        1184,
+        534
+      ],
+      "layout": [
+        3,
+        2
+      ],
+      "pixelsPerNativePixel": 1,
+      "bytes": 53897,
+      "sha256": "9f2dd9da855ced45adf12e34c304bec36a685b0ffe1fa7d9cbafbd528b4556a3"
+    },
+    "temporaryRenderOutputs": [
+      {
+        "path": ".qa/charged-impact/arcane/charged-impact/contact.png",
+        "sha256": "322d5fb7a9ebfab7dd6e6beeddd3ce60160169654c56f604b641af7040b26294",
+        "viewed": true
+      },
+      {
+        "path": ".qa/charged-impact/arcane/charged-impact/anim.mp4",
+        "sha256": "6830dab34bd136903e7c861b21ec850eb2ddac0b8a64b4802ae31834c881df62",
+        "size": [
+          384,
+          224
+        ],
+        "frameCount": 83,
+        "averageFrameRate": "30/1",
+        "durationSeconds": 2.766667,
+        "viewed": false
+      },
+      {
+        "path": ".qa/charged-impact/arcane/charged-impact/anim.gif",
+        "sha256": "4aa263717fb18372b700b64a6febeb3694b70685dd18cac51d57cbd64a6999fe",
+        "size": [
+          384,
+          224
+        ],
+        "frameCount": 83,
+        "durationSeconds": 2.76,
+        "viewed": false
+      }
+    ],
+    "nativeStillsViewed": [
+      ".qa/charged-impact/native-frame-3.png",
+      ".qa/charged-impact/native-frame-19.png"
+    ],
+    "temporaryOutputNote": "The compact native-size sheet and this record are retained in the repository. The CLI command regenerates the local contact sheet and playback files."
+  },
+  "intendedMeaning": "A cyan lightning channel reaches the ground and causes a warm localized explosion and cooling smoke at the same horizontal position.",
+  "observedFirstImpression": "In the sampled native frames, an already connected cyan lightning channel is followed by a warm pointed starburst at its lower endpoint, then separate overlapping circular smoke puffs.",
+  "observations": [
+    {
+      "frames": [
+        3,
+        10
+      ],
+      "status": "needs-work",
+      "topic": "Visual contact timing",
+      "observed": "At frame 3 (0.1 seconds) the lightning is already continuous to the lower contact, with visible contact glow. The response cue starts at 0.32 seconds as authored. The samples therefore do not support the intent's precise claim that the channel first arrives at 0.32 seconds.",
+      "scope": "The existing focused-arc source draws the early complete channel; this is a source-artwork/intent mismatch rather than evidence of an incorrectly scheduled response cue.",
+      "nextCheck": "View the generated MP4 at normal speed and decide whether the source should progressively propagate to the contact, or whether the authored event should explicitly represent a delayed discharge after a channel has formed. No source artwork or intent was silently changed during this review."
+    },
+    {
+      "frames": [
+        19,
+        34
+      ],
+      "status": "observed",
+      "topic": "Spatial placement and silhouette",
+      "observed": "The gold, orange and red pointed blast occupies the lower-center position shared with the lightning endpoint. The lightning overlaps the blast's upper-left side. A thin ground ellipse and small debris pixels remain below the bright body. The blast reads as a graphic starburst in these stills.",
+      "scope": "This confirms sampled spatial overlap and visible shape, not motion quality, physical realism or an artistic approval."
+    },
+    {
+      "frames": [
+        54
+      ],
+      "status": "observed",
+      "topic": "Cooling tail",
+      "observed": "At 1.8 seconds the bright blast is gone and several purple-gray circular puffs remain. Their individual circles are obvious at native size; a continuous volumetric plume is not established by this sample."
+    },
+    {
+      "frames": [
+        3,
+        10,
+        19,
+        34,
+        54,
+        82
+      ],
+      "status": "observed",
+      "topic": "Canvas and ending",
+      "observed": "No visible canvas-edge clipping appears in the viewed samples. The final sampled frame at 2.733 seconds is visually empty against the black background and has zero occupied raw color cells.",
+      "scope": "Sampled review only. Native color bounds do not measure every glow pixel and do not certify all intervening frames."
+    }
+  ],
+  "metadataChecks": {
+    "contact": {
+      "id": "strike/primary",
+      "at": 0.32,
+      "position": [
+        0,
+        -9
+      ],
+      "normal": [
+        0,
+        -1
+      ],
+      "material": "metal"
+    },
+    "responseCueStartSeconds": 0.32,
+    "finalSampleOccupiedColorCells": 0,
+    "sampledColorBoundsUnion": {
+      "minX": 78,
+      "minY": 63,
+      "maxX": 259,
+      "maxY": 210
+    }
+  },
+  "limitations": [
+    "Full-speed playback has been generated and its encoding metadata checked, but has not been visually inspected.",
+    "This is an informed agent self-review of a compositing example, not an independent blind review or user approval.",
+    "The timing interpretation needs work; the example is not marked artistically ready.",
+    "Only the intended dark background and the listed native samples were visually reviewed."
+  ]
+}

@@ -308,6 +308,31 @@ export interface AssetManifest {
   files: { path: string; sha256: string; bytes: number }[];
 }
 
+export interface AtlasExportSettings {
+  maxTextureSize:number; padding:number; extrude:number; trim:boolean; deduplicate:boolean;
+}
+/** Keep legacy CLI defaults; browser callers may explicitly opt into trimming. */
+export function resolveAtlasExportSettings(input:Partial<AtlasExportSettings>={}):AtlasExportSettings{
+  const out={maxTextureSize:2048,padding:1,extrude:0,trim:false,deduplicate:false,...input};
+  if(!Number.isSafeInteger(out.maxTextureSize)||out.maxTextureSize<1||out.maxTextureSize>4096||!Number.isSafeInteger(out.padding)||out.padding<0||out.padding*2>=out.maxTextureSize||!Number.isSafeInteger(out.extrude)||out.extrude<0||out.extrude>out.padding)throw new RangeError('Atlas size/padding/extrusion are invalid; extrusion must fit inside padding');
+  if(typeof out.trim!=='boolean'||typeof out.deduplicate!=='boolean')throw new TypeError('Atlas trim/deduplicate must be boolean');
+  return out;
+}
+
+/** Copy edge texels into reserved padding. UV/trim/pivot rectangles remain unchanged.
+ * Apply to every stored channel, including HDR; only padding is written.
+ */
+export function extrudeAtlasRegion(buffer:Uint8Array|Uint8ClampedArray|Float32Array,pageWidth:number,channels:number,rect:{x:number;y:number;w:number;h:number},amount:number):void{
+  if(!Number.isInteger(pageWidth)||pageWidth<1||!Number.isInteger(channels)||channels<1||!Number.isInteger(amount)||amount<0||buffer.length%(pageWidth*channels)!==0||![rect.x,rect.y,rect.w,rect.h].every(Number.isInteger)||rect.w<1||rect.h<1||rect.x-amount<0||rect.y-amount<0||rect.x+rect.w+amount>pageWidth||rect.y+rect.h+amount>buffer.length/pageWidth/channels)throw new RangeError('Atlas extrusion exceeds its reserved page region');
+  if(!amount)return;
+  const right=rect.x+rect.w-1,bottom=rect.y+rect.h-1;
+  for(let y=rect.y-amount;y<=bottom+amount;y++)for(let x=rect.x-amount;x<=right+amount;x++){
+    if(x>=rect.x&&x<=right&&y>=rect.y&&y<=bottom)continue;
+    const source=(Math.min(bottom,Math.max(rect.y,y))*pageWidth+Math.min(right,Math.max(rect.x,x)))*channels,dest=(y*pageWidth+x)*channels;
+    for(let c=0;c<channels;c++)buffer[dest+c]=buffer[source+c];
+  }
+}
+
 /** Convert authored cues to displayed-frame event times while preserving their original payload. */
 export function resolveAssetEvents(events: readonly Record<string, unknown>[], frames: readonly Pick<AssetFrame, "time" | "duration">[], loopDuration?: number): AssetEvent[] {
   if (!frames.length) return [];

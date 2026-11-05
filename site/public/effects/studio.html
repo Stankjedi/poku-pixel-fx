@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="studio.css">
 </head>
 <body>
-<header><a class="brand" href="index.html"><span class="brand-mark"></span>POKU <strong>STUDIO</strong></a><span class="project-name" id="project-name">새 프로젝트</span><nav><button id="open">열기</button><button id="save">프로젝트 저장</button><button id="undo" disabled>실행 취소</button><button id="redo" disabled>다시 실행</button><a href="3d.html">3D 작업실 ↗</a><button class="primary" id="export">Atlas 내보내기</button></nav></header>
+<header><a class="brand" href="index.html"><span class="brand-mark"></span>POKU <strong>STUDIO</strong></a><span class="project-name" id="project-name">새 프로젝트</span><nav><button id="open">열기</button><button id="save">프로젝트 저장</button><button id="undo" disabled>실행 취소</button><button id="redo" disabled>다시 실행</button><a href="3d.html">3D 작업실 ↗</a><button class="primary" id="export">Atlas 내보내기</button><a href="gpu-lab.html">GPU Lab ↗</a></nav></header>
 <main>
 <aside class="library">
   <div class="panel-head"><h2>제작 시작</h2><span>01</span></div>
@@ -15,6 +15,7 @@
   <div id="recipes" class="recipe-grid"></div>
   <label>새 캐릭터 높이 <select id="new-character-height"><option>32</option><option>48</option><option>64</option><option selected>96</option><option>128</option><option>192</option></select></label>
   <button class="wide" id="new-character">+ 캐릭터 제작</button>
+  <button class="wide" id="new-sequence">+ 현재 효과로 시퀀스 제작</button>
   <div class="panel-head"><h2>효과 라이브러리</h2><span id="library-count"></span></div>
   <label class="sr-only" for="search">효과 검색</label><input id="search" placeholder="검, 회전, 물, 접촉…" type="search">
   <div id="results" class="results"></div>
@@ -34,10 +35,12 @@
   <div class="panel-head"><h2>속성</h2><span>02</span></div>
   <div class="field-row"><label>Seed<input id="seed" type="number" min="0" max="4294967295" step="1" value="1"></label><label>FPS<input id="fps" type="number" min="1" max="120" value="30"></label></div>
   <label>클립 길이 (초)<input id="duration" type="number" min=".1" max="60" step=".1" value="2.2"></label>
-  <div id="character-controls"></div><div id="parameters"></div>
+  <div id="character-controls"></div><div id="sequence-controls"></div><div id="parameters"></div>
   <section><h2>레이어</h2><div id="layers"></div></section>
   <section><h2>곡선과 경로</h2><label>트랙<select id="track"><option value="body">본체</option><option value="trail">잔상</option><option value="glow">발광</option><option value="debris">파편</option><option value="environment">환경</option></select></label><canvas id="curve" width="260" height="110" aria-label="시간 곡선. 클릭하여 키 추가, 드래그하여 이동"></canvas><p class="hint">클릭: 키 추가 · 드래그: 값/시간 이동 · 우클릭: 키 삭제</p><div id="path-fields"></div></section>
   <section><h2>픽셀 스타일</h2><label>팔레트 정책<select id="color-policy"><option value="cinematic">자유 색상 + 발광</option><option value="palette-locked">최종 팔레트 고정</option></select></label><label>알파<select id="alpha-policy"><option value="coverage">Coverage</option><option value="solid">불투명 면</option><option value="authored-dither">Ordered dither</option></select></label><label>외곽선<select id="outline-policy"><option value="none">원본 유지</option><option value="silhouette">전체 실루엣</option><option value="selective">선택적 외곽선</option></select></label><label>디더 좌표<select id="dither-anchor"><option value="object">물체</option><option value="world">월드</option><option value="screen">화면</option></select></label></section>
+  <section><h2>색상과 도트 패턴</h2><label>팔레트 시작점<select id="palette-preset"><option value="custom">현재 팔레트</option><option value="ink-paper">잉크 / 종이 · 4색</option><option value="moon-steel">달빛 / 금속 · 6색</option><option value="ember-gold">불씨 / 황금 · 6색</option><option value="glacier">빙하 · 6색</option><option value="arcane-orchid">비전 / 난초 · 6색</option></select></label><div id="palette-swatches" class="palette"></div><label>색상 변환<select id="color-quantization"><option value="exact">지정 색상만 허용</option><option value="nearest">가장 가까운 팔레트 색</option><option value="ordered">두 색상으로 명암 디더링</option></select></label><label>색상 디더 강도<input id="color-dither-strength" type="range" min="0" max="1" step=".05" value="1"></label><label>도트 패턴<select id="dither-pattern"><option value="bayer2">Bayer 2×2</option><option value="bayer4" selected>Bayer 4×4</option><option value="dispersed8">분산 8×8</option><option value="cluster4">클러스터 4×4</option></select></label><p class="hint">색상 디더는 팔레트 고정에서 적용됩니다. 알파 디더와 개별 설정하며 같은 좌표계를 사용합니다.</p></section>
+  <details><summary>게임 자산 출력</summary><label>Atlas 최대 크기<select id="atlas-size"><option>256</option><option>512</option><option>1024</option><option selected>2048</option></select></label><label>프레임 간 여백<input id="atlas-padding" type="number" min="0" max="16" step="1" value="1"></label><label>가장자리 확장<input id="atlas-extrude" type="number" min="0" max="16" step="1" value="0"></label><label><input id="atlas-trim" type="checkbox" checked>빈 영역 잘라내기</label><label><input id="atlas-deduplicate" type="checkbox">같은 프레임 데이터 재사용</label><p class="hint">가장자리 확장은 여백 안에 색상과 HDR을 복제합니다. 원본 프레임·피벗·소켓은 유지됩니다.</p></details>
   <details><summary>프로젝트 JSON</summary><textarea id="project-json" rows="12" spellcheck="false" aria-label="프로젝트 JSON"></textarea><button id="apply-json">JSON 적용</button></details>
 </aside>
 </main>

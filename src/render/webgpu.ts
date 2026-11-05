@@ -69,6 +69,9 @@ export class WebGPUCinematicRenderer {
     });
   }
   static async create(canvas?: GpuCanvas, options: WebGPUCinematicOptions = {}): Promise<WebGPUCinematicRenderer> {
+    // Reject host configuration before acquiring an owned device.
+    if (!Number.isInteger(options.captureSlots ?? 3) || (options.captureSlots ?? 3) < 1 || (options.captureSlots ?? 3) > 8) throw new RangeError('Capture ring must contain 1..8 slots');
+    if (!Number.isSafeInteger(options.maxBytes ?? 256 * 1024 * 1024) || (options.maxBytes ?? 256 * 1024 * 1024) < 4) throw new RangeError('Cinematic GPU budget must be a positive byte count');
     const gpu = navigatorGPU();
     const adapter = options.device ? null : await gpu?.requestAdapter({ powerPreference: 'high-performance' });
     if (!options.device && !adapter) throw new Error('WebGPU is unavailable or no adapter was granted');
@@ -116,12 +119,14 @@ export class WebGPUCinematicRenderer {
     const t = this.target; [t.base, t.emission, t.extracted, t.output, ...t.bloom.flatMap(l => [l.data, l.scratch])].forEach(texture => texture.destroy());
     this.target = undefined;
   }
+  private get stagingBytes(): number { return this.captureSlots.reduce((n, slot) => n + slot.bytes, 0); }
+  private get overheadBytes(): number { return 96 + this.clocks.length * 32; }
   private prepareTarget(w: number, h: number, levels: number): Target {
-    if (this.target?.w === w && this.target.h === h && this.target.levels === levels) return this.target;
     if (Math.max(w, h) > this.device.limits.maxTextureDimension2D || w * h * 12 > this.device.limits.maxStorageBufferBindingSize) throw new RangeError('Frame exceeds adapter texture or storage limits');
     let lw = w, lh = h, bytes = w * h * 52;
     for (let i = 0; i < levels; i++) { lw = Math.max(1, Math.ceil(lw / 2)); lh = Math.max(1, Math.ceil(lh / 2)); bytes += lw * lh * 32; }
-    if (bytes + w * h * 44 > (this.options.maxBytes ?? 256 * 1024 * 1024)) throw new RangeError('Cinematic frame exceeds GPU memory budget');
+    if (bytes + Math.max(w * h * 44 + 1028, this.cache.resources.bytes) + this.stagingBytes + this.overheadBytes > (this.options.maxBytes ?? 256 * 1024 * 1024)) throw new RangeError('Cinematic frame exceeds GPU memory budget');
+    if (this.target?.w === w && this.target.h === h && this.target.levels === levels) return this.target;
     this.clearTarget();
     const bloom: Target['bloom'] = []; lw = w; lh = h;
     for (let i = 0; i < levels; i++) { lw = Math.max(1, Math.ceil(lw / 2)); lh = Math.max(1, Math.ceil(lh / 2)); bloom.push({ data: this.texture(lw, lh, 'rgba32float'), scratch: this.texture(lw, lh, 'rgba32float') }); }
@@ -135,13 +140,20 @@ export class WebGPUCinematicRenderer {
     this.cache.beginFrame(); const start = performance.now(), revision = ++this.revision;
     const color = this.cache.upload('frame color', frame.color, revision), light = this.cache.upload('frame packed light', frame.light, revision);
     const hdrLight = frame.hdrLight ? this.cache.upload('frame HDR light', frame.hdrLight, revision) : undefined;
+    if (!frame.hdrLight) this.cache.release('frame HDR light');
     this.timing.upload = performance.now() - start;
     return this.renderBuffers({ w: frame.w, h: frame.h, color, light, hdrLight }, options, false);
   }
   /** Consume GPU-authored DrawIR/particle buffers directly; no GPU→CPU→GPU round trip. */
   renderBuffers(frame: GpuFrameBuffers, options: CinematicOptions = {}, beginFrame = true): GpuCanvas | undefined {
     this.assertReady(); validateCinematicInput({ w: frame.w, h: frame.h }, options);
-    if (beginFrame) { this.cache.beginFrame(); this.timing.upload = 0; ++this.revision; }
+    if (beginFrame) {
+      this.cache.beginFrame(); this.timing.upload = 0; ++this.revision;
+      // A resident GPU DrawIR frame replaces the previous CPU-uploaded frame.
+      for (const key of ['frame color', 'frame packed light', 'frame HDR light']) this.cache.release(key);
+    }
+    for (const [key, used] of [['background', options.background instanceof Uint32Array], ['extra packed light', !!options.legacyLight], ['extra HDR radiance', !!options.radiance], ['occlusion', !!options.occlusion], ['final palette', !!options.finalPalette]] as const)
+      if (!used) this.cache.release(key);
     const prepareStart = performance.now(), bloom = options.bloom === false ? null : options.bloom ?? {};
     const levels = bloom ? clamp(Math.floor(bloom.levels ?? 4), 1, 6) : 0;
     const t = this.prepareTarget(frame.w, frame.h, levels), d = this.device;
@@ -201,6 +213,7 @@ export class WebGPUCinematicRenderer {
     const slot = this.captureSlots.find(s => !s.busy); if (!slot) throw new Error('Capture ring is full; await an outstanding capture before requesting another');
     const row = Math.ceil(t.w * 4 / 256) * 256, bytes = row * t.h;
     if (bytes > this.device.limits.maxBufferSize) throw new RangeError('Capture exceeds adapter buffer limit');
+    if (t.bytes + Math.max(t.w * t.h * 44 + 1028, this.cache.resources.bytes) + this.stagingBytes - slot.bytes + bytes + this.overheadBytes > (this.options.maxBytes ?? 256 * 1024 * 1024)) throw new RangeError('Capture staging exceeds cinematic GPU memory budget');
     if (!slot.buffer || slot.bytes !== bytes) { slot.buffer?.destroy(); slot.buffer = this.device.createBuffer({ size: bytes, usage: B.COPY_DST | B.MAP_READ, label: 'capture staging' }); slot.bytes = bytes; }
     slot.busy = true; const buffer = slot.buffer, start = performance.now();
     try {
@@ -213,11 +226,11 @@ export class WebGPUCinematicRenderer {
   }
   get status(): Readonly<CinematicRendererStatus> { return Object.freeze({ ...this.current }); }
   get timings(): Readonly<CinematicTimings> { return { ...this.timing }; }
-  get resources() { return { ...this.cache.resources, textureBytes: this.target?.bytes ?? 0, stagingBytes: this.captureSlots.reduce((n, s) => n + s.bytes, 0), pendingCaptures: this.captureSlots.filter(s => s.busy).length }; }
+  get resources() { return { ...this.cache.resources, textureBytes: this.target?.bytes ?? 0, stagingBytes: this.stagingBytes, pendingCaptures: this.captureSlots.filter(s => s.busy).length }; }
   dispose(): void {
     if (this.current.state === 'disposed') return;
     this.current = { ...this.current, state: 'disposed' }; this.clearTarget(); this.cache.dispose(); this.uniform?.destroy(); this.dummy?.destroy();
-    for (const s of this.captureSlots) s.buffer?.destroy();
+    for (const s of this.captureSlots) { s.buffer?.destroy(); s.buffer = undefined; s.bytes = 0; s.busy = false; }
     for (const c of this.clocks) { c.query.destroy(); c.resolve.destroy(); c.read.destroy(); }
     this.context?.unconfigure(); this.device.removeEventListener?.('uncapturederror', this.onDeviceError); if (this.ownedDevice) this.device.destroy(); this.options.onStatus?.(this.status);
   }
@@ -230,6 +243,7 @@ export class CinematicFrameRenderer {
   private gpu: WebGPUCinematicRenderer | null = null;
   private cpu = new CinematicCompositor(); private image?: ImageData;
   private current: CinematicRendererStatus = { backend: 'cpu', state: 'ready', reason: null, timestampQuery: false };
+  private request = 0;
   private cpuTiming: CinematicTimings = { prepare: 0, upload: 0, encode: 0, present: 0, gpu: null, readback: null };
   private constructor(readonly canvas: HTMLCanvasElement, private options: CinematicFrameRendererOptions) {
     const context = canvas.getContext('2d'); if (!context) throw new Error('Cinematic presentation needs a 2D canvas'); this.context = context;
@@ -240,14 +254,17 @@ export class CinematicFrameRenderer {
   }
   async retry(): Promise<void> {
     if (this.current.state === 'disposed') throw new Error('Renderer is disposed');
+    const request = ++this.request;
     this.gpu?.dispose(); this.gpu = null;
     this.current = { backend: 'cpu', state: 'ready', reason: null, timestampQuery: false };
     if (this.options.backend && this.options.backend !== 'cpu') try {
-      this.gpu = await WebGPUCinematicRenderer.create(this.canvas.ownerDocument.createElement('canvas'), { ...this.options, onStatus: status => {
-        if (status.state === 'lost') { this.current = { ...status, backend: 'cpu', state: 'ready' }; this.options.onStatus?.(this.status); }
+      const candidate = await WebGPUCinematicRenderer.create(this.canvas.ownerDocument.createElement('canvas'), { ...this.options, onStatus: status => {
+        if (request === this.request && status.state === 'lost') { this.current = { ...status, backend: 'cpu', state: 'ready' }; this.options.onStatus?.(this.status); }
       } });
-      this.current = { ...this.gpu.status };
-    } catch (error) { this.current.reason = error instanceof Error ? error.message : String(error); }
+      if (request !== this.request) { candidate.dispose(); return; }
+      if (candidate.status.state === 'ready') { this.gpu = candidate; this.current = { ...candidate.status }; }
+      else { this.current = { ...candidate.status, backend: 'cpu', state: 'ready' }; candidate.dispose(); }
+    } catch (error) { if (request !== this.request) return; this.current.reason = error instanceof Error ? error.message : String(error); }
     this.options.onStatus?.(this.status);
   }
   render(frame: CinematicFrame, options: CinematicOptions = {}): void {
@@ -273,5 +290,5 @@ export class CinematicFrameRenderer {
   get status(): Readonly<CinematicRendererStatus> { return Object.freeze({ ...this.current }); }
   get timings(): Readonly<CinematicTimings> { return this.gpu?.status.state === 'ready' ? { ...this.gpu.timings, present: this.gpu.timings.present + this.cpuTiming.present } : { ...this.cpuTiming }; }
   get resources() { return this.gpu?.resources ?? { buffers: 0, bytes: 0, uploadedBytes: 0, writes: 0, avoidedUploadBytes: 0, textureBytes: 0, stagingBytes: 0, pendingCaptures: 0 }; }
-  dispose(): void { if (this.current.state === 'disposed') return; this.current.state = 'disposed'; this.gpu?.dispose(); this.gpu = null; this.options.onStatus?.(this.status); }
+  dispose(): void { if (this.current.state === 'disposed') return; ++this.request; this.current.state = 'disposed'; this.gpu?.dispose(); this.gpu = null; this.options.onStatus?.(this.status); }
 }

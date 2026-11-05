@@ -1,6 +1,6 @@
 {
   "name": "poku-pixel-fx",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Code-driven pixel art effects and animations, and a Claude Code skill to make your own.",
   "type": "module",
   "license": "MIT",
@@ -88,7 +88,9 @@
     "test:install": "node --test tests/cli-package.test.mjs",
     "test:browser": "node tools/studio-browser-harness.mjs",
     "test:browser:gpu": "node tools/gpu-browser-harness.mjs",
-    "test:native": "cargo test --locked --manifest-path native/Cargo.toml"
+    "test:native": "cargo test --locked --manifest-path native/Cargo.toml",
+    "test:production": "node --test tests/character-animation-tracks.test.mjs tests/palette-atlas-production.test.mjs tests/authoring-sequence.test.mjs tests/authoring-retiming.test.mjs tests/gpu-tiles.test.mjs",
+    "test:browser:production": "node tools/production-browser-harness.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

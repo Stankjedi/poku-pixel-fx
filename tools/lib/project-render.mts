@@ -42,8 +42,10 @@ export function readProjectIntent(project: ResolvedProject, projectFile: string)
 
 export async function renderProject(project: ResolvedProject, capture: Pick<RenderOptions, "layers" | "diagnostics"> = {}) {
   let fx: EffectData, sequence: RenderSequence;
-  const { postprocessProjectFrame, finishProjectRGBA } = await import(new URL("../../../build/authoring/edits.js", import.meta.url).href);
+  const { postprocessProjectFrame, finishProjectRGBA, prepareProjectStyle } = await import(new URL("../../../build/authoring/edits.js", import.meta.url).href);
   const { compositeProjectFrame } = await import(new URL("../../../build/authoring/composite.js", import.meta.url).href);
+  const { resolveAtlasExportSettings } = await import(new URL("../../../build/render/export.js", import.meta.url).href);
+  prepareProjectStyle(project); resolveAtlasExportSettings(project.exportSettings);
   const options: RenderOptions = { ...projectRenderOptions(project), ...capture,
     postprocess: (frame, time, index, context) => postprocessProjectFrame(frame, project, time, index, context),
     finalizeRGBA: rgba => finishProjectRGBA(rgba, project), hdr: true, assetActor: project.actor,
@@ -60,6 +62,11 @@ export async function renderProject(project: ResolvedProject, capture: Pick<Rend
     if (project.kind === "recipe") {
       const { createRecipeEffect } = await import(new URL("../../../build/authoring/recipes.js", import.meta.url).href);
       const mod = createRecipeEffect(project.recipe);
+      fx = { id: project.id, file: "", mod, meta: mod.meta };
+    } else if (project.kind === "sequence") {
+      const { createSequenceEffect } = await import(new URL("../../../build/authoring/sequence.js", import.meta.url).href);
+      const compiled = await createSequenceEffect(project.sequence, undefined, project.fps);
+      const mod = { ...compiled, events: compiled.eventsFor({ ...options.options, seed: project.seed }) };
       fx = { id: project.id, file: "", mod, meta: mod.meta };
     } else if (project.kind === "character") {
       const { createCharacterEffect } = await import(new URL("../../../build/authoring/character-effect.js", import.meta.url).href);

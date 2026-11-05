@@ -1,6 +1,6 @@
 /** Portable authoring settings. No functions, runtime instances or review approvals are serialized. */
 export type JSONValue = null | boolean | number | string | JSONValue[] | { [key: string]: JSONValue };
-export type ProjectKind = '2d' | 'act' | '3d' | 'recipe' | 'character';
+export type ProjectKind = '2d' | 'act' | '3d' | 'recipe' | 'character' | 'sequence';
 export interface ResolvedProject {
   schema: 'poku.project/v1';
   id: string;
@@ -20,9 +20,11 @@ export interface ResolvedProject {
   intentRef?: string;
   intentSha256?: string;
   renderProfile?: Record<string, any>;
+  exportSettings?: Record<string, any>;
   pixelStyle?: Record<string, any>;
   recipe?: Record<string, any>;
   character?: Record<string, any>;
+  sequence?: Record<string, any>;
   layers: Record<string, boolean>;
   edits: JSONValue[];
   sourceRevision?: string;
@@ -66,7 +68,7 @@ export function resolveProject(input: unknown): ResolvedProject {
   if (p.schema !== undefined && p.schema !== 'poku.project/v1') throw new RangeError('Unsupported project schema');
   if (typeof p.id !== 'string' || !/^[a-z0-9-]+\/[a-z0-9-]+$/.test(p.id)) throw new RangeError('Project id must be category/name');
   const kind: ProjectKind = p.kind ?? '2d';
-  if (!['2d', 'act', '3d', 'recipe', 'character'].includes(kind)) throw new RangeError('Unknown project kind');
+  if (!['2d', 'act', '3d', 'recipe', 'character', 'sequence'].includes(kind)) throw new RangeError('Unknown project kind');
   const seed = number(p.seed ?? p.options?.seed, 1, 0, 0xffffffff, 'seed');
   if (!Number.isInteger(seed)) throw new RangeError('Seed must be an integer');
   const layers = object(p.layers ?? {}, 'layers');
@@ -85,7 +87,7 @@ export function resolveProject(input: unknown): ResolvedProject {
   for (const key of ['seconds', 'hold', 'margin', 'pad', 'cameraMotion'] as const) {
     if (p[key] !== undefined) out[key] = number(p[key], 0, 0, key === 'seconds' ? 3600 : 4096, key);
   }
-  for (const key of ['renderProfile', 'pixelStyle', 'recipe', 'character'] as const)
+  for (const key of ['renderProfile', 'exportSettings', 'pixelStyle', 'recipe', 'character', 'sequence'] as const)
     if (p[key] !== undefined) out[key] = object(p[key], key);
   for (const key of ['intentRef', 'intentSha256', 'sourceRevision'] as const)
     if (p[key] !== undefined) out[key] = p[key];

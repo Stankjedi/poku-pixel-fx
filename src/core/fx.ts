@@ -59,7 +59,7 @@ export interface EffectDrawContext {
 }
 const drawState = (p: Painter) => ({ tx: p.tx, ty: p.ty, fx: p.fx, cs: p.cs, sn: p.sn,
   fade: p.fade, lightK: p.lightK, particleStyle: p.particleStyle, layer: p.layer });
-import { clamp } from "./math.js";
+import { clamp, loopTime } from "./math.js";
 import { stockActor } from "./actor.js";
 import { fit, toHex } from "./color.js";
 
@@ -149,7 +149,7 @@ export function createFx<O extends EffectOptions>(mod: EffectModule<O>, o: Effec
       const strength = opts.cameraMotion ?? 1;
       if (!Number.isFinite(strength) || strength < 0) throw new RangeError("cameraMotion must be finite and non-negative");
       if (!mod.cameraShake || strength === 0 || (!meta.loop && t >= D) || t - stopAt >= FADE) return [0, 0];
-      const offset = mod.cameraShake(meta.loop ? t % D : t, opts);
+      const offset = mod.cameraShake(meta.loop ? loopTime(t, D) : t, opts);
       if (!Array.isArray(offset) || offset.length !== 2 || !offset.every(Number.isFinite)) throw new RangeError("cameraShake must return two finite pixel offsets");
       const fade = stopAt === Infinity ? 1 : clamp(1 - (t - stopAt) / FADE);
       return [Math.round(offset[0] * strength * fade), Math.round(offset[1] * strength * fade)];
@@ -193,7 +193,7 @@ export function createFx<O extends EffectOptions>(mod: EffectModule<O>, o: Effec
       p.fade = (inherited?.fade ?? 1) * (stopAt === Infinity ? 1 : clamp(1 - (t - stopAt) / FADE));
       p.lightK = (inherited?.lightK ?? 1) * (opts.light ?? 1);
       p.particleStyle = opts.particleStyle ?? inherited?.particleStyle ?? "refined";
-      const tt = meta.loop ? t % D : Math.min(t, D);
+      const tt = meta.loop ? loopTime(t, D) : Math.min(t, D);
       try {
         if (layer !== "front" && impl.drawBack) {
           p.layer = "back";

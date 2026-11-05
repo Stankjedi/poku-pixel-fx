@@ -53,6 +53,7 @@ jobs:
       - run: npm run test:studio
       - run: npm run test:export-studio
       - run: npm run test:install
+      - run: npm run test:production
       - name: Smoke-test integrated cinematic image exports
         run: |
           for effect in frost slash blackhole wind windOriginal water shield; do
@@ -80,6 +81,7 @@ jobs:
       - run: npm run test:studio
       - run: npm run test:export-studio
       - run: npm run test:install
+      - run: npm run test:production
 
   site-build:
     runs-on: ubuntu-latest
@@ -124,6 +126,12 @@ jobs:
           STUDIO_REPORT_PATH: studio-browser-result.json
           STUDIO_SCREENSHOT_PATH: studio-browser.png
         run: node tools/studio-browser-harness.mjs
+      - name: Exercise sequence authoring, palette patterns and optimized atlas export
+        env:
+          PRODUCTION_REQUIRED: "1"
+          PRODUCTION_REPORT_PATH: production-browser-result.json
+          PRODUCTION_SCREENSHOT_PATH: production-browser.png
+        run: node tools/production-browser-harness.mjs
       - name: Probe actual browser WebGPU capability and shaders
         env:
           GPU_REPORT_PATH: gpu-browser-result.json
@@ -136,6 +144,8 @@ jobs:
             studio-browser-result.json
             studio-browser.png
             gpu-browser-result.json
+            production-browser-result.json
+            production-browser.png
 
   native-wgpu:
     runs-on: ubuntu-latest

@@ -1,0 +1,231 @@
+{
+  "status": "passed",
+  "adapter": {
+    "info": "AdapterInfo { name: \"llvmpipe (LLVM 20.1.2, 256 bits)\", vendor: 65541, device: 0, device_type: Cpu, device_pci_bus_id: \"\", driver: \"\", driver_info: \"4.5 (Core Profile) Mesa 25.2.8-0ubuntu0.24.04.2\", backend: Gl, subgroup_min_size: 4, subgroup_max_size: 128, transient_saves_memory: None, limit_bucket: None }",
+    "software": true
+  },
+  "checks": [
+    {
+      "name": "mixed-default",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 2852,
+      "firstUploadBytes": 704,
+      "secondUploadBytes": 608
+    },
+    {
+      "name": "mixed-reinhard-hdr-background",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 2852,
+      "firstUploadBytes": 704,
+      "secondUploadBytes": 608
+    },
+    {
+      "name": "mixed-ungraded",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 2852,
+      "firstUploadBytes": 704,
+      "secondUploadBytes": 608
+    },
+    {
+      "name": "mixed-final-palette",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 2852,
+      "firstUploadBytes": 716,
+      "secondUploadBytes": 608
+    },
+    {
+      "name": "mesh-shared-edge",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 100,
+      "firstUploadBytes": 368,
+      "secondUploadBytes": 352
+    },
+    {
+      "name": "depth-order-012",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 36,
+      "firstUploadBytes": 496,
+      "secondUploadBytes": 480
+    },
+    {
+      "name": "depth-order-201",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 36,
+      "firstUploadBytes": 496,
+      "secondUploadBytes": 480
+    },
+    {
+      "name": "depth-order-120",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 36,
+      "firstUploadBytes": 496,
+      "secondUploadBytes": 480
+    },
+    {
+      "name": "one-pixel-bloom",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 4,
+      "firstUploadBytes": 240,
+      "secondUploadBytes": 224
+    },
+    {
+      "name": "tiled-sparse-512",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 198404,
+      "firstUploadBytes": 65648,
+      "secondUploadBytes": 65632
+    },
+    {
+      "name": "tiled-dense-overflow-301",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 2244,
+      "firstUploadBytes": 38640,
+      "secondUploadBytes": 38624
+    },
+    {
+      "name": "tiled-boundaries-materials-sprites",
+      "maxDelta": 1,
+      "differentChannels": 10,
+      "channels": 6580,
+      "firstUploadBytes": 1984,
+      "secondUploadBytes": 1888
+    },
+    {
+      "name": "tiled-alpha-depth-ties-64",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 1156,
+      "firstUploadBytes": 8432,
+      "secondUploadBytes": 8416
+    },
+    {
+      "name": "tiled-offscreen-80",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 2852,
+      "firstUploadBytes": 10352,
+      "secondUploadBytes": 10336
+    },
+    {
+      "name": "tiled-empty-odd-frame",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 988,
+      "firstUploadBytes": 240,
+      "secondUploadBytes": 224
+    },
+    {
+      "name": "asset-frame-0",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 64
+    },
+    {
+      "name": "asset-frame-1",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 64
+    },
+    {
+      "name": "asset-frame-2",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 64
+    },
+    {
+      "name": "asset-frame-3",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 64
+    },
+    {
+      "name": "asset-frame-4",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 64
+    },
+    {
+      "name": "asset-frame-5",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 64
+    },
+    {
+      "name": "asset-frame-6",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 64
+    },
+    {
+      "name": "asset-frame-7",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 64
+    },
+    {
+      "name": "asset-declared-palette-policy",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 64
+    },
+    {
+      "name": "asset-lighting-sidecars-0",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 64
+    },
+    {
+      "name": "asset-lighting-sidecars-1",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 64
+    },
+    {
+      "name": "asset-linear-transparent-profile",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 64
+    },
+    {
+      "name": "catalog-frost-lighting-0",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 12288
+    },
+    {
+      "name": "catalog-frost-lighting-1",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 12288
+    },
+    {
+      "name": "catalog-frost-lighting-2",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 12288
+    },
+    {
+      "name": "catalog-frost-lighting-3",
+      "maxDelta": 0,
+      "differentChannels": 0,
+      "channels": 12288
+    }
+  ],
+  "sceneCases": 15,
+  "catalogCases": 1,
+  "capturedNativeFrames": 46,
+  "comparedChannels": 273764,
+  "tolerance": "max 2 encoded channel values; same-device replay exact",
+  "scope": "Actual native wgpu shared WGSL and production 3D export. Software adapter is reported; browser canvas and physical GPUs remain separate validation targets."
+}
