@@ -89,7 +89,7 @@
     "test:browser": "node tools/studio-browser-harness.mjs",
     "test:browser:gpu": "node tools/gpu-browser-harness.mjs",
     "test:native": "cargo test --locked --manifest-path native/Cargo.toml",
-    "test:production": "node --test tests/character-animation-tracks.test.mjs tests/palette-atlas-production.test.mjs tests/authoring-sequence.test.mjs tests/authoring-retiming.test.mjs tests/gpu-tiles.test.mjs",
+    "test:production": "node --test tests/character-animation-tracks.test.mjs tests/palette-atlas-production.test.mjs tests/authoring-sequence.test.mjs tests/authoring-retiming.test.mjs tests/gpu-tiles.test.mjs tests/atlas-memory.test.mjs",
     "test:browser:production": "node tools/production-browser-harness.mjs"
   },
   "devDependencies": {

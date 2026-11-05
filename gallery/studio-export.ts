@@ -2,6 +2,7 @@ import { createAtlasPacker, frameContentBounds, frameDurationMs, resolveAssetEve
 import { serializeProject, type ResolvedProject } from '../src/authoring/project.js';
 import { encodeRGBAPNG } from './png.js';
 import { ENGINE_VERSION } from '../src/version.js';
+import { AtlasPageBuffer } from '../src/render/atlas-page.js';
 
 export interface DownloadFile {name:string;blob:Blob}
 const encoder=new TextEncoder(),MAX_BYTES=128*1024*1024;
@@ -39,7 +40,7 @@ export function exportProjectAtlas(project:ResolvedProject,onProgress:(message:s
   const packer=createAtlasPacker(PAGE,settings.padding),files:DownloadFile[]=[],records:AssetManifest['files']=[];
   const duplicates=new Map<string,{page:number;rect:{x:number;y:number;w:number;h:number}}>();let reused=0;
   const renderMode=project.renderProfile?.mode==='cinematic'?'cinematic':'legacy';
-  let info:any,page=-1,pageColor=new Uint8Array(0),pageEmission=new Float32Array(0),bytes=0;
+  let info:any,page=-1,pageBuffer:AtlasPageBuffer|undefined,bytes=0;
   const manifest:AssetManifest={schema:'poku-asset/v1',id:project.id,name:project.name,loop:false,durationMs:0,
     color:{format:'RGBA8888',colorSpace:'srgb',alpha:'straight'},coordinates:'untrimmed-pixel-edges-y-down',pages:[],frames:[],tags:[],
     settings:{project,renderMode,renderProfile:{...project.renderProfile,mode:renderMode},atlas:settings,assetLayers:'straight color + linear HDR emission',previewBackground:project.bg},source:{engineVersion:ENGINE_VERSION,rng:'poku-rng/v1',...(project.sourceRevision?{sourceRevision:project.sourceRevision}:{})},files:records};
@@ -49,13 +50,14 @@ export function exportProjectAtlas(project:ResolvedProject,onProgress:(message:s
     files.push({name,blob});records.push({path:name,bytes:blob.size,sha256:await sha256(blob)});
   }
   async function flush(){
-    if(page<0)return;const {w,h}=packer.pages[page],color=new Uint8Array(w*h*4),emission=new Float32Array(w*h*3);let hasEmission=false;
-    for(let y=0;y<h;y++){color.set(pageColor.subarray(y*PAGE*4,y*PAGE*4+w*4),y*w*4);emission.set(pageEmission.subarray(y*PAGE*3,y*PAGE*3+w*3),y*w*3);}
+    if(page<0||!pageBuffer)return;const {w,h}=packer.pages[page],color=new Uint8Array(w*h*4),emission=new Float32Array(w*h*3);let hasEmission=false;
+    const {color:pageColor,emission:pageEmission,width:stride}=pageBuffer;
+    for(let y=0;y<h;y++){color.set(pageColor.subarray(y*stride*4,y*stride*4+w*4),y*w*4);emission.set(pageEmission!.subarray(y*stride*3,y*stride*3+w*3),y*w*3);}
     for(const v of emission)if(v!==0){hasEmission=true;break;}
     const name=`atlas-${page}.png`;await add(name,await encodeRGBAPNG(w,h,color));
     const entry:AssetManifest['pages'][number]={image:name,width:w,height:h};
     if(hasEmission){const name=`atlas-${page}.emission.f32`,le=new ArrayBuffer(emission.byteLength),view=new DataView(le);for(let i=0;i<emission.length;i++)view.setFloat32(i*4,emission[i],true);await add(name,new Blob([le],{type:'application/octet-stream'}));entry.emission={image:name,format:'float32-le',channels:3,colorSpace:'linear-srgb'};}
-    manifest.pages.push(entry);pageColor=new Uint8Array(0);pageEmission=new Float32Array(0);
+    manifest.pages.push(entry);pageBuffer=undefined;
   }
   async function message(m:any){
     if(cancelled||m.id!==id)return;
@@ -75,16 +77,18 @@ export function exportProjectAtlas(project:ResolvedProject,onProgress:(message:s
       const previous=settings.deduplicate?duplicates.get(key):undefined,placement=previous??packer.place(trim.w,trim.h);
       if(previous)reused++;
       else{
-        if(placement.page!==page){await flush();page=placement.page;if(page>=16)throw new RangeError('브라우저 내보내기는 최대 16개 atlas 페이지입니다. CLI를 사용하세요.');pageColor=new Uint8Array(PAGE*PAGE*4);pageEmission=new Float32Array(PAGE*PAGE*3);}
+        if(placement.page!==page){await flush();page=placement.page;if(page>=16)throw new RangeError('브라우저 내보내기는 최대 16개 atlas 페이지입니다. CLI를 사용하세요.');pageBuffer=new AtlasPageBuffer(PAGE,{emission:true});}
+        const used=packer.pages[page];pageBuffer!.ensure(used.w,used.h);
+        const {color:pageColor,emission:pageEmission,width:stride}=pageBuffer!;
         for(let y=0;y<trim.h;y++){
-          const source=(y+trim.y)*info.width+trim.x,dest=(placement.rect.y+y)*PAGE+placement.rect.x;
-          pageColor.set(rgba.subarray(source*4,(source+trim.w)*4),dest*4);pageEmission.set(emission.subarray(source*3,(source+trim.w)*3),dest*3);
+          const source=(y+trim.y)*info.width+trim.x,dest=(placement.rect.y+y)*stride+placement.rect.x;
+          pageColor.set(rgba.subarray(source*4,(source+trim.w)*4),dest*4);pageEmission!.set(emission.subarray(source*3,(source+trim.w)*3),dest*3);
         }
-        if(settings.extrude){extrudeAtlasRegion(pageColor,PAGE,4,placement.rect,settings.extrude);extrudeAtlasRegion(pageEmission,PAGE,3,placement.rect,settings.extrude);}
+        if(settings.extrude){extrudeAtlasRegion(pageColor,stride,4,placement.rect,settings.extrude);extrudeAtlasRegion(pageEmission!,stride,3,placement.rect,settings.extrude);}
         if(settings.deduplicate)duplicates.set(key,placement);
       }
       manifest.frames.push({...placement,sourceSize:[info.width,info.height],trimOffset:[trim.x,trim.y],pivot:info.origin,duration:frameDurationMs(m.index,info.fps),time:m.time,frozen:m.frozen,...(m.sockets?{sockets:m.sockets}:{})});
-      onProgress(`${m.index+1} / ${info.count} 프레임 · ${page+1}페이지 · 중복 ${reused}장 재사용 · ${Math.round(bytes/1048576)} MiB`);
+      onProgress(`${m.index+1} / ${info.count} 프레임 · ${page+1}페이지 · 중복 ${reused}장 재사용 · 출력 ${Math.round(bytes/1048576)} MiB · 페이지 버퍼 ${((pageBuffer?.byteLength??0)/1048576).toFixed(1)} MiB`);
       worker.postMessage({type:'ack',id});return;
     }
     if(m.type==='done'){
@@ -96,8 +100,8 @@ export function exportProjectAtlas(project:ResolvedProject,onProgress:(message:s
       if(cancelled)return;settled=true;worker.terminate();finish([{name:project.id.replace('/','-')+'.poku-asset.zip',blob:zip},...files]);
     }
   }
-  worker.onmessage=e=>{void message(e.data).catch(error=>{if(!settled){settled=true;worker.terminate();fail(error);}});};
-  worker.onerror=e=>{if(!settled){settled=true;worker.terminate();fail(new Error(e.message));}};
+  worker.onmessage=e=>{void message(e.data).catch(error=>{if(!settled){settled=true;worker.terminate();pageBuffer=undefined;files.length=0;fail(error);}});};
+  worker.onerror=e=>{if(!settled){settled=true;worker.terminate();pageBuffer=undefined;files.length=0;fail(new Error(e.message));}};
   worker.postMessage({type:'bake',id,project});
-  return{promise,cancel(){if(settled)return;cancelled=true;settled=true;worker.postMessage({type:'cancel',id});worker.terminate();pageColor=new Uint8Array(0);pageEmission=new Float32Array(0);fail(new Error('내보내기가 취소되었습니다.'));}};
+  return{promise,cancel(){if(settled)return;cancelled=true;settled=true;worker.postMessage({type:'cancel',id});worker.terminate();pageBuffer=undefined;files.length=0;fail(new Error('내보내기가 취소되었습니다.'));}};
 }
