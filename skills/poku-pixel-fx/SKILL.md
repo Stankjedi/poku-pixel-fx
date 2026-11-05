@@ -91,7 +91,7 @@ up, when to freeze, how the target reacts. Use it whichever way the game is buil
 
 Read `docs/AUTHORING.md` first: it is the contract (meta, `draw(p, t, o)` for pure effects or `create(o)` for
 simulated ones, local coordinates, seamless loops, ending empty), the toolkit, the painter API and the quality bar.
-Read `docs/QUALITY.md` too. Treat `shadow/spatial-severance` as the clean-curve, refined-particle reference,
+Read `docs/QUALITY.md` and `docs/EFFECT_INTENT.md` too. Write a concrete intent brief before adding detail: what happened, the intended first impression and likely wrong read, dominant silhouette, source of force, direction, weight/material, cause and effect, and preparation/action/response/ending. Use a physical, stylized-physical, magic-with-rules or symbolic-ui model with explicit limits. Omit inapplicable phases with reasons rather than imposing the same impact, gravity or glow on every effect. Treat `shadow/spatial-severance` as the clean-curve, refined-particle reference,
 not a style to impose on all effects. New effects should use the shared ribbon, trajectory trail, envelope,
 and path-lighting helpers where appropriate. Keep the pixel palette and inspect native-size silhouettes,
 impact timing, negative space, and transparency. Automated tests do not guarantee artistic quality.
@@ -108,13 +108,14 @@ Then:
 2. **Find references** in the library: `node build-tools/tools/list.mjs <words>`, then read the two or three closest effect
    files and borrow their techniques (`Particles` and `Bits` in `src/core/sim.ts` for sparks, smoke and debris,
    `p.disc` for translucent volumes, `cycle` for seamless particles, `tileFbm` scrolls for flames and water). Use the local library references as the quality bar; external references are optional and require network access.
-3. **Draft.** `node build-tools/tools/new.mjs <category>/<name>` (add `--loop` for a loop) gives a working file. When the
+3. **Draft.** `node build-tools/tools/new.mjs <category>/<name>` (add `--loop` for a loop) gives a working file and blank `authoring/<category>/<name>.intent.json`. Fill that brief, including actual `meta.duration` and `meta.loop`, and run `node tools/effect-intent.mjs validate <id>`. For an existing effect, create the brief with `node tools/effect-intent.mjs init <id>`. When the
    direction is open, write 3 to 5 genuinely different drafts (`<name>-a.ts` .. `-e.ts`), render them all
    (`node build-tools/tools/render.mjs "<category>/<name>-*"`) and look at every contact sheet before choosing. Show the user
    the strongest two or three if they're around (`--gif` makes animations to share). Rebuild after changing source files before rendering.
 4. **Look, judge, fix.** Render, open `records/<id>/contact.png`, and judge like a picky pixel artist. Fix the
-   worst thing, render again. Three rounds minimum; a showpiece takes more. `--all` shows every frame,
-   `--mp4` shows motion at full speed.
+   worst misread or causal problem, then render again when needed. Do not use a fixed iteration count as proof of quality. `--all` shows every frame and `--mp4` shows motion at full speed.
+   Run `npm run review -- <id>` for native/zoomed, silhouette/value/background and full-speed playback evidence. Record what it actually looks like, with frame references, separately from the intent. Use `informed-self-review` unless a genuinely independent observer saw it without the label. An agent may record a visually inspected self-assessment; never invent user approval or claim tests certify meaning, physics or artistic quality. Save both the visual review and explicit intent review as described in `docs/EFFECT_INTENT.md`.
+   If playback was not inspected, retain an honest provisional record and do not mark it ready.
 5. **Act it out** if a character is involved: add `export const act` (see "Acts" in `docs/AUTHORING.md`), with a wind-up before t = 0,
    a pose change on the release frame, a freeze on contact and a recovery. `node build-tools/tools/act.mjs <id>` shows consecutive 12 fps steps:
    judge motion from those and from `--mp4`, not from a contact sheet's samples.

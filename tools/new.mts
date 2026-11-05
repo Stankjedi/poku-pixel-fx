@@ -4,8 +4,9 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { FX_DIR, effectSymbol } from "./lib/fxlib.mjs";
+import { ROOT, FX_DIR, effectSymbol } from "./lib/fxlib.mjs";
 import { timingTemplate } from "./lib/timing-template.mjs";
+const { createIntentBrief } = await import(new URL("../../tools/lib/effect-intent.mjs", import.meta.url).href);
 const { categories } = await import(new URL("../../build/fx/categories.js", import.meta.url).href);
 
 const id = process.argv[2], loop = process.argv.includes("--loop"), timing = process.argv.includes("--timing");
@@ -92,10 +93,11 @@ export function draw(p: import("../../core/painter.js").Painter, t: number, o: t
 ${body}
 }
 `;
+const intent = createIntentBrief(ROOT, id);
 mkdirSync(dirname(file), { recursive: true });
 writeFileSync(file, src, { flag: "wx" });
 try { writeFileSync(registryFile, updatedRegistry); }
 catch (error) { unlinkSync(file); throw error; }
-console.log(`${file} 생성 완료\n다음: npm run build && node build-tools/tools/render.mjs ${id} 실행 후 records/${id}/contact.png 확인\n완성 전 docs/QUALITY.md 기준으로 원본 크기와 실제 속도를 확인하세요.\n캐릭터가 있으면 동작을 추가하세요: docs/AUTHORING.md의 "Acts"를 참고하고 node build-tools/tools/act.mjs ${id} 실행`);
+console.log(`${file} 생성 완료\n의도서: ${intent.path} (${intent.created ? "새 빈 초안" : "기존 내용 유지"})\n먼저 docs/EFFECT_INTENT.md에 따라 의미·힘·인과·종료와 실제 duration/loop를 작성하고 node tools/effect-intent.mjs validate ${id} 실행\n다음: npm run build && node build-tools/tools/render.mjs ${id} 실행 후 records/${id}/contact.png 확인\n완성 전 docs/QUALITY.md 기준으로 원본 크기와 실제 속도를 확인하세요.\n캐릭터가 있으면 동작을 추가하세요: docs/AUTHORING.md의 "Acts"를 참고하고 node build-tools/tools/act.mjs ${id} 실행`);
 
 if (timing) console.log("시간 곡선 제작 안내: docs/TIMING_CURVES.md. 이동·두께·투명도·광원을 따로 조정하고 마지막 구간을 확인하세요.");

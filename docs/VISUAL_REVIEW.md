@@ -7,7 +7,13 @@ and repeat only when the result or its intended use warrants it.
 
 ## Workflow
 
+First write the intended meaning, likely misread and causal motion in an intent brief, following
+[EFFECT_INTENT.md](EFFECT_INTENT.md). `new` creates a blank brief; for existing effects:
+
 ```sh
+node tools/effect-intent.mjs init fire/torch
+# Fill authoring/fire/torch.intent.json, including the real duration and loop.
+node tools/effect-intent.mjs validate fire/torch
 npm run build
 npm run review -- fire/torch
 ```
@@ -44,6 +50,8 @@ Do not change the generated schema or hashes. Submit the completed file explicit
 
 ```sh
 npm run review -- fire/torch --record /path/to/my-review.json
+# Also complete the emitted intent-review-template-<hash>-<hash>.json after actual inspection.
+node tools/effect-intent.mjs record fire/torch /path/to/my-intent-review.json
 npm run share -- fire/torch
 ```
 
@@ -51,7 +59,10 @@ Preparing evidence never grants a review. There is no automatic approve flag. Em
 explicit viewing confirmation, `needs-work`, changed evidence, and changed source/output/scene are
 blocked by `share` before any upload-ready files are written. A SHA-256 identity binds the record to
 the exported PNG, matching JSON (including timing/pivot), preview frames and effect source. A second
-hash binds it to the diagnostic files. A valid review record is copied beside the share PNG/JSON.
+hash binds it to the diagnostic files. A valid visual record and matching intent brief/review are copied beside the share PNG/JSON.
+The intent record separates intended meaning from observed first impression and records force,
+causality and lifecycle findings with frame references. Human or agent review is allowed; a
+reviewer self-assessment is not user approval. No extra user approval is required by this tool.
 
 Rebuild after changing TypeScript, prepare new evidence and review the changed result. Unchanged
 evidence can reuse its existing record; incidental reruns do not demand another approval. Rebuilding

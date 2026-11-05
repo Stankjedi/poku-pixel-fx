@@ -60,7 +60,7 @@
     "preview:human:weapons": "node tools/preview-human-weapons.mjs",
     "preview:human:portraits": "node tools/preview-human-portraits.mjs",
     "review": "node build-tools/tools/review.mjs",
-    "test:review": "node --test tests/visual-review.test.mjs",
+    "test:review": "node --test tests/visual-review.test.mjs tests/effect-intent.test.mjs tests/effect-intent-workflow.test.mjs",
     "test:gpu": "node --test tests/frame-renderer.test.mjs",
     "aseprite": "node build-tools/tools/aseprite.mjs",
     "test:aseprite": "node --test tests/sprite-clip.test.mjs tests/aseprite-data.test.mjs tests/aseprite-bridge.test.mjs tests/sprite-sheet-alpha.test.mjs",
