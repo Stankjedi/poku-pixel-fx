@@ -33,6 +33,7 @@ try {
     });
     assert(koreanFont, 'The bundled Korean UI font loads without an operating-system CJK font or an external font service');
     assert(await evaluate("document.querySelectorAll('#recipes button').length") === 6, 'Studio boots all six recipe buttons using real bundled modules');
+    assert(await evaluate("[...document.querySelectorAll('#recipes button')].every(button=>button.scrollHeight<=button.clientHeight+1&&button.scrollWidth<=button.clientWidth+1)"), 'All Korean recipe titles and descriptions fit their cards after the bundled font loads');
     const kinds = ['thrown-blade', 'ribbon-slash', 'lightning', 'explosion', 'flame', 'portal'];
     for (let i = 0; i < 6; i++) {
       await evaluate(`document.querySelectorAll('#recipes button')[${i}].click()`); await ready(`p.kind==='recipe'&&p.recipe.kind===${JSON.stringify(kinds[i])}`);

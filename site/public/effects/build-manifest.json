@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "source": "poku-pixel-fx",
-  "sourceHash": "958d80f43d93455835c78e80cf7846fc393644474f21239cc2ae09c1d17eef52",
+  "sourceHash": "5abec167194edf6d16b20a0414e5d81ea345d2b7da42a9f2719e1915e33b54ac",
   "files": {
     "index.html": "bc3a8d34c178246fb61e67a34ef7dcc927f634fe21bacdcc1f16eff04b59e01d",
     "app.js": "a03e897396078eb800bd31ef1d9a53438b41a8cf7df10bf71bb4096dc1182f36",
@@ -10,7 +10,7 @@
     "studio.js": "3478c21a20037911890f4b314e3dc253eb05bb4df606fc8208a7ba5474ae0f2e",
     "studio-worker.js": "3315f70f6b9259c70d5f7cb68cf9064b22d76b72c54211b6fec59405ad880351",
     "studio.html": "8957025738d1ad53aa623349840109908429fbbceef4f240ed818545934cfaeb",
-    "studio.css": "794f55235b629de0aead29746a0dbb885b2d4ca55f313ce6b4b907bdc75836d4",
+    "studio.css": "1b25e7195cd348439964d600a7fe4cff3d7420715efba78de053b411f2c4ea0a",
     "style.css": "5988306c3f46a7a7a496a51717f4045769f74b900a78031275113d836c603877",
     "community.css": "fd108ebcf2ef0e2553d3e3193a027bea213ca121bea4b0872cb88ecb5454aac1",
     "catalog.json": "f5148f9ae381e0b51dd8fcf571c2ee561f187e89d7e250772c19972e329ee06c",
