@@ -28,6 +28,8 @@ export class WebGPUDrawRenderer {
   private culling: DrawCullingMode;
   private cullingReason: string | null = null;
   private diagnostics?: GpuBuffer;
+  private drawGroup?: { buffers: GpuBuffer[]; group: object };
+  private tileGroup?: { buffers: GpuBuffer[]; group: object };
 
   private constructor(readonly device: GpuDevice, readonly maxBytes: number, options: WebGPUDrawOptions) {
     if (!Number.isSafeInteger(maxBytes) || maxBytes < 32) throw new RangeError('DrawIR GPU budget must be a positive byte count');
@@ -72,11 +74,13 @@ export class WebGPUDrawRenderer {
     this.validateSize(w, h);
     if (this.baseBytes(w, h) > this.maxBytes) throw new RangeError('DrawIR frame and resident assets exceed GPU budget');
     if (this.output?.w === w && this.output.h === h) return this.output;
-    this.output?.color.destroy(); this.output?.light.destroy(); this.output?.hdrLight?.destroy();
-    this.output = undefined;
     const created: GpuBuffer[] = [];
     const buffer = (size: number) => { const b = this.device.createBuffer({ size, usage: B.STORAGE | B.COPY_SRC | B.COPY_DST }); created.push(b); return b; };
-    try { return this.output = { w, h, color: buffer(w * h * 4), light: buffer(w * h * 4), hdrLight: buffer(w * h * 12) }; }
+    try {
+      const next = { w, h, color: buffer(w * h * 4), light: buffer(w * h * 4), hdrLight: buffer(w * h * 12) };
+      this.output?.color.destroy(); this.output?.light.destroy(); this.output?.hdrLight?.destroy();
+      return this.output = next;
+    }
     catch (error) { created.forEach(b => b.destroy()); throw error; }
   }
 
@@ -88,7 +92,10 @@ export class WebGPUDrawRenderer {
       const total = Math.ceil(w / DRAW_TILE_SIZE) * Math.ceil(h / DRAW_TILE_SIZE);
       const bytes = total * (DRAW_TILE_CAPACITY + 1) * 4;
       if (bytes <= this.device.limits.maxStorageBufferBindingSize && bytes <= this.device.limits.maxBufferSize && this.baseBytes(w, h) + bytes <= this.maxBytes) {
-        if (this.tiles?.size !== bytes) { this.tiles?.destroy(); this.tiles = this.device.createBuffer({ size: bytes, usage: B.STORAGE | B.COPY_SRC, label: 'DrawIR tile candidates' }); }
+        if (this.tiles?.size !== bytes) {
+          const next = this.device.createBuffer({ size: bytes, usage: B.STORAGE | B.COPY_SRC, label: 'DrawIR tile candidates' });
+          this.tiles?.destroy(); this.tiles = next;
+        }
         this.tileCount = total; return this.tiles;
       }
       this.cullingReason = 'Tile bins exceed the available GPU budget; exact direct rasterization is active';
@@ -105,19 +112,28 @@ export class WebGPUDrawRenderer {
     if (cosmetic && (count > 16384 || cosmetic.alphaPrimitives !== 0 || !Number.isInteger(cosmeticCount) || cosmeticCount < 0 || cosmetic.commands.size < cosmeticCount * 128)) throw new RangeError('Invalid cosmetic DrawIR batch');
     const combinedBytes = cosmeticCount > 0 ? Math.max(128, count * 128) : 0;
     const assetBytes = compiled.commands.byteLength + compiled.color.byteLength + compiled.emission.byteLength + 12;
-    if (16 + compiled.width * compiled.height * 20 + assetBytes + combinedBytes + (this.diagnostics?.size ?? 0) > this.maxBytes) throw new RangeError('DrawIR scene and resident assets exceed GPU budget');
+    const otherBytes = 16 + compiled.width * compiled.height * 20 + assetBytes + (this.diagnostics?.size ?? 0);
+    if (otherBytes + combinedBytes > this.maxBytes) throw new RangeError('DrawIR scene and resident assets exceed GPU budget');
+    const mergeLimit = Math.min(this.device.limits.maxStorageBufferBindingSize, this.device.limits.maxBufferSize, this.maxBytes - otherBytes);
+    if (combinedBytes > mergeLimit) throw new RangeError('Combined DrawIR commands exceed storage binding limit or GPU budget');
+    if (!cosmeticCount && this.combined && this.combined.size > mergeLimit) { this.combined.destroy(); this.combined = undefined; }
     this.previous = compiled; this.assets.beginFrame();
     let commands = this.assets.upload('DrawIR commands', new Uint8Array(compiled.commands), ++this.revision, undefined, B.STORAGE | B.COPY_SRC);
     const colors = this.assets.upload('DrawIR color assets', compiled.color, compiled.assetRevision);
     const emission = this.assets.upload('DrawIR emission assets', compiled.emission, compiled.assetRevision);
     if (cosmeticCount > 0) {
-      if (combinedBytes > this.device.limits.maxStorageBufferBindingSize) throw new RangeError('Combined DrawIR commands exceed storage binding limit');
-      if (this.combined?.size !== combinedBytes) { this.combined?.destroy(); this.combined = this.device.createBuffer({ size: combinedBytes, usage: B.STORAGE | B.COPY_DST }); }
+      if (!this.combined || this.combined.size < combinedBytes || this.combined.size > mergeLimit) {
+        // A live particle prefix can shrink every tick. Keep capacity, not stale
+        // commands: the exact count and copied range still bound all GPU work.
+        const size = Math.min(2 ** Math.ceil(Math.log2(combinedBytes)), mergeLimit);
+        const next = this.device.createBuffer({ size: Math.floor(size / 128) * 128, usage: B.STORAGE | B.COPY_DST });
+        this.combined?.destroy(); this.combined = next;
+      }
       const encoder = this.device.createCommandEncoder();
       if (compiled.count) encoder.copyBufferToBuffer(commands, 0, this.combined!, 0, compiled.count * 128);
       encoder.copyBufferToBuffer(cosmetic!.commands, 0, this.combined!, compiled.count * 128, cosmeticCount * 128);
       this.device.queue.submit([encoder.finish()]); commands = this.combined!;
-    } else { this.combined?.destroy(); this.combined = undefined; }
+    }
     return this.renderCommandBuffer(compiled.width, compiled.height, commands, count, colors, emission, compiled.alphaPrimitives);
   }
 
@@ -129,14 +145,18 @@ export class WebGPUDrawRenderer {
     const zero = this.assets.upload('DrawIR zero asset', new Uint32Array(3), 0), frame = this.allocate(w, h), tiles = this.prepareTiles(w, h, count);
     this.commandCount = count; this.alphaCount = alphaPrimitives;
     this.device.queue.writeBuffer(this.params, 0, new Uint32Array([w, h, count, tiles ? DRAW_TILE_CAPACITY : 0]));
-    const group = (pipeline: GpuPipeline, buffers: GpuBuffer[]) => this.device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: buffers.map((buffer, binding) => ({ binding, resource: { buffer } })) });
-    const drawGroup = group(this.pipeline, [this.params, commands, colors ?? zero, emission ?? zero, frame.color, frame.light, frame.hdrLight!, tiles ?? zero]);
+    const group = (pipeline: GpuPipeline, buffers: GpuBuffer[], old?: { buffers: GpuBuffer[]; group: object }) =>
+      old && buffers.every((buffer, i) => old.buffers[i] === buffer) ? old : {
+        buffers, group: this.device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: buffers.map((buffer, binding) => ({ binding, resource: { buffer } })) }),
+      };
+    this.drawGroup = group(this.pipeline, [this.params, commands, colors ?? zero, emission ?? zero, frame.color, frame.light, frame.hdrLight!, tiles ?? zero], this.drawGroup);
     const encoder = this.device.createCommandEncoder({ label: 'DrawIR spatially culled raster' }), pass = encoder.beginComputePass();
     if (tiles) {
-      pass.setPipeline(this.tilePipeline); pass.setBindGroup(0, group(this.tilePipeline, [this.params, commands, tiles]));
+      this.tileGroup = group(this.tilePipeline, [this.params, commands, tiles], this.tileGroup);
+      pass.setPipeline(this.tilePipeline); pass.setBindGroup(0, this.tileGroup.group);
       pass.dispatchWorkgroups(Math.ceil(this.tileCount / 64));
     }
-    pass.setPipeline(this.pipeline); pass.setBindGroup(0, drawGroup); pass.dispatchWorkgroups(Math.ceil(w / 4), Math.ceil(h / 4)); pass.end();
+    pass.setPipeline(this.pipeline); pass.setBindGroup(0, this.drawGroup.group); pass.dispatchWorkgroups(Math.ceil(w / 4), Math.ceil(h / 4)); pass.end();
     this.device.queue.submit([encoder.finish()]); return frame;
   }
 
@@ -167,6 +187,7 @@ export class WebGPUDrawRenderer {
     this.assets.dispose(); this.params.destroy(); this.combined?.destroy(); this.tiles?.destroy(); this.diagnostics?.destroy();
     this.output?.color.destroy(); this.output?.light.destroy(); this.output?.hdrLight?.destroy(); this.previous = undefined;
     this.combined = this.tiles = this.diagnostics = undefined; this.output = undefined;
+    this.drawGroup = this.tileGroup = undefined;
     this.tileCount = this.commandCount = this.alphaCount = 0;
   }
 }

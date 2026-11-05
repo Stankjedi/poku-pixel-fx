@@ -69,6 +69,8 @@ var WebGPUDrawRenderer = class _WebGPUDrawRenderer {
   culling;
   cullingReason = null;
   diagnostics;
+  drawGroup;
+  tileGroup;
   static async create(device, maxBytes = 128 * 1024 * 1024, options2 = {}) {
     const renderer = new _WebGPUDrawRenderer(device, maxBytes, options2);
     try {
@@ -103,10 +105,6 @@ var WebGPUDrawRenderer = class _WebGPUDrawRenderer {
     this.validateSize(w, h);
     if (this.baseBytes(w, h) > this.maxBytes) throw new RangeError("DrawIR frame and resident assets exceed GPU budget");
     if (this.output?.w === w && this.output.h === h) return this.output;
-    this.output?.color.destroy();
-    this.output?.light.destroy();
-    this.output?.hdrLight?.destroy();
-    this.output = void 0;
     const created = [];
     const buffer = (size) => {
       const b = this.device.createBuffer({ size, usage: GPU_BUFFER.STORAGE | GPU_BUFFER.COPY_SRC | GPU_BUFFER.COPY_DST });
@@ -114,7 +112,11 @@ var WebGPUDrawRenderer = class _WebGPUDrawRenderer {
       return b;
     };
     try {
-      return this.output = { w, h, color: buffer(w * h * 4), light: buffer(w * h * 4), hdrLight: buffer(w * h * 12) };
+      const next = { w, h, color: buffer(w * h * 4), light: buffer(w * h * 4), hdrLight: buffer(w * h * 12) };
+      this.output?.color.destroy();
+      this.output?.light.destroy();
+      this.output?.hdrLight?.destroy();
+      return this.output = next;
     } catch (error) {
       created.forEach((b) => b.destroy());
       throw error;
@@ -130,8 +132,9 @@ var WebGPUDrawRenderer = class _WebGPUDrawRenderer {
       const bytes = total * (DRAW_TILE_CAPACITY + 1) * 4;
       if (bytes <= this.device.limits.maxStorageBufferBindingSize && bytes <= this.device.limits.maxBufferSize && this.baseBytes(w, h) + bytes <= this.maxBytes) {
         if (this.tiles?.size !== bytes) {
+          const next = this.device.createBuffer({ size: bytes, usage: GPU_BUFFER.STORAGE | GPU_BUFFER.COPY_SRC, label: "DrawIR tile candidates" });
           this.tiles?.destroy();
-          this.tiles = this.device.createBuffer({ size: bytes, usage: GPU_BUFFER.STORAGE | GPU_BUFFER.COPY_SRC, label: "DrawIR tile candidates" });
+          this.tiles = next;
         }
         this.tileCount = total;
         return this.tiles;
@@ -150,26 +153,31 @@ var WebGPUDrawRenderer = class _WebGPUDrawRenderer {
     if (cosmetic && (count > 16384 || cosmetic.alphaPrimitives !== 0 || !Number.isInteger(cosmeticCount) || cosmeticCount < 0 || cosmetic.commands.size < cosmeticCount * 128)) throw new RangeError("Invalid cosmetic DrawIR batch");
     const combinedBytes = cosmeticCount > 0 ? Math.max(128, count * 128) : 0;
     const assetBytes = compiled.commands.byteLength + compiled.color.byteLength + compiled.emission.byteLength + 12;
-    if (16 + compiled.width * compiled.height * 20 + assetBytes + combinedBytes + (this.diagnostics?.size ?? 0) > this.maxBytes) throw new RangeError("DrawIR scene and resident assets exceed GPU budget");
+    const otherBytes = 16 + compiled.width * compiled.height * 20 + assetBytes + (this.diagnostics?.size ?? 0);
+    if (otherBytes + combinedBytes > this.maxBytes) throw new RangeError("DrawIR scene and resident assets exceed GPU budget");
+    const mergeLimit = Math.min(this.device.limits.maxStorageBufferBindingSize, this.device.limits.maxBufferSize, this.maxBytes - otherBytes);
+    if (combinedBytes > mergeLimit) throw new RangeError("Combined DrawIR commands exceed storage binding limit or GPU budget");
+    if (!cosmeticCount && this.combined && this.combined.size > mergeLimit) {
+      this.combined.destroy();
+      this.combined = void 0;
+    }
     this.previous = compiled;
     this.assets.beginFrame();
     let commands = this.assets.upload("DrawIR commands", new Uint8Array(compiled.commands), ++this.revision, void 0, GPU_BUFFER.STORAGE | GPU_BUFFER.COPY_SRC);
     const colors = this.assets.upload("DrawIR color assets", compiled.color, compiled.assetRevision);
     const emission = this.assets.upload("DrawIR emission assets", compiled.emission, compiled.assetRevision);
     if (cosmeticCount > 0) {
-      if (combinedBytes > this.device.limits.maxStorageBufferBindingSize) throw new RangeError("Combined DrawIR commands exceed storage binding limit");
-      if (this.combined?.size !== combinedBytes) {
+      if (!this.combined || this.combined.size < combinedBytes || this.combined.size > mergeLimit) {
+        const size = Math.min(2 ** Math.ceil(Math.log2(combinedBytes)), mergeLimit);
+        const next = this.device.createBuffer({ size: Math.floor(size / 128) * 128, usage: GPU_BUFFER.STORAGE | GPU_BUFFER.COPY_DST });
         this.combined?.destroy();
-        this.combined = this.device.createBuffer({ size: combinedBytes, usage: GPU_BUFFER.STORAGE | GPU_BUFFER.COPY_DST });
+        this.combined = next;
       }
       const encoder = this.device.createCommandEncoder();
       if (compiled.count) encoder.copyBufferToBuffer(commands, 0, this.combined, 0, compiled.count * 128);
       encoder.copyBufferToBuffer(cosmetic.commands, 0, this.combined, compiled.count * 128, cosmeticCount * 128);
       this.device.queue.submit([encoder.finish()]);
       commands = this.combined;
-    } else {
-      this.combined?.destroy();
-      this.combined = void 0;
     }
     return this.renderCommandBuffer(compiled.width, compiled.height, commands, count, colors, emission, compiled.alphaPrimitives);
   }
@@ -182,16 +190,20 @@ var WebGPUDrawRenderer = class _WebGPUDrawRenderer {
     this.commandCount = count;
     this.alphaCount = alphaPrimitives;
     this.device.queue.writeBuffer(this.params, 0, new Uint32Array([w, h, count, tiles ? DRAW_TILE_CAPACITY : 0]));
-    const group = (pipeline, buffers) => this.device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: buffers.map((buffer, binding) => ({ binding, resource: { buffer } })) });
-    const drawGroup = group(this.pipeline, [this.params, commands, colors ?? zero, emission ?? zero, frame.color, frame.light, frame.hdrLight, tiles ?? zero]);
+    const group = (pipeline, buffers, old) => old && buffers.every((buffer, i) => old.buffers[i] === buffer) ? old : {
+      buffers,
+      group: this.device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: buffers.map((buffer, binding) => ({ binding, resource: { buffer } })) })
+    };
+    this.drawGroup = group(this.pipeline, [this.params, commands, colors ?? zero, emission ?? zero, frame.color, frame.light, frame.hdrLight, tiles ?? zero], this.drawGroup);
     const encoder = this.device.createCommandEncoder({ label: "DrawIR spatially culled raster" }), pass = encoder.beginComputePass();
     if (tiles) {
+      this.tileGroup = group(this.tilePipeline, [this.params, commands, tiles], this.tileGroup);
       pass.setPipeline(this.tilePipeline);
-      pass.setBindGroup(0, group(this.tilePipeline, [this.params, commands, tiles]));
+      pass.setBindGroup(0, this.tileGroup.group);
       pass.dispatchWorkgroups(Math.ceil(this.tileCount / 64));
     }
     pass.setPipeline(this.pipeline);
-    pass.setBindGroup(0, drawGroup);
+    pass.setBindGroup(0, this.drawGroup.group);
     pass.dispatchWorkgroups(Math.ceil(w / 4), Math.ceil(h / 4));
     pass.end();
     this.device.queue.submit([encoder.finish()]);
@@ -250,100 +262,250 @@ var WebGPUDrawRenderer = class _WebGPUDrawRenderer {
     this.previous = void 0;
     this.combined = this.tiles = this.diagnostics = void 0;
     this.output = void 0;
+    this.drawGroup = this.tileGroup = void 0;
     this.tileCount = this.commandCount = this.alphaCount = 0;
   }
 };
 
 // src/render/gpu-particles.ts
+var SlotHeap = class {
+  constructor(values, before) {
+    this.values = values;
+    this.before = before;
+  }
+  push(slot) {
+    const a = this.values;
+    let i = a.length;
+    a.push(slot);
+    while (i > 0) {
+      const parent = i - 1 >>> 1;
+      if (!this.before(slot, a[parent])) break;
+      a[i] = a[parent];
+      i = parent;
+    }
+    a[i] = slot;
+  }
+  pop() {
+    const a = this.values, result = a[0], last = a.pop();
+    if (!a.length) return result;
+    let i = 0;
+    while (i * 2 + 1 < a.length) {
+      let child = i * 2 + 1;
+      if (child + 1 < a.length && this.before(a[child + 1], a[child])) child++;
+      if (!this.before(a[child], last)) break;
+      a[i] = a[child];
+      i = child;
+    }
+    a[i] = last;
+    return result;
+  }
+};
+var STATE_BYTES = 80;
+var COMMAND_BYTES = 128;
+var uint32 = (n) => Number.isInteger(n) && n >= 0 && n <= 4294967295;
+function validateSpawn(spec, hz) {
+  const gravity = spec.gravity ?? [0, 0, 0];
+  if (spec.position.length !== 3 || spec.velocity.length !== 3 || gravity.length !== 3 || ![...spec.position, ...spec.velocity, ...gravity, spec.lifetime, spec.radius, spec.emission ?? 1, spec.drag ?? 0, spec.spread ?? 0].every((n) => Number.isFinite(n) && Number.isFinite(Math.fround(n))) || spec.lifetime <= 0 || spec.radius < 0 || (spec.drag ?? 0) < 0 || (spec.emission ?? 1) < 0 || (spec.spread ?? 0) < 0 || !uint32(spec.color) || spec.seed !== void 0 && !uint32(spec.seed) || spec.blend !== void 0 && spec.blend !== "additive" && spec.blend !== "cutout")
+    throw new RangeError("Invalid cosmetic particle");
+  const lifetime = Math.ceil(spec.lifetime * hz);
+  if (lifetime > 16777216) throw new RangeError("Cosmetic lifetime exceeds exact integer tick storage");
+  return lifetime;
+}
 var GpuParticleSystem = class _GpuParticleSystem {
   constructor(device, capacity, seed, hz) {
     this.device = device;
     this.capacity = capacity;
     this.seed = seed;
     this.hz = hz;
-    if (!Number.isInteger(capacity) || capacity < 1 || capacity > 16384 || !Number.isInteger(hz) || hz < 1 || hz > 1e3) throw new RangeError("Invalid cosmetic particle capacity or fixed tick rate");
+    if (!Number.isInteger(capacity) || capacity < 1 || capacity > 16384 || !Number.isInteger(hz) || hz < 1 || hz > 1e3 || !uint32(seed))
+      throw new RangeError("Invalid cosmetic particle capacity, seed or fixed tick rate");
+    if (capacity * COMMAND_BYTES > Math.min(device.limits.maxStorageBufferBindingSize ?? Infinity, device.limits.maxBufferSize ?? Infinity) || Math.ceil(capacity / 64) > (device.limits.maxComputeWorkgroupsPerDimension ?? 65535))
+      throw new RangeError("Cosmetic particle pool exceeds adapter buffer or dispatch limits");
     this.expires = new Float64Array(capacity);
-    this.particles = device.createBuffer({ size: capacity * 80, usage: GPU_BUFFER.STORAGE | GPU_BUFFER.COPY_DST | GPU_BUFFER.COPY_SRC });
-    this.commands = device.createBuffer({ size: capacity * 128, usage: GPU_BUFFER.STORAGE | GPU_BUFFER.COPY_SRC });
-    this.uniform = device.createBuffer({ size: 16, usage: GPU_BUFFER.UNIFORM | GPU_BUFFER.COPY_DST });
+    this.freeSlots = new SlotHeap(Array.from({ length: capacity }, (_, i) => i), (a, b) => a < b);
+    this.expirySlots = new SlotHeap([], (a, b) => this.expires[a] < this.expires[b] || this.expires[a] === this.expires[b] && a < b);
+    this.staging = new ArrayBuffer(capacity * STATE_BYTES);
+    this.stagedFloats = new Float32Array(this.staging);
+    this.stagedWords = new Uint32Array(this.staging);
+    this.dirty = new Uint8Array(capacity);
+    this.firstDirty = capacity;
+    const created = [];
+    const buffer = (size, usage) => {
+      const b = device.createBuffer({ size, usage });
+      created.push(b);
+      return b;
+    };
+    try {
+      this.particles = buffer(capacity * STATE_BYTES, GPU_BUFFER.STORAGE | GPU_BUFFER.COPY_DST | GPU_BUFFER.COPY_SRC);
+      this.commands = buffer(capacity * COMMAND_BYTES, GPU_BUFFER.STORAGE | GPU_BUFFER.COPY_SRC | GPU_BUFFER.COPY_DST);
+      this.uniform = buffer(16, GPU_BUFFER.UNIFORM | GPU_BUFFER.COPY_DST);
+    } catch (error) {
+      created.forEach((b) => b.destroy());
+      throw error;
+    }
   }
   commands;
   alphaPrimitives = 0;
   particles;
   uniform;
   pipeline;
+  group;
   expires;
+  freeSlots;
+  expirySlots;
+  staging;
+  stagedFloats;
+  stagedWords;
+  dirty;
+  pending = 0;
+  firstDirty;
+  lastDirty = -1;
+  commandsDirty = false;
+  range = 0;
+  peakRange = 0;
+  live = 0;
   nextId = 1;
   accumulator = 0;
   currentTick = 0;
   disposed = false;
+  params = new ArrayBuffer(16);
+  paramsFloat = new Float32Array(this.params);
+  paramsUint = new Uint32Array(this.params);
+  uploadedBytes = 0;
+  uploadCalls = 0;
+  dispatches = 0;
+  updatedSlots = 0;
+  lastUpdateSlots = 0;
   static async create(device, options2 = {}) {
-    const p = new _GpuParticleSystem(device, options2.capacity ?? 1024, (options2.seed ?? 42) >>> 0, options2.hz ?? 120);
+    const p = new _GpuParticleSystem(device, options2.capacity ?? 1024, options2.seed ?? 42, options2.hz ?? 120);
     try {
       const module = await checkedShader(device, PARTICLES_WGSL, "fixed-tick cosmetic particles");
       p.pipeline = await device.createComputePipelineAsync({ layout: "auto", compute: { module, entryPoint: "main" } });
-      p.advance(0);
+      p.group = device.createBindGroup({ layout: p.pipeline.getBindGroupLayout(0), entries: [p.uniform, p.particles, p.commands].map((buffer, binding) => ({ binding, resource: { buffer } })) });
       return p;
     } catch (error) {
       p.dispose();
       throw error;
     }
   }
+  /** Only this prefix contains live commands. Holes retain their stable slot/order. */
   get count() {
-    return this.capacity;
+    return this.range;
   }
   get tick() {
     return this.currentTick;
   }
   get active() {
-    return this.expires.reduce((n, expiry) => n + (expiry > this.currentTick ? 1 : 0), 0);
+    return this.live;
+  }
+  get resources() {
+    return {
+      capacity: this.capacity,
+      active: this.live,
+      drawSlots: this.range,
+      pendingSpawns: this.pending,
+      allocatedBytes: this.disposed ? 0 : this.capacity * (STATE_BYTES + COMMAND_BYTES) + 16,
+      stagingBytes: this.staging.byteLength,
+      spawnUploadBytes: this.uploadedBytes,
+      spawnUploadCalls: this.uploadCalls,
+      dispatches: this.dispatches,
+      updatedSlots: this.updatedSlots,
+      lastUpdateSlots: this.lastUpdateSlots,
+      lastWorkgroups: Math.ceil(this.lastUpdateSlots / 64)
+    };
   }
   spawn(spec) {
+    return this.spawnBatch([spec])[0];
+  }
+  /** Validate the whole burst before reserving IDs/slots. Uploads coalesce at advance/snapshot. */
+  spawnBatch(specs) {
     if (this.disposed) throw new Error("Particle system is disposed");
-    if (![...spec.position, ...spec.velocity, ...spec.gravity ?? [0, 0, 0], spec.lifetime, spec.radius, spec.emission ?? 1, spec.drag ?? 0, spec.spread ?? 0].every(Number.isFinite) || spec.position.length !== 3 || spec.velocity.length !== 3 || spec.lifetime <= 0 || spec.radius < 0 || (spec.drag ?? 0) < 0 || (spec.emission ?? 1) < 0 || (spec.spread ?? 0) < 0 || !Number.isInteger(spec.color) || spec.color < 0 || spec.color > 4294967295) throw new RangeError("Invalid cosmetic particle");
-    const slot = this.expires.findIndex((expiry) => expiry <= this.currentTick);
-    if (slot < 0) throw new RangeError("Cosmetic particle capacity reached");
-    const lifetimeTicks = Math.ceil(spec.lifetime * this.hz);
-    if (lifetimeTicks > 16777216) throw new RangeError("Cosmetic lifetime exceeds exact integer tick storage");
-    if (this.nextId > 4294967295) throw new RangeError("Particle stable ID exhausted; clear the system explicitly");
-    const id = this.nextId++, data = new ArrayBuffer(80), f = new Float32Array(data), u = new Uint32Array(data);
-    f.set(spec.position, 0);
-    f.set(spec.velocity, 4);
-    f[7] = lifetimeTicks;
-    f.set([spec.radius, spec.drag ?? 0, spec.emission ?? 1, 0], 8);
-    u.set([id, (spec.seed ?? this.seed) >>> 0, spec.color, spec.blend === "cutout" ? 7 : 3], 12);
-    f.set(spec.gravity ?? [0, 0, 0], 16);
-    f[19] = spec.spread ?? 0;
-    this.device.queue.writeBuffer(this.particles, slot * 80, data);
-    this.expires[slot] = this.currentTick + lifetimeTicks;
-    return { id, slot };
+    if (specs.length > this.capacity - this.live) throw new RangeError("Cosmetic particle capacity reached");
+    if (this.nextId + specs.length - 1 > 4294967295) throw new RangeError("Particle stable ID exhausted; clear the system explicitly");
+    const lifetimes = specs.map((spec) => validateSpawn(spec, this.hz)), handles = [];
+    specs.forEach((spec, k) => {
+      const slot = this.freeSlots.pop(), id = this.nextId++, i = slot * 20;
+      this.stagedWords.fill(0, i, i + 20);
+      this.stagedFloats.set(spec.position, i);
+      this.stagedFloats.set(spec.velocity, i + 4);
+      this.stagedFloats[i + 7] = lifetimes[k];
+      this.stagedFloats.set([spec.radius, spec.drag ?? 0, spec.emission ?? 1, 0], i + 8);
+      this.stagedWords.set([id, spec.seed ?? this.seed, spec.color, spec.blend === "cutout" ? 7 : 3], i + 12);
+      this.stagedFloats.set(spec.gravity ?? [0, 0, 0], i + 16);
+      this.stagedFloats[i + 19] = spec.spread ?? 0;
+      this.expires[slot] = this.currentTick + lifetimes[k];
+      this.expirySlots.push(slot);
+      this.dirty[slot] = 1;
+      this.pending++;
+      this.firstDirty = Math.min(this.firstDirty, slot);
+      this.lastDirty = Math.max(this.lastDirty, slot);
+      this.range = Math.max(this.range, slot + 1);
+      this.peakRange = Math.max(this.peakRange, this.range);
+      this.live++;
+      handles.push({ id, slot });
+    });
+    this.commandsDirty ||= specs.length > 0;
+    return handles;
+  }
+  flushSpawns() {
+    if (!this.pending) return;
+    for (let i = this.firstDirty; i <= this.lastDirty; ) {
+      if (!this.dirty[i]) {
+        i++;
+        continue;
+      }
+      const start = i;
+      while (i <= this.lastDirty && this.dirty[i]) i++;
+      const size = (i - start) * STATE_BYTES;
+      this.device.queue.writeBuffer(this.particles, start * STATE_BYTES, this.staging, start * STATE_BYTES, size);
+      this.uploadedBytes += size;
+      this.uploadCalls++;
+    }
+    this.dirty.fill(0, this.firstDirty, this.lastDirty + 1);
+    this.pending = 0;
+    this.firstDirty = this.capacity;
+    this.lastDirty = -1;
   }
   advance(dt) {
     if (this.disposed) throw new Error("Particle system is disposed");
     if (!Number.isFinite(dt) || dt < 0 || dt > 2) throw new RangeError("Cosmetic update dt must be 0..2 seconds; subdivide longer seeks");
-    this.accumulator += dt * this.hz;
-    const steps = Math.floor(this.accumulator + 1e-9);
-    this.accumulator -= steps;
-    this.currentTick += steps;
-    const data = new ArrayBuffer(16), f = new Float32Array(data), u = new Uint32Array(data);
-    f[0] = 1 / this.hz;
-    u.set([steps, this.capacity, this.currentTick >>> 0], 1);
-    this.device.queue.writeBuffer(this.uniform, 0, data);
-    const group = this.device.createBindGroup({ layout: this.pipeline.getBindGroupLayout(0), entries: [this.uniform, this.particles, this.commands].map((buffer, binding) => ({ binding, resource: { buffer } })) });
-    const encoder = this.device.createCommandEncoder({ label: "cosmetic particle fixed ticks" }), pass = encoder.beginComputePass();
-    pass.setPipeline(this.pipeline);
-    pass.setBindGroup(0, group);
-    pass.dispatchWorkgroups(Math.ceil(this.capacity / 64));
-    pass.end();
-    this.device.queue.submit([encoder.finish()]);
+    const accumulated = this.accumulator + dt * this.hz, steps = Math.floor(accumulated + 1e-9), tick2 = this.currentTick + steps;
+    if (!Number.isSafeInteger(tick2)) throw new RangeError("Cosmetic tick counter exhausted; clear the system explicitly");
+    this.flushSpawns();
+    this.lastUpdateSlots = 0;
+    if (this.range > 0 && (steps > 0 || this.commandsDirty)) {
+      this.paramsFloat[0] = 1 / this.hz;
+      this.paramsUint.set([steps, this.range, tick2 >>> 0], 1);
+      this.device.queue.writeBuffer(this.uniform, 0, this.params);
+      const encoder = this.device.createCommandEncoder({ label: "cosmetic particle fixed ticks" }), pass = encoder.beginComputePass();
+      pass.setPipeline(this.pipeline);
+      pass.setBindGroup(0, this.group);
+      pass.dispatchWorkgroups(Math.ceil(this.range / 64));
+      pass.end();
+      this.device.queue.submit([encoder.finish()]);
+      this.dispatches++;
+      this.updatedSlots += this.range;
+      this.lastUpdateSlots = this.range;
+      this.commandsDirty = false;
+    }
+    this.accumulator = Math.max(0, accumulated - steps);
+    this.currentTick = tick2;
+    while (this.expirySlots.values.length && this.expires[this.expirySlots.values[0]] <= tick2) {
+      const slot = this.expirySlots.pop();
+      this.expires[slot] = 0;
+      this.live--;
+      this.freeSlots.push(slot);
+    }
+    while (this.range > 0 && this.expires[this.range - 1] === 0) this.range--;
   }
   /** Explicit diagnostic readback; ordinary update and drawing never call it. */
   async snapshot() {
     if (this.disposed) throw new Error("Particle system is disposed");
-    const buffer = this.device.createBuffer({ size: this.capacity * 80, usage: GPU_BUFFER.COPY_DST | GPU_BUFFER.MAP_READ });
+    this.flushSpawns();
+    const buffer = this.device.createBuffer({ size: this.capacity * STATE_BYTES, usage: GPU_BUFFER.COPY_DST | GPU_BUFFER.MAP_READ });
     try {
       const e = this.device.createCommandEncoder();
-      e.copyBufferToBuffer(this.particles, 0, buffer, 0, this.capacity * 80);
+      e.copyBufferToBuffer(this.particles, 0, buffer, 0, this.capacity * STATE_BYTES);
       this.device.queue.submit([e.finish()]);
       await buffer.mapAsync(GPU_BUFFER.MAP_READ);
       return new Float32Array(buffer.getMappedRange().slice(0));
@@ -354,11 +516,21 @@ var GpuParticleSystem = class _GpuParticleSystem {
   }
   clear() {
     if (this.disposed) throw new Error("Particle system is disposed");
+    if (this.peakRange) {
+      const zero = new Uint8Array(this.peakRange * COMMAND_BYTES);
+      this.device.queue.writeBuffer(this.particles, 0, zero.subarray(0, this.peakRange * STATE_BYTES));
+      this.device.queue.writeBuffer(this.commands, 0, zero);
+    }
     this.expires.fill(0);
+    this.dirty.fill(0);
+    this.expirySlots.values.length = 0;
+    this.freeSlots.values.length = this.capacity;
+    for (let i = 0; i < this.capacity; i++) this.freeSlots.values[i] = i;
     this.nextId = 1;
-    this.accumulator = this.currentTick = 0;
-    this.device.queue.writeBuffer(this.particles, 0, new Uint8Array(this.capacity * 80));
-    this.advance(0);
+    this.accumulator = this.currentTick = this.range = this.peakRange = this.live = this.pending = this.lastUpdateSlots = 0;
+    this.firstDirty = this.capacity;
+    this.lastDirty = -1;
+    this.commandsDirty = false;
   }
   dispose() {
     if (this.disposed) return;
@@ -366,6 +538,13 @@ var GpuParticleSystem = class _GpuParticleSystem {
     this.particles.destroy();
     this.commands.destroy();
     this.uniform.destroy();
+    this.live = this.range = this.pending = this.lastUpdateSlots = 0;
+    this.expirySlots.values.length = this.freeSlots.values.length = 0;
+    this.staging = new ArrayBuffer(0);
+    this.stagedFloats = new Float32Array(0);
+    this.stagedWords = new Uint32Array(0);
+    this.expires = new Float64Array(0);
+    this.dirty = new Uint8Array(0);
   }
 };
 
@@ -522,6 +701,7 @@ function metrics() {
   element("gpu-time").textContent = gpu?.timings.gpu != null ? `${gpu.timings.gpu.toFixed(2)} ms` : "\uBBF8\uC81C\uACF5";
   element("primitives").textContent = resources ? resources.primitives.toLocaleString() : currentScene.commands.length.toLocaleString();
   element("tile-count").textContent = resources ? resources.culling === "tiled" ? `${resources.tiles}\uAC1C \uD0C0\uC77C \xB7 ${(resources.tileBytes / 1024).toFixed(0)} KiB` : "\uC804\uCCB4 \uB3C4\uD615 \uC9C1\uC811 \uAC80\uC0AC" : "CPU reference \xB7 \uC815\uC9C0\uD654\uBA74";
+  element("particle-count").textContent = particles ? `\uC785\uC790 ${particles.active} / ${particles.capacity} \xB7 \uC81C\uCD9C \uC2AC\uB86F ${particles.count}` : "GPU \uC785\uC790 \uBE44\uD65C\uC131";
 }
 function requestCpu() {
   currentScene = scene();
@@ -690,11 +870,12 @@ input("timeline").oninput = () => {
 };
 button("burst").onclick = () => {
   if (!particles || busyAction) return;
-  const available = particles.capacity - particles.active;
+  const available = particles.capacity - particles.active, burst = [];
   for (let i = 0; i < Math.min(available, 128); i++) {
     const angle = i * 2.399963229728653, speed = 18 + i % 41;
-    particles.spawn({ position: [currentScene.width / 2, currentScene.height / 2, 30], velocity: [Math.cos(angle) * speed, Math.sin(angle) * speed - 10, 0], gravity: [0, 16, 0], lifetime: 2, radius: i % 5 ? 0.65 : 1.2, color: i % 2 ? 4294957162 : 4289752063, emission: 0.8, spread: 2, drag: 0.1 });
+    burst.push({ position: [currentScene.width / 2, currentScene.height / 2, 30], velocity: [Math.cos(angle) * speed, Math.sin(angle) * speed - 10, 0], gravity: [0, 16, 0], lifetime: 2, radius: i % 5 ? 0.65 : 1.2, color: i % 2 ? 4294957162 : 4289752063, emission: 0.8, spread: 2, drag: 0.1 });
   }
+  particles.spawnBatch(burst);
   particles.advance(0);
   clock.playing = true;
   clock.suspend();

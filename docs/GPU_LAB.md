@@ -27,9 +27,9 @@ The page reports the adapter identity and whether the API identifies it as a sof
 ## Authoring and comparison
 
 - **Orbit / distributed / overlapping** change the layout of the diagnostic primitives. Overlapping is deliberately a dense fallback case, not a quality preset.
-- **Additional shape count** adds 32–4096 original shapes to 133 core/ribbon commands. Active particles add their resident command capacity; empty particle systems are not merged.
+- **Additional shape count** adds 32–4096 original shapes to 133 core/ribbon commands. Active particles add their occupied command prefix; empty particle systems are not merged. Live count, allocated capacity and submitted particle slots are displayed separately.
 - **Culling** selects automatic tiles, a tiled request or the full-command baseline. Limited tile memory and per-tile overflow preserve the exact full scan.
-- **GPU particle burst** creates up to 128 cosmetic particles within a 512-slot pool, with seeded initial variation, outward velocity, gravity and a two-second lifetime. It does not affect gameplay.
+- **GPU particle burst** creates up to 128 cosmetic particles within a 512-slot pool, with seeded initial variation, outward velocity, gravity and a two-second lifetime. A fresh burst uploads its 128 consecutive slots together and dispatches two 64-slot workgroups; the former full-pool path dispatched eight. Further bursts reuse free slots and command-buffer capacity. This reduces submitted work without changing the fixed-tick shader or claiming a hardware speedup. It does not affect gameplay.
 - **Current-frame inspection** pauses playback and reads actual GPU tile data. The reported candidate visits count one scan over native pixels, weighted for partial edge tiles. Bounds-check figures are a conservative upper bound. A candidate reduction percentage is not a speedup percentage.
 - **Direct / tile pixel comparison** freezes the same geometry, particle state and finishing options, captures both paths, and reports differing RGBA channel count/max difference. It is one current-adapter check, not an artistic-quality or all-device certificate.
 - **Final 8-color lock** applies to visible final RGB after bloom and grading, preserving alpha. The locked palette is a demonstration choice; imported assets retain their original source values.

@@ -1,6 +1,6 @@
 import { WebGPUCinematicRenderer } from '../src/render/webgpu.js';
 import { WebGPUDrawRenderer } from '../src/render/draw-ir-gpu.js';
-import { GpuParticleSystem } from '../src/render/gpu-particles.js';
+import { GpuParticleSystem, type CosmeticParticleSpawn } from '../src/render/gpu-particles.js';
 import { parseDrawScene, serializeDrawScene, type DrawScene } from '../src/render/draw-ir.js';
 import { createGpuLabScene, type GpuLabDistribution } from '../src/examples/gpu-lab.js';
 import { integerViewport, PlaybackClock } from '../src/authoring/clock.js';
@@ -53,6 +53,7 @@ function metrics(): void {
   element('gpu-time').textContent = gpu?.timings.gpu != null ? `${gpu.timings.gpu.toFixed(2)} ms` : '미제공';
   element('primitives').textContent = resources ? resources.primitives.toLocaleString() : currentScene.commands.length.toLocaleString();
   element('tile-count').textContent = resources ? resources.culling === 'tiled' ? `${resources.tiles}개 타일 · ${(resources.tileBytes / 1024).toFixed(0)} KiB` : '전체 도형 직접 검사' : 'CPU reference · 정지화면';
+  element('particle-count').textContent = particles ? `입자 ${particles.active} / ${particles.capacity} · 제출 슬롯 ${particles.count}` : 'GPU 입자 비활성';
 }
 function requestCpu(): void {
   currentScene = scene();
@@ -127,12 +128,12 @@ for (const id of ['bloom', 'palette']) input(id).onchange = invalidate;
 input('timeline').oninput = () => { clock.playing = false; clock.seek(Number(input('timeline').value)); particles?.clear(); syncControls(); invalidate(); };
 button('burst').onclick = () => {
   if (!particles || busyAction) return;
-  const available = particles.capacity - particles.active;
+  const available = particles.capacity - particles.active, burst: CosmeticParticleSpawn[] = [];
   for (let i = 0; i < Math.min(available, 128); i++) {
     const angle = i * 2.399963229728653, speed = 18 + i % 41;
-    particles.spawn({ position: [currentScene.width / 2, currentScene.height / 2, 30], velocity: [Math.cos(angle) * speed, Math.sin(angle) * speed - 10, 0], gravity: [0, 16, 0], lifetime: 2, radius: i % 5 ? .65 : 1.2, color: i % 2 ? 0xffffd86a : 0xffb06bff, emission: .8, spread: 2, drag: .1 });
+    burst.push({ position: [currentScene.width / 2, currentScene.height / 2, 30], velocity: [Math.cos(angle) * speed, Math.sin(angle) * speed - 10, 0], gravity: [0, 16, 0], lifetime: 2, radius: i % 5 ? .65 : 1.2, color: i % 2 ? 0xffffd86a : 0xffb06bff, emission: .8, spread: 2, drag: .1 });
   }
-  particles.advance(0); clock.playing = true; clock.suspend(); dirty = true; syncControls();
+  particles.spawnBatch(burst); particles.advance(0); clock.playing = true; clock.suspend(); dirty = true; syncControls();
 };
 button('inspect').onclick = () => { void action(async () => {
   renderGpu(); const stats = await draw!.inspectCulling();

@@ -101,7 +101,7 @@ const stats = await draw.inspectCulling(); // explicit diagnostic readback only
 console.log(stats.candidatePixelVisits, stats.directPixelVisits, stats.overflowTiles);
 ```
 
-`resources` includes tile/merge/output allocation bytes, current primitive/alpha counts and the active culling mode. Tile storage is `ceil(width/16) × ceil(height/16) × 257 × 4` bytes. `inspectCulling()` allows one pending bounded inspection, preserves partial edge-tile weighting, and reports a conservative upper bound for binning bound checks. It never runs implicitly during ordinary rendering. Asset buffers, output and merge buffers are included in the configured DrawIR budget; optional bins give way before geometry does. The cinematic renderer has its own budget because it may be shared by other producers.
+`resources` includes tile/merge/output allocation bytes, current primitive/alpha counts and the active culling mode. Tile storage is `ceil(width/16) × ceil(height/16) × 257 × 4` bytes. `inspectCulling()` allows one pending bounded inspection, preserves partial edge-tile weighting, and reports a conservative upper bound for binning bound checks. It never runs implicitly during ordinary rendering. Asset buffers, output and merge buffers are included in the configured DrawIR budget; optional bins give way before geometry does. Merge capacity grows geometrically within the remaining budget and is reused when particle counts shrink or a burst ends. Only the current command prefix is copied and rasterized. Retained capacity is released when a larger scene needs the memory. Draw/particle bind groups are reused while their bound buffers stay the same. A failed replacement output allocation leaves the previous output intact. The cinematic renderer has its own budget because it may be shared by other producers.
 
 [GPU Lab](GPU_LAB.md) exposes the real path in the browser, including GPU particles, direct/tiled pixel comparison, a captured-bin inspector, palette-locked output, PNG capture and DrawIR JSON save/open. Existing Studio catalog callbacks continue to author geometry on the CPU.
 
@@ -109,9 +109,26 @@ The total primitive budget is 16,384 after mesh/ribbon expansion. The submitted 
 
 ## Cosmetic particles
 
-Particles use stable CPU-assigned IDs, an integer hash for seeded initial variation, fixed 120 Hz ticks by default, and a resident state/DrawIR command buffer. Spawn writes one slot; updates and command generation are compute operations. A host can merge their command buffer with its main scene so opaque depth and transparent coverage are resolved together.
+Particles use stable CPU-assigned IDs, an integer hash for seeded initial variation, fixed 120 Hz ticks by default, and a resident state/DrawIR command buffer. Updates and command generation are compute operations. A host can merge their command buffer with its main scene so opaque depth and transparent coverage are resolved together.
 
-Lifetime is an explicit integer tick count, avoiding floating accumulation at death boundaries. Updates retain fractional elapsed time. Capacity exhaustion throws rather than overwriting a still-live slot. A single `advance()` accepts at most two seconds; subdivide longer seeks. `snapshot()` is an explicit diagnostic readback. Cosmetic output never feeds gameplay collision or authoritative state. Identical fixed ticks were checked on one software adapter; cross-device bit-identical floating-point trajectories are not promised.
+`spawn()` and `spawnBatch(specs)` stage only newly spawned state until `advance()` or an explicit `snapshot()`. Consecutive dirty slots share one upload. Disjoint ranges never overwrite live GPU state between them. `spawnBatch()` validates the complete burst and available capacity before reserving any IDs/slots; a malformed later entry does not partially create a burst. Both APIs assign the same IDs and lowest available slots for the same ordered spawns. `snapshot()` flushes staging but does not advance time; call `advance(0)` to regenerate drawable commands at the current tick.
+
+```ts
+const burst = Array.from({ length: 128 }, (_, i) => ({
+  position: [40, 30, 2] as const,
+  velocity: [Math.cos(i * 2.4) * 20, Math.sin(i * 2.4) * 20, 0] as const,
+  lifetime: 2, radius: 1, color: 0xffffc080,
+}));
+particles.spawnBatch(burst);
+particles.advance(0); // one state upload for a contiguous burst; commands ready
+finish.renderBuffers(draw.render(scene, particles), { background: null });
+```
+
+`capacity` describes allocation. `active` is a constant-time live count, while `count` is the occupied command prefix ending at the highest live slot. Stable holes are retained; this is not GPU compaction or particle dropping. Expiration uses a CPU deadline heap without reading GPU state. A final update clears particles at their exact lifetime before the prefix shrinks. Empty pools and unchanged zero-tick updates skip compute work. `clear()` cancels staged spawns, clears used state/commands, resets IDs/time, and preserves the allocation for another deterministic burst.
+
+For a fresh 4,096-slot pool with 128 live particles, the first update uses **2 workgroups instead of 64** and one contiguous spawn write instead of 128 individual writes. This is a host workload count, not a measured frame-rate improvement. Fragmented live slots can keep a longer prefix. `resources` reports active/draw slots, pending spawns, GPU allocation and CPU staging bytes, cumulative spawn upload bytes/calls, dispatch count and the last update range. CPU staging costs 80 bytes per allocated particle; GPU state/commands remain resident.
+
+Lifetime is an explicit integer tick count, avoiding floating accumulation at death boundaries. Updates retain fractional elapsed time. Capacity exhaustion throws rather than overwriting a still-live slot. A single `advance()` accepts at most two seconds; subdivide longer seeks. Seeds are unsigned 32-bit integers; positions, gravity and velocities require three finite float32-representable components. Pool sizes are checked against adapter buffer/dispatch limits before allocation. `snapshot()` is an explicit diagnostic readback. Cosmetic output never feeds gameplay collision or authoritative state. Identical fixed ticks were checked on one software adapter; cross-device bit-identical floating-point trajectories are not promised.
 
 ## Bounded capture
 
