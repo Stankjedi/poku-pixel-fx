@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "source": "poku-pixel-fx",
-  "sourceHash": "7f74e2e154f5bf2d7b7ea08913c2263d64a6d5a1b0000f410aa0d4194016d9c6",
+  "sourceHash": "4a99f4301fd659ca8a018ea2980b7a852cfd2a69e84eaeb6a9472560046bab45",
   "files": {
     "index.html": "2308e11a71de9a0fbd4ff250d8fe57a7cd54cb912f944075771da83a97116f2d",
     "app.js": "151d597dd2a80a7e206c46997fe808f03656feb975ff0dc624c845b4fceb6061",
     "3d.js": "a4754bd757afcaac1ce8742d894c00ee47ebcb98e2525d0217f09538ff7ab952",
     "3d.html": "9dcef30de8480201565c8d8624ded082915a58057b340a144970079b2efa0471",
-    "studio.js": "7d23c6c8dc0a13e08cdb549e916c40202fd786293e58ee91e162ed03d4429f98",
+    "studio.js": "3b2f3f6533f3ea1a9e6ff7e3b3cc8ad656da69e325c36441cebeb115653fd2fb",
     "studio-worker.js": "5246f9191e2ebe17dcb24a1569bfedeceba612155da6230e0f05402147dc539e",
     "studio.html": "4fa19914dddc50bea9bf2ec74080c89072d710c52ff78d5ad0cb2321824d2ba2",
     "studio.css": "1b25e7195cd348439964d600a7fe4cff3d7420715efba78de053b411f2c4ea0a",

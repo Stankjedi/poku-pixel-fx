@@ -132,6 +132,58 @@ function observationsFromReview(input2) {
 // src/version.ts
 var ENGINE_VERSION = "0.5.0";
 
+// src/render/atlas-page.ts
+var AtlasPageBuffer = class {
+  constructor(maxTextureSize, channels = {}) {
+    this.maxTextureSize = maxTextureSize;
+    if (!Number.isSafeInteger(maxTextureSize) || maxTextureSize < 1 || maxTextureSize > 16384)
+      throw new RangeError("Atlas page limit must be an integer within 1..16384");
+    this.channels = { ...channels };
+  }
+  width = 0;
+  height = 0;
+  color = new Uint8ClampedArray(0);
+  emission;
+  radiance;
+  occlusion;
+  channels;
+  /** Capacity in bytes, excluding encoded output and transient buffers during a growth. */
+  get byteLength() {
+    return this.color.byteLength + (this.emission?.byteLength ?? 0) + (this.radiance?.byteLength ?? 0) + (this.occlusion?.byteLength ?? 0);
+  }
+  /** Geometric growth amortizes copying; the packer still determines the exported dimensions. */
+  ensure(width, height) {
+    if (![width, height].every((v) => Number.isSafeInteger(v) && v > 0 && v <= this.maxTextureSize))
+      throw new RangeError("Atlas page contents exceed its configured limit");
+    if (width <= this.width && height <= this.height) return;
+    const grow = (required, current) => Math.max(
+      current,
+      Math.min(this.maxTextureSize, 2 ** Math.ceil(Math.log2(required)))
+    );
+    const nextWidth = grow(width, this.width), nextHeight = grow(height, this.height);
+    const pixels = nextWidth * nextHeight, color = new Uint8ClampedArray(pixels * 4);
+    const emission = this.channels.emission ? new Float32Array(pixels * 3) : void 0;
+    const radiance = this.channels.radiance ? new Float32Array(pixels * 3) : void 0;
+    const occlusion = this.channels.occlusion ? new Float32Array(pixels).fill(1) : void 0;
+    const copy = (source, target, channels) => {
+      if (!source || !target) return;
+      const row = this.width * channels;
+      for (let y = 0; y < this.height; y++)
+        target.set(source.subarray(y * row, (y + 1) * row), y * nextWidth * channels);
+    };
+    copy(this.color, color, 4);
+    copy(this.emission, emission, 3);
+    copy(this.radiance, radiance, 3);
+    copy(this.occlusion, occlusion, 1);
+    this.width = nextWidth;
+    this.height = nextHeight;
+    this.color = color;
+    this.emission = emission;
+    this.radiance = radiance;
+    this.occlusion = occlusion;
+  }
+};
+
 // gallery/studio-export.ts
 var encoder = new TextEncoder();
 var MAX_BYTES = 128 * 1024 * 1024;
@@ -196,7 +248,7 @@ function exportProjectAtlas(project2, onProgress) {
   const duplicates = /* @__PURE__ */ new Map();
   let reused = 0;
   const renderMode = project2.renderProfile?.mode === "cinematic" ? "cinematic" : "legacy";
-  let info, page = -1, pageColor = new Uint8Array(0), pageEmission = new Float32Array(0), bytes = 0;
+  let info, page = -1, pageBuffer, bytes = 0;
   const manifest = {
     schema: "poku-asset/v1",
     id: project2.id,
@@ -220,12 +272,13 @@ function exportProjectAtlas(project2, onProgress) {
     records.push({ path: name, bytes: blob.size, sha256: await sha256(blob) });
   }
   async function flush() {
-    if (page < 0) return;
+    if (page < 0 || !pageBuffer) return;
     const { w, h } = packer.pages[page], color = new Uint8Array(w * h * 4), emission = new Float32Array(w * h * 3);
     let hasEmission = false;
+    const { color: pageColor, emission: pageEmission, width: stride } = pageBuffer;
     for (let y = 0; y < h; y++) {
-      color.set(pageColor.subarray(y * PAGE * 4, y * PAGE * 4 + w * 4), y * w * 4);
-      emission.set(pageEmission.subarray(y * PAGE * 3, y * PAGE * 3 + w * 3), y * w * 3);
+      color.set(pageColor.subarray(y * stride * 4, y * stride * 4 + w * 4), y * w * 4);
+      emission.set(pageEmission.subarray(y * stride * 3, y * stride * 3 + w * 3), y * w * 3);
     }
     for (const v of emission) if (v !== 0) {
       hasEmission = true;
@@ -241,8 +294,7 @@ function exportProjectAtlas(project2, onProgress) {
       entry.emission = { image: name2, format: "float32-le", channels: 3, colorSpace: "linear-srgb" };
     }
     manifest.pages.push(entry);
-    pageColor = new Uint8Array(0);
-    pageEmission = new Float32Array(0);
+    pageBuffer = void 0;
   }
   async function message(m) {
     if (cancelled || m.id !== id) return;
@@ -280,22 +332,24 @@ function exportProjectAtlas(project2, onProgress) {
           await flush();
           page = placement.page;
           if (page >= 16) throw new RangeError("\uBE0C\uB77C\uC6B0\uC800 \uB0B4\uBCF4\uB0B4\uAE30\uB294 \uCD5C\uB300 16\uAC1C atlas \uD398\uC774\uC9C0\uC785\uB2C8\uB2E4. CLI\uB97C \uC0AC\uC6A9\uD558\uC138\uC694.");
-          pageColor = new Uint8Array(PAGE * PAGE * 4);
-          pageEmission = new Float32Array(PAGE * PAGE * 3);
+          pageBuffer = new AtlasPageBuffer(PAGE, { emission: true });
         }
+        const used = packer.pages[page];
+        pageBuffer.ensure(used.w, used.h);
+        const { color: pageColor, emission: pageEmission, width: stride } = pageBuffer;
         for (let y = 0; y < trim.h; y++) {
-          const source = (y + trim.y) * info.width + trim.x, dest = (placement.rect.y + y) * PAGE + placement.rect.x;
+          const source = (y + trim.y) * info.width + trim.x, dest = (placement.rect.y + y) * stride + placement.rect.x;
           pageColor.set(rgba.subarray(source * 4, (source + trim.w) * 4), dest * 4);
           pageEmission.set(emission.subarray(source * 3, (source + trim.w) * 3), dest * 3);
         }
         if (settings.extrude) {
-          extrudeAtlasRegion(pageColor, PAGE, 4, placement.rect, settings.extrude);
-          extrudeAtlasRegion(pageEmission, PAGE, 3, placement.rect, settings.extrude);
+          extrudeAtlasRegion(pageColor, stride, 4, placement.rect, settings.extrude);
+          extrudeAtlasRegion(pageEmission, stride, 3, placement.rect, settings.extrude);
         }
         if (settings.deduplicate) duplicates.set(key, placement);
       }
       manifest.frames.push({ ...placement, sourceSize: [info.width, info.height], trimOffset: [trim.x, trim.y], pivot: info.origin, duration: frameDurationMs(m.index, info.fps), time: m.time, frozen: m.frozen, ...m.sockets ? { sockets: m.sockets } : {} });
-      onProgress(`${m.index + 1} / ${info.count} \uD504\uB808\uC784 \xB7 ${page + 1}\uD398\uC774\uC9C0 \xB7 \uC911\uBCF5 ${reused}\uC7A5 \uC7AC\uC0AC\uC6A9 \xB7 ${Math.round(bytes / 1048576)} MiB`);
+      onProgress(`${m.index + 1} / ${info.count} \uD504\uB808\uC784 \xB7 ${page + 1}\uD398\uC774\uC9C0 \xB7 \uC911\uBCF5 ${reused}\uC7A5 \uC7AC\uC0AC\uC6A9 \xB7 \uCD9C\uB825 ${Math.round(bytes / 1048576)} MiB \xB7 \uD398\uC774\uC9C0 \uBC84\uD37C ${((pageBuffer?.byteLength ?? 0) / 1048576).toFixed(1)} MiB`);
       worker.postMessage({ type: "ack", id });
       return;
     }
@@ -320,6 +374,8 @@ function exportProjectAtlas(project2, onProgress) {
       if (!settled) {
         settled = true;
         worker.terminate();
+        pageBuffer = void 0;
+        files.length = 0;
         fail(error);
       }
     });
@@ -328,6 +384,8 @@ function exportProjectAtlas(project2, onProgress) {
     if (!settled) {
       settled = true;
       worker.terminate();
+      pageBuffer = void 0;
+      files.length = 0;
       fail(new Error(e.message));
     }
   };
@@ -338,8 +396,8 @@ function exportProjectAtlas(project2, onProgress) {
     settled = true;
     worker.postMessage({ type: "cancel", id });
     worker.terminate();
-    pageColor = new Uint8Array(0);
-    pageEmission = new Float32Array(0);
+    pageBuffer = void 0;
+    files.length = 0;
     fail(new Error("\uB0B4\uBCF4\uB0B4\uAE30\uAC00 \uCDE8\uC18C\uB418\uC5C8\uC2B5\uB2C8\uB2E4."));
   } };
 }
