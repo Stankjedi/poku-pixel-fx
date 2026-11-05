@@ -1,6 +1,6 @@
 import { type Frame3D, type Color3D, clearFrame3D, color3D } from "./frame.js";
-import { channelToLinear } from "../render/linear.js";
 import { blendOver, type AlphaMode } from "../render/coverage.js";
+import { surfacesFor3D, type SurfaceFragments3D } from "./surface.js";
 import { type Vec3, clamp3, cross3, dot3, norm3, sub3, TAU3 } from "./math.js";
 
 const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
@@ -36,9 +36,11 @@ export class Painter3D {
   private ringCoverage?: Float32Array;
   private ringDepth?: Float32Array;
   private readonly ringPixels: number[] = [];
+  private readonly surfaces: SurfaceFragments3D;
 
   constructor(frame: Frame3D, camera: Camera3D = DEFAULT_CAMERA_3D) {
     this.frame = frame;
+    this.surfaces = surfacesFor3D(frame);
     this.camera = camera;
     this.setCamera(camera);
   }
@@ -53,42 +55,49 @@ export class Painter3D {
   begin(background: Color3D = "#0a1424") { clearFrame3D(this.frame, background); return this; }
   get alphaMode(): AlphaMode { return this.frame.alphaMode ?? "coverage"; }
   set alphaMode(mode: AlphaMode) { this.frame.alphaMode = mode; }
-  project(point: Vec3): Projected3D {
+  project(point: Vec3, out?: Projected3D): Projected3D {
     const x = point[0] - this.origin[0], y = point[1] - this.origin[1], z = point[2] - this.origin[2];
     const u = x * this.cy - z * this.sy, v = x * this.sy + z * this.cy;
     const up = y * this.ce - v * this.se;
     const depth = y * this.se + v * this.ce;
     const perspective = this.camera.projection === "perspective" ? 1 / Math.max(0.3, 1 - depth * (this.camera.perspective ?? 0.025)) : 1;
     const scale = this.scale * perspective;
-    return { x: this.frame.w * 0.5 + u * scale, y: this.frame.h * 0.61 - up * scale, depth, scale };
+    const result = out ?? { x: 0, y: 0, depth: 0, scale: 0 };
+    result.x = this.frame.w * 0.5 + u * scale; result.y = this.frame.h * 0.61 - up * scale;
+    result.depth = depth; result.scale = scale;
+    return result;
   }
-  private addLight(i: number, col: number, amount: number) {
-    if (amount <= 0) return;
-    const hdr = this.frame.hdrLight;
-    if (hdr) {
-      const j = i * 3;
-      hdr[j] += channelToLinear(col, 0) * amount;
-      hdr[j + 1] += channelToLinear(col, 8) * amount;
-      hdr[j + 2] += channelToLinear(col, 16) * amount;
-    }
-    const previous = this.frame.light[i];
-    const r = Math.min(255, (previous & 255) + (col & 255) * amount) | 0;
-    const g = Math.min(255, ((previous >>> 8) & 255) + ((col >>> 8) & 255) * amount) | 0;
-    const b = Math.min(255, ((previous >>> 16) & 255) + ((col >>> 16) & 255) * amount) | 0;
-    this.frame.light[i] = (0xff000000 | (b << 16) | (g << 8) | r) >>> 0;
-  }
-  private put(x: number, y: number, depth: number, color: number, alpha: number, emission: number) {
+  private put(x: number, y: number, depth: number, color: number, alpha: number, emission: number, emissionColor = color) {
     if (x < 0 || x >= this.frame.w || y < 0 || y >= this.frame.h || alpha <= 0) return;
     const dither = this.alphaMode === "dither";
     const opacity = clamp3(alpha) * (color >>> 24) / 255;
     if (opacity <= 0 || (dither && opacity < 1 && opacity <= BAYER4[((y & 3) << 2) | (x & 3)])) return;
     const i = y * this.frame.w + x;
-    const z = Math.fround(depth);
-    if (z < this.frame.depth[i]) return;
-    // Retain the nearest-surface contract. Translucent meshes should be submitted back-to-front.
-    this.frame.depth[i] = z;
-    this.frame.color[i] = dither ? (color | 0xff000000) >>> 0 : blendOver(this.frame.color[i], color, alpha);
-    if (emission > 0) this.addLight(i, color, emission * (dither ? 1 : opacity));
+    this.surfaces.put(i, depth, dither ? (color | 0xff000000) >>> 0 : color, dither ? 1 : clamp3(alpha), emission, emissionColor);
+  }
+  /** A custom material sample using the same surface coverage and depth as primitives. */
+  pixel(x: number, y: number, depth: number, color: Color3D, alpha = 1, emission = 0, emissionColor: Color3D = color) {
+    this.put(x, y, depth, color3D(color), alpha, emission, color3D(emissionColor));
+  }
+  /** Opaque depth only; translucent surfaces must not truncate a volume ray. */
+  opaqueDepthAt(x: number, y: number) { return this.surfaces.opaqueDepth(y * this.frame.w + x); }
+  /** Backing material before queued transparent samples, for custom ray rasterizers. */
+  opaqueColorAt(x: number, y: number) { return this.surfaces.opaqueColor(y * this.frame.w + x); }
+  /** Explicit optical glow at one pixel. Its light is independent of surface visibility. */
+  screenLight(x: number, y: number, color: Color3D, strength = 1) {
+    if (x >= 0 && x < this.frame.w && y >= 0 && y < this.frame.h) this.surfaces.glow(y * this.frame.w + x, color3D(color), strength);
+  }
+  /** Optical post effects can keep their already-integrated linear radiance unclamped. */
+  screenLightRGB(x: number, y: number, lr: number, lg: number, lb: number, hr: number, hg: number, hb: number) {
+    this.surfaces.glowRGB(y * this.frame.w + x, lr, lg, lb, hr, hg, hb);
+  }
+  /** Only for a known owned mask (e.g. an event horizon); foreground ownership is caller-tested. */
+  clearEmission(x: number, y: number, screen = false) { this.surfaces.clearEmission(y * this.frame.w + x, screen); }
+  /** Capture explicit direct raster writes as the input to a new resolved post pass. */
+  adoptResolved() { this.surfaces.adoptResolved(); return this; }
+  /** Preintegrated material ray. The caller supplies premultiplied legacy and linear light. */
+  volumePixel(x: number, y: number, depth: number, color: number, alpha: number, lr: number, lg: number, lb: number, hr: number, hg: number, hb: number) {
+    this.surfaces.layer(y * this.frame.w + x, depth, color, alpha, lr, lg, lb, hr, hg, hb, false);
   }
   /** A single voxel-like camera-facing particle. Radius is in world units, not screen pixels. */
   point(position: Vec3, radius: number, color: Color3D, alpha = 1, emission = 0) {
@@ -113,6 +122,11 @@ export class Painter3D {
   line(a: Vec3, b: Vec3, radius: number, color: Color3D, alpha = 1, emission = 0) {
     if (radius <= 0 || alpha <= 0) return;
     const p = this.project(a), q = this.project(b);
+    this.lineProjected(p, q, radius, color, alpha, emission);
+  }
+  /** Reuse camera projections shared by a mesh/edge set. Inputs are borrowed, never modified. */
+  lineProjected(p: Projected3D, q: Projected3D, radius: number, color: Color3D, alpha = 1, emission = 0) {
+    if (radius <= 0 || alpha <= 0) return;
     const c = color3D(color);
     this.rasterLine(p, q, radius, (x, y, depth, coverage) => this.put(x, y, depth, c, alpha * coverage, emission));
   }
@@ -135,8 +149,12 @@ export class Painter3D {
   /** Filled, z-buffered pixel triangle; low-poly geometry remains solid under orbit. */
   triangle(a: Vec3, b: Vec3, c: Vec3, color: Color3D, alpha = 1, emission = 0) {
     if (alpha <= 0) return;
-    const A = this.project(a), w = this.frame.w, h = this.frame.h;
-    let B = this.project(b), C = this.project(c);
+    this.triangleProjected(this.project(a), this.project(b), this.project(c), color, alpha, emission);
+  }
+  /** Raster a triangle from cached shared-vertex projections. */
+  triangleProjected(A: Projected3D, B: Projected3D, C: Projected3D, color: Color3D, alpha = 1, emission = 0) {
+    if (alpha <= 0) return;
+    const w = this.frame.w, h = this.frame.h;
     // Shared vertices snap to the same subpixel lattice; integer edge equations give each
     // shared edge exactly one owner. No cracks or double alpha/emission along a mesh diagonal.
     const ax = Math.round(A.x * SUBPIXEL), ay = Math.round(A.y * SUBPIXEL);
@@ -205,7 +223,7 @@ export class Painter3D {
     }
     pixels.length = 0;
   }
-  /** Separate additive light-buffer disc, independent of the pixel color buffer. */
+  /** Explicit screen-space optical glow; unlike surface emission it survives foreground geometry. */
   glow(position: Vec3, radius: number, color: Color3D, strength = 1) {
     if (radius <= 0 || strength <= 0) return;
     const p = this.project(position), r = Math.max(1, radius * p.scale), c = color3D(color), w = this.frame.w, h = this.frame.h;
@@ -214,10 +232,10 @@ export class Painter3D {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const d = ((x + 0.5 - p.x) ** 2 + (y + 0.5 - p.y) ** 2) / (r * r);
       if (d >= 1) continue;
-      this.addLight(y * w + x, c, (1 - d) ** 2 * strength);
+      this.surfaces.glow(y * w + x, c, (1 - d) ** 2 * strength);
     }
   }
-  /** Depth-tested opaque sphere; the front hemisphere occludes color and both light buffers. */
+  /** Depth-tested opaque sphere; the front hemisphere occludes color and surface emission. */
   sphere(center: Vec3, radius: number, fill: Color3D, edge: Color3D = fill) {
     if (radius <= 0) return;
     const p = this.project(center), r = radius * p.scale;
@@ -228,14 +246,7 @@ export class Painter3D {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const dx = (x + 0.5 - p.x) / r, dy = (y + 0.5 - p.y) / r, d2 = dx * dx + dy * dy;
       if (d2 > 1) continue;
-      const depth = p.depth + radius * Math.sqrt(Math.max(0, 1 - d2));
-      const i = y * w + x;
-      if (depth < this.frame.depth[i]) continue;
-      this.frame.depth[i] = depth;
-      this.frame.color[i] = d2 > 0.865 ? rim : inner;
-      this.frame.light[i] = 0;
-      const hdr = this.frame.hdrLight;
-      if (hdr) { hdr[i * 3] = 0; hdr[i * 3 + 1] = 0; hdr[i * 3 + 2] = 0; }
+      this.put(x, y, p.depth + radius * Math.sqrt(Math.max(0, 1 - d2)), (d2 > 0.865 ? rim : inner) | 0xff000000, 1, 0);
     }
   }
 
@@ -281,6 +292,7 @@ export class Painter3D {
         hdr[a] = hdrCopy[b]; hdr[a + 1] = hdrCopy[b + 1]; hdr[a + 2] = hdrCopy[b + 2];
       }
     }
+    this.surfaces.adoptResolved();
   }
 
   /** Expanding air-pressure shell. Refracts existing pixels, including HDR and depth,
@@ -342,6 +354,7 @@ export class Painter3D {
       }
       if(hdr&&this.warpHDR) {hdr[i*3]=this.warpHDR[j*3];hdr[i*3+1]=this.warpHDR[j*3+1];hdr[i*3+2]=this.warpHDR[j*3+2];}
     }
+    this.surfaces.adoptResolved();
   }
 
   grid(extent = 8, step = 1) {

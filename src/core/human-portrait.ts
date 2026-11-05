@@ -1,6 +1,7 @@
 /** Original adult portrait studies. Native face budgets, semantic eyes and joined color masses. */
 import { Painter } from './painter.js';
 import { hex } from './color.js';
+import { characterPalette } from './character-cache.js';
 import type { PaintFrame } from './painter.js';
 export type HumanPortraitResolution=64|96|128|192;
 export type HumanPortraitExpression='neutral'|'smile'|'determined'|'surprised';
@@ -48,16 +49,16 @@ function validate(style:HumanPortraitStyle,pose:HumanPortraitPose){
 }
 function frame(w:number,h:number):PaintFrame{return{w,h,ox:0,oy:0,color:new Uint32Array(w*h),light:new Uint32Array(w*h)};}
 /** Front-facing bust, with optional whole-canvas reflection of hair/lighting. No 3D projection. */
-export function renderHumanPortrait2D(style:HumanPortraitStyle={},pose:HumanPortraitPose={}):HumanPortraitSprite {
+function renderPortraitUncached(style:HumanPortraitStyle={},pose:HumanPortraitPose={}):HumanPortraitSprite {
   const resolution=validate(style,pose);
   if(style.facing==='left'){
-    const a=renderHumanPortrait2D({...style,facing:'right'},pose),flip=<T extends Uint32Array|Uint8Array>(src:T):T=>{const out=src.slice() as T;for(let y=0;y<a.h;y++)for(let x=0;x<a.w;x++)out[y*a.w+a.w-1-x]=src[y*a.w+x];return out;};
+    const a=renderPortraitUncached({...style,facing:'right'},pose),flip=<T extends Uint32Array|Uint8Array>(src:T):T=>{const out=src.slice() as T;for(let y=0;y<a.h;y++)for(let x=0;x<a.w;x++)out[y*a.w+a.w-1-x]=src[y*a.w+x];return out;};
     return{...a,pixels:flip(a.pixels),mask:{...a.mask,data:flip(a.mask.data)},faceMask:flip(a.faceMask),eyeRegionMask:flip(a.eyeRegionMask),eyeMask:flip(a.eyeMask),frontHairMask:flip(a.frontHairMask),headAnchor:[a.w-1-a.headAnchor[0],a.headAnchor[1]],eyeAnchors:a.eyeAnchors.map(q=>[a.w-1-q[0],q[1]]) as [[number,number],[number,number]]};
   }
   const [w,h]=style.canvas??[resolution,resolution],s=resolution/128,t=((pose.time??0)%2+2)%2,compact=resolution===64,rich=resolution===192;
   // Idle is a blink, not a rigid whole-bust bob or an unsupported hair simulation.
   const ox=Math.floor((w-resolution)/2),oy=Math.floor((h-resolution)/2),cx=ox+Math.round(resolution*.5),cy=oy+Math.round(resolution*.375);
-  const skin=SKIN[style.skin??'warm'].map(hex),hair=HAIR[style.hairColor??'ink'].map(hex),cloth=CLOTH[style.cloth??'ocean'].map(hex),iris=EYES[style.eyes??'teal'].map(hex);
+  const skin=characterPalette(SKIN[style.skin??'warm']),hair=characterPalette(HAIR[style.hairColor??'ink']),cloth=characterPalette(CLOTH[style.cloth??'ocean']),iris=characterPalette(EYES[style.eyes??'teal']);
   const base=frame(w,h),face=frame(w,h),front=frame(w,h),eye=frame(w,h),safe=frame(w,h),p=new Painter(base),fp=new Painter(face),hp=new Painter(front),ep=new Painter(eye),rp=new Painter(safe);
   const pt=(x:number,y:number):[number,number]=>[cx+Math.round(x*s),cy+Math.round(y*s)];
   const poly=(p:Painter,a:number[][],c:number)=>p.poly(a.map(([x,y])=>pt(x,y)),c);
@@ -192,5 +193,20 @@ export function renderHumanPortrait2D(style:HumanPortraitStyle={},pose:HumanPort
   const pixels=base.color.slice(),ink=style.outline===null?0:hex(style.outline??'#292738');
   if(ink)for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){const i=y*w+x;if(!base.color[i]&&(base.color[i-1]||base.color[i+1]||base.color[i-w]||base.color[i+w]))pixels[i]=ink;}
   return{w,h,pixels,mask:{w,h,data:Uint8Array.from(pixels,c=>c?1:0)},faceMask,eyeRegionMask,eyeMask,frontHairMask,headAnchor:[cx,cy],eyeAnchors,resolution,detailTier:compact?'compact':rich?'rich':'standard',blink};
+}
+const portraitCache = new Map<string, HumanPortraitSprite>();
+/** Owned output arrays, with a bounded cache of discrete eye/expression states. */
+export function renderHumanPortrait2D(style:HumanPortraitStyle={},pose:HumanPortraitPose={}):HumanPortraitSprite {
+  validate(style,pose);
+  const t=((pose.time??0)%2+2)%2;
+  const sample={expression:pose.expression??'neutral',gaze:Math.max(-1,Math.min(1,pose.gaze??0)),blink:pose.blink??(!pose.reducedMotion&&t>1.55&&t<1.68)};
+  const key=JSON.stringify([Object.keys(style).sort().map(k=>[k,style[k as keyof HumanPortraitStyle]]),sample]);
+  let a=portraitCache.get(key);
+  if(!a){
+    a=renderPortraitUncached(style,sample);
+    if(portraitCache.size>=12)portraitCache.delete(portraitCache.keys().next().value!);
+    portraitCache.set(key,a);
+  } else {portraitCache.delete(key);portraitCache.set(key,a);}
+  return {...a,pixels:a.pixels.slice(),mask:{...a.mask,data:a.mask.data.slice()},faceMask:a.faceMask.slice(),eyeRegionMask:a.eyeRegionMask.slice(),eyeMask:a.eyeMask.slice(),frontHairMask:a.frontHairMask.slice(),headAnchor:[...a.headAnchor],eyeAnchors:[[...a.eyeAnchors[0]],[...a.eyeAnchors[1]]]};
 }
 export function drawHumanPortrait2D(p:Painter,style:HumanPortraitStyle={},pose:HumanPortraitPose={}):HumanPortraitSprite {const a=renderHumanPortrait2D(style,pose);for(let y=0;y<a.h;y++)for(let x=0;x<a.w;x++)if(a.pixels[y*a.w+x])p.px(x,y,a.pixels[y*a.w+x]);return a;}

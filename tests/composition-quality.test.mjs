@@ -145,13 +145,24 @@ test('invalid cue times and fade durations are rejected before drawing', () => {
     assert.throws(()=>chain([{fx:mark,...bad}])({}),RangeError);
 });
 
-const before=JSON.parse(readFileSync(new URL('./fixtures/chain-composition-before.json',import.meta.url),'utf8'));
-for(const [id,reference] of Object.entries(before))test(`${id}: existing default composition is pixel-identical away from corrected boundaries`,async()=>{
-  const e=await loadEffect(id),{canvas:oldCanvas,...times}=reference;
-  const {origin,size}=oldCanvas??e.meta;
-  for(const [time,hash] of Object.entries(times)){
-    const fx=createFx(e.mod,{x:origin[0],y:origin[1]}),f=createFrame(...size);fx.update(+time);fx.draw(f);
-    assert.equal(createHash('sha256').update(f.color).update(f.light).digest('hex'),hash,`t=${time}`);
+const originalBytes=readFileSync(new URL('./fixtures/chain-composition-before.json',import.meta.url));
+const before=JSON.parse(originalBytes);
+const fixedTick=JSON.parse(readFileSync(new URL('./fixtures/chain-composition-fixed-tick.json',import.meta.url),'utf8'));
+// Preserve the original evidence. Its single update(t) used ceil(t*120) equal
+// subdivisions, so it encoded a different simulation step length at every t.
+assert.equal(createHash('sha256').update(originalBytes).digest('hex'),fixedTick.provenance.originalFixtureSha256);
+for(const [id,reference] of Object.entries(before))test(`${id}: reviewed fixed-tick composition is identical across host frame rates`,async()=>{
+  const e=await loadEffect(id),{canvas:_oldCanvas,...times}=reference,reviewed=fixedTick.effects[id];
+  const {origin,size}=reviewed.canvas;
+  for(const [time,originalHash] of Object.entries(times)){
+    const expected=reviewed.frames[time];assert.equal(expected.originalHash,originalHash);
+    for(const fps of [null,30,60,144,165]){
+      const fx=createFx(e.mod,{x:origin[0],y:origin[1]}),f=createFrame(...size);
+      if(fps===null)fx.update(+time);
+      else for(let elapsed=0;elapsed<+time-1e-12;){const dt=Math.min(1/fps,+time-elapsed);fx.update(dt);elapsed+=dt;}
+      fx.draw(f);
+      assert.equal(createHash('sha256').update(f.color).update(f.light).digest('hex'),expected.hash,`t=${time}, host=${fps??'single update'}`);
+    }
   }
 });
 
@@ -179,13 +190,17 @@ test('matched cue crossfades conserve local HDR illumination instead of flashing
   }
 });
 
-test('classic fireball choreography retains all 205 original color and light frames', async () => {
+test('classic fireball preserves its original launch and reviewed fixed-tick impact across 205 frames', async () => {
   const {renderFrames}=await import('../build-tools/tools/lib/fxlib.mjs');
-  const r=renderFrames(await loadEffect('moves/fireball-throw'),{options:{choreography:'classic'}});
-  const hash=createHash('sha256');for(const frame of r.frames)hash.update(frame.clear).update(frame.light);
-  assert.equal(r.n,205);
-  // Captured before the composition changes, not regenerated from the new implementation.
-  assert.equal(hash.digest('hex'),'e584dc9b9f8048d1816bab1b9bc727f0e6ba3a01ddea685abb0485672adcbe28');
+  const r=renderFrames(await loadEffect('moves/fireball-throw'),{diagnostics:true,options:{choreography:'classic'}});
+  const expected=fixedTick.fireballClassic,hash=createHash('sha256'),prefix=createHash('sha256');
+  for(const [i,frame] of r.frames.entries()){
+    hash.update(frame.clear).update(frame.light);
+    if(i<expected.unchangedPrefix.frames)prefix.update(frame.clear).update(frame.light);
+  }
+  assert.equal(r.n,205);assert.equal(r.n,expected.frames);
+  assert.equal(hash.digest('hex'),expected.hash);
+  assert.equal(prefix.digest('hex'),expected.unchangedPrefix.hash,expected.unchangedPrefix.reason);
 });
 
 test('the restored ice-lance release frame stays inside its expanded canvas', async () => {

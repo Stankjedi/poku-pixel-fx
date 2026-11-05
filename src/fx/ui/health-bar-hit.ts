@@ -6,7 +6,7 @@ export const meta = {
   name: "Health bar hit",
   desc: "A segmented health bar takes a hit: it jolts and dips, the lost chunk flashes white and sheds chips, holds, then drains away behind a sparking edge.",
   tags: ["ui", "health", "hud", "damage", "bar", "one-shot"],
-  size: [160, 64],
+  size: [160, 67],
   origin: [80, 30],
   duration: 2.0,
   loop: false,

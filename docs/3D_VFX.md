@@ -1,6 +1,6 @@
 # POKU 3D Pixel FX Engine
 
-A dependency-free TypeScript **software-rasterized** 3D VFX engine, alongside the existing 2D renderer. It preserves the project's authoring loop: procedural geometry, seeded particles, choreography on a second-based timeline, discrete palette ramps, 4×4 Bayer alpha, a separate additive-light buffer, render/inspect/refine. It does **not** replace `src/core` or silently convert the 2D catalog.
+A dependency-free TypeScript **software-rasterized** 3D VFX engine, alongside the existing 2D renderer. It preserves the project's authoring loop: procedural geometry, seeded particles, choreography on a second-based timeline, discrete palette ramps, continuous coverage with optional 4×4 Bayer alpha, separate emission, render/inspect/refine. It does **not** replace `src/core` or silently convert the 2D catalog.
 
 ## Run
 
@@ -50,7 +50,7 @@ This is intentionally a small, CPU-side reference engine. It uses real 3D coordi
 |---|---|
 | `math.ts` | Vec3 + deterministic `Rng3D`, tween helpers |
 | `frame.ts` | `createFrame3D`, `clearFrame3D`, `compositeFrame3D` and packed ABGR buffers |
-| `painter.ts` | `Painter3D` with `project`, `point`, `line`, `triangle`, `facet`, `ring`, `crystal`, `glow` and `grid` |
+| `painter.ts` | `Painter3D` with `project`, `point`, `line`, `triangle`, `facet`, `ring`, `crystal`, `glow` and `grid`; cached projections through `triangleProjected` / `lineProjected` |
 | `particles.ts` | `Particles3D.spawn`, `update`, `draw`, `clear` (gravity, drag, bounce, trails) |
 | `fx.ts` | `createFx3D`, fixed 120Hz simulation, `seek`, `restart`, cues and stage names |
 | `effects/*` | Typed `meta` + `create(opts)` factories; new effects do not modify the engine |
@@ -70,8 +70,10 @@ Effects are deterministic for a given seed and fixed-step timeline. `update(dt)`
 ## Rendering constraints and trade-offs
 
 - Fixed low-resolution frame and nearest-neighbor presentation preserve hard pixel edges; pixel size and orbit should remain stable within a shot.
-- Bayer thresholds replace smooth alpha for primary pixel shapes; **additive emission is intentionally softer**. The light buffer is accumulated in 8-bit channels, so extremely bright overlap can saturate.
-- Opaque z-buffered triangles are used for crystals/ribbons. This favors intentional flat-color silhouettes rather than expensive volumetrics. The painter does not implement order-independent transparency, shadow maps, physically based lighting or full scene occlusion with external 3D objects.
+- Pixel geometry uses continuous coverage by default; select `alphaMode = "dither"` for deliberate Bayer stippling. The legacy light mirror accumulates in 8-bit channels; `enableHDRLight(frame)` preserves linear emission above that ceiling.
+- Opaque surfaces replace hidden color and surface emission. Transparent raster fragments share a frame-local, per-pixel depth-sorted queue, including fragments from different `Painter3D` instances on that frame. Coverage attenuates rear surface emission by the same transmittance as color. Equal-depth ties retain submission order. `frame.depth` remains nearest visible depth for lighting; `opaqueDepthAt()` exposes only the depth that can block transparent material.
+- `glow()` and `screenLight()` explicitly request screen-space optical glow. That glow remains independent of surface occlusion. Use primitive `emission` for a material that must be hidden by a foreground object. Custom optical masks can use `clearEmission(x, y, true)` after confirming ownership; the black-hole horizon does so without erasing foreground debris.
+- Surface transparency is exact for the submitted fragments. Integrated overlapping volumes still belong in one field, and refraction (`lensWarp` / `pressureWarp`) is an explicit resolved pass: submit the scene to refract before it, then foreground geometry afterward. This reference engine does not implement shadow maps, physically based lighting or an external game engine's scene depth automatically.
 - Runtime performance depends on pixel resolution, 3D triangle count and pixel coverage, not just particle count; benchmark target devices. Use smaller render targets and pre-bake sheets for mobile/large crowds.
 - Existing 2D effects stay in `src/fx` and are unaffected. 3D effects live in `src/3d/effects` and are **not** counted as 2D gallery effects.
 
@@ -136,4 +138,14 @@ The refined **WIND** attack compresses its four airfoils into a fast gust and st
 A shared contact clock drives local pressure, prop rocking/skidding, delayed grass response and
 non-emissive downstream dust/leaves. `gustImpulse3D` and `advectGust3D` provide small seekable force
 and drag tools. See [wind-pressure choreography, host controls and limits](WIND_PRESSURE_3D.md).
-The legacy wind variant remains unchanged.
+The legacy wind variant retains its own choreography and remains available separately; both variants use the shared renderer's corrected coverage and emission rules.
+
+## Rendering and HDR contracts
+
+Depth is compared and stored at Float32 precision for every primitive, including spheres and custom black-hole samples. Repainting an identical opaque surface therefore replaces every pixel instead of rejecting half the samples due to mixed double/Float32 rounding.
+
+`enableHDRLight()` should be called before drawing. When HDR is present, `CinematicCompositor` reads it as the authoritative emission source; the saturated packed mirror is never selected with `max()`. A packed-only custom writer can use `importPackedLight(frame, additionalPacked)` to import a separate light buffer, or pass `legacyLight` to the compositor. Use `importPackedLight(frame, completeLegacyResult, "replace")` to convert an entire legacy result. Do not import the already mirrored `frame.light` a second time as additional light. The ordinary packed compositor remains available.
+
+The shield renderer caches its ring connectivity and hex adjacency by surface, updates deployment positions in reusable arrays, and projects shared vertices once for both sorting and rasterization. Reuse the same `ShieldSurface3D` object; pass an animated `aperture` to `drawShieldSurface3D` instead of creating a new surface every draw. The cache keeps one cell-size topology per surface, so changing `cellSize` replaces that topology instead of accumulating a cache keyed by animation time.
+
+See [rendering-contract implementation notes](RENDERING_CONTRACTS.md) for the report mapping and compatibility changes.

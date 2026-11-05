@@ -34,7 +34,9 @@ test("near smoke attenuates prior emission and contributes only its own radiance
   const frame=createFrame3D(17,50),p=new Painter3D(frame,{yaw:0,elevation:0,zoom:1}),i=30*17+8;
   enableHDRLight(frame);p.begin("#000");frame.light[i]=color3D("#ffffff");frame.hdrLight.fill(1);
   drawVolume3D(p,bounds,()=>({density:0.7,color:"#333"}),{step:0.2});
-  assert.equal(frame.light[i]&255,Math.round(255*Math.exp(-1.4)));
+  // The shared surface resolver uses the painter's truncating 8-bit mirror rule.
+  // Linear HDR below remains the unquantized transmittance contract.
+  assert.equal(frame.light[i]&255,Math.floor(255*Math.exp(-1.4)));
   assert.ok(Math.abs(frame.hdrLight[i*3]-Math.exp(-1.4))<1e-6);
   const a=centerVolume(0.1,-Infinity,true);
   assert.ok(a.frame.hdrLight[a.i*3]>0);
@@ -165,7 +167,7 @@ test("volume interpolation preserves the reference corner accumulation exactly",
   }
 });
 
-test("optimized plume retains baseline pixels, light and depth across material variants",async()=>{
+test("reviewed plume retains exact pixels, light and depth across material variants",async()=>{
   const {readFile}=await import('node:fs/promises');
   const {createHash}=await import('node:crypto');
   const fixture=JSON.parse(await readFile(new URL('./fixtures/thermal-plume-render.json',import.meta.url),'utf8'));

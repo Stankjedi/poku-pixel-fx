@@ -5,12 +5,18 @@
 //   node tools/check.mjs              every effect
 //   node tools/check.mjs fire ui/level-up
 
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 const { shortfall } = await import(new URL("../../build/core/rig.js", import.meta.url).href);
 import { resolveIds, allIds, loadEffect } from "./lib/fxlib.mjs";
-const { createFrame, clearFrame, painterFor, createFx, createAct, poseAt, stockActor, resolveOptions, Painter, BACKDROPS } = await import(new URL("../../build/core/index.js", import.meta.url).href);
+const { createFrame, clearFrame, painterFor, createFx, createAct, poseAt, stockActor, resolveOptions, Painter, BACKDROPS, enableHDRLight } = await import(new URL("../../build/core/index.js", import.meta.url).href);
 
 const ids = process.argv.slice(2).length ? resolveIds(process.argv.slice(2)) : allIds();
+const signature = (frame:any) => {
+  const hash=createHash('sha256');
+  for(const a of [frame.color,frame.light,frame.hdrLight])if(a)hash.update(new Uint8Array(a.buffer,a.byteOffset,a.byteLength));
+  return hash.digest('hex');
+};
 const M = 24; // margin around the canvas, to catch pixels drawn outside it
 let fails = 0, warns = 0;
 
@@ -95,6 +101,7 @@ for (const id of ids) {
     if (errs.length) throw new Error(errs.join("; "));
 
     const [W, H] = meta.size, frame = createFrame(W + M * 2, H + M * 2, -M, -M);
+    enableHDRLight(frame);
     const fw = frame.w, inside = (i: number) => {
       const x = (i % fw) - M, y = Math.floor(i / fw) - M;
       return x >= 0 && y >= 0 && x < W && y < H;
@@ -139,14 +146,16 @@ for (const id of ids) {
       }
       // loops have no seam: stepping from the last frame back to the first changes no more than a normal step
       if (meta.loop) {
-        const shots: Uint32Array[] = [];
+        let first:Uint32Array|undefined,previous:Uint32Array|undefined;
+        const diffs:number[]=[];
         for (let i = 0; i < n; i++) {
           drawAt(fx, (i / n) * meta.duration, frame, opts);
-          shots.push(frame.color.slice());
+          if(previous)diffs.push(count(previous,(c,j)=>c!==frame.color[j]));
+          else first=frame.color.slice();
+          if(!previous)previous=frame.color.slice();else previous.set(frame.color);
         }
-        const step = (a: Uint32Array, b: Uint32Array) => count(a, (c, j) => c !== b[j]);
-        const diffs = shots.slice(0, -1).map((a, i) => step(a, shots[i + 1])).sort((x, y) => x - y);
-        const typical = diffs[Math.floor(diffs.length * 0.9)] ?? 0, seam = step(shots[n - 1], shots[0]);
+        diffs.sort((x,y)=>x-y);
+        const typical = diffs[Math.floor(diffs.length * 0.9)] ?? 0, seam = count(previous!,(c,j)=>c!==first![j]);
         if (seam > Math.max(typical * 2, 12)) notes.push(`반복 경계: 마지막 프레임과 첫 프레임 사이에 ${seam} px이 바뀝니다 (일반 스텝은 ${typical} px)`);
       }
       // any palette works: a short one (resampled by resolveOptions, as createFx does) leaves no holes
@@ -166,9 +175,9 @@ for (const id of ids) {
       // deterministic: the same t twice gives the same frame
       const tt = meta.duration * 0.37;
       drawAt(fx, tt, frame, opts);
-      const once = frame.color.slice();
+      const once = signature(frame);
       drawAt(fx, tt, frame, opts);
-      if (count(once, (c, j) => c !== frame.color[j]) > 0) errs.push("결정적이지 않습니다. 같은 t에서 서로 다른 프레임이 그려졌습니다");
+      if (once !== signature(frame)) errs.push("결정적이지 않습니다. 같은 t의 color/light/HDR 결과가 다릅니다");
       ms.sort((x, y) => x - y);
       const med = ms[ms.length >> 1];
       if (med > 4) notes.push(`느림: 프레임당 ${med.toFixed(1)} ms`);
@@ -176,30 +185,32 @@ for (const id of ids) {
       // a simulation: step it in order, as a game would, and check every frame
       const run = (seed: number) => {
         const inst = createFx(mod, { x: meta.origin[0], y: meta.origin[1], ...opts, seed });
-        const shots: Uint32Array[] = [];
+        const shots: string[] = [];
+        let lastPixels=0;
         for (let i = 0; i <= n; i++) {
           if (i) inst.update(1 / meta.fps);
           clearFrame(frame);
           const t0 = performance.now();
           inst.draw(frame);
           ms.push(performance.now() - t0);
-          shots.push(frame.color.slice());
+          shots.push(signature(frame));
+          lastPixels=count(frame.color,(c,j)=>c>>>24&&inside(j));
           maxPx = Math.max(maxPx, count(frame.color, (c, j) => c >>> 24 && inside(j)), count(frame.light, (c, j) => (c & 0xffffff) && inside(j)));
           const sp = count(frame.color, (c, j) => c >>> 24 && !inside(j));
           spill = Math.max(spill, sp);
           bounds(); // Report the full animation extent, not only the frame with the most spilled pixels.
           spillLight = Math.max(spillLight, count(frame.light, (c, j) => (c & 255) + ((c >>> 8) & 255) + ((c >>> 16) & 255) > 90 && !inside(j)));
         }
-        return shots;
+        return {shots,lastPixels};
       };
       const a = run(opts.seed), b = run(opts.seed);
       for (const seed of [2, 3, 7]) run(seed);
       if (maxPx === 0) errs.push("아무것도 그리지 않습니다");
       if (spill > 0) notes.push(`${W}x${H} 캔버스 밖에 ${spill} px이 그려집니다 (그리기 범위: x ${bx0}..${bx1}, y ${by0}..${by1}). 크기를 늘리거나 원점을 옮기세요`);
       if (spillLight > 60) notes.push(`발광이 캔버스 밖으로 ${spillLight} px 넘칩니다`);
-      if (a.some((s, i) => count(s, (c, j) => c !== b[i][j]) > 0)) errs.push("결정적이지 않습니다. 같은 seed로 두 번 실행한 결과가 다릅니다");
+      if (a.shots.some((s, i) => s !== b.shots[i])) errs.push("결정적이지 않습니다. 같은 seed의 color/light/HDR 결과가 다릅니다");
       if (!meta.loop) {
-        const left = count(a[a.length - 1], (c, j) => c >>> 24 && inside(j));
+        const left = a.lastPixels;
         if (left > 0) notes.push(`t = duration에서 ${left} px이 남아 있습니다. 일회성 이펙트는 빈 화면으로 끝나야 합니다`);
       }
       ms.sort((x, y) => x - y);

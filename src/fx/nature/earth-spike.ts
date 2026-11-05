@@ -11,7 +11,7 @@ export const meta = {
   name: "Earth spike",
   desc: "The floor cracks with light and heaves, a faceted stone spike rams up with two side shards in a burst of chips, grit and dust; rubble rains, then it splits and crumbles.",
   tags: ["nature", "earth", "stone", "spike", "ground", "attack", "one-shot"],
-  size: [272, 150],
+  size: [273, 150],
   origin: [136, 132],
   duration: 3.4,
   loop: false,

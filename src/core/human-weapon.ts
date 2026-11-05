@@ -112,7 +112,23 @@ function arrow(p:Painter,tail:HumanPoint,tip:HumanPoint,s:number){const d=unit(t
 /** Render the actor/held item and the released arrow as separate reusable pixel layers. */
 export function renderHumanWeapon2D(kind:HumanWeapon,time:number,style:HumanStyle={},reducedMotion=false):HumanWeaponFrame {
   if(style.facing==='left'){const a=renderHumanWeapon2D(kind,time,{...style,facing:'right'},reducedMotion),sample=humanWeapon2D(kind,time,style,reducedMotion);return{actor:{...mirror(a.actor),rig:humanRig2D(style,sample.pose)},projectile:a.projectile?mirror(a.projectile):null,sample};}
-  const sample=humanWeapon2D(kind,time,style,reducedMotion),body=renderHuman2D({...style,outline:null},sample.pose),g=sample.geometry,s=body.rig.scale;
+  return renderWeaponSample(humanWeapon2D(kind,time,style,reducedMotion),style);
+}
+/** Attach the authored weapon materials to an external pose, such as an ACT timeline. */
+export function renderHumanWeaponPose2D(kind:HumanWeapon,pose:HumanPose,style:HumanStyle={},angle=0,nocked=false):HumanWeaponFrame {
+  if(kind!=='sword'&&kind!=='bow')throw new RangeError('Weapon must be sword or bow');
+  if(!Number.isFinite(angle))throw new RangeError('Weapon angle must be finite');
+  const r=humanRig2D(style,pose),hand=r.view==='front'||r.view==='back'?'right':'left',grip=humanGrip2D(r,hand),s=r.scale;
+  const direction:HumanPoint=[Math.cos(angle)*(r.facing==='left'?-1:1),-Math.sin(angle)],v:HumanPoint=[-direction[1],direction[0]];
+  const g:HumanWeaponGeometry={kind,hand,grip,direction,tip:add(grip,direction,37*s),loaded:kind==='bow'&&nocked};
+  if(kind==='bow'){
+    g.drawGrip=humanGrip2D(r,hand==='left'?'right':'left');g.upperTip=add(add(grip,v,-24*s),direction,-7*s);g.lowerTip=add(add(grip,v,24*s),direction,-7*s);
+    g.nock=nocked?g.drawGrip:add(grip,direction,-7*s);g.arrowTip=add(grip,direction,17*s);
+  }
+  return renderWeaponSample({pose,phase:'ready',time:0,duration:0,done:false,loop:false,geometry:g,cue:null,cueActive:false,projectile:null},style);
+}
+function renderWeaponSample(sample:HumanWeaponSample,style:HumanStyle):HumanWeaponFrame {
+  const kind=sample.geometry.kind,body=renderHuman2D({...style,outline:null},sample.pose),g=sample.geometry,s=body.rig.scale;
   const pts=[g.grip,g.tip,...(g.upperTip?[g.upperTip,g.lowerTip!,g.nock!,g.drawGrip!]:[])],pad=Math.ceil(7*s)+3;
   const x=Math.min(body.x,Math.floor(Math.min(...pts.map(p=>p[0])))-pad),y=Math.min(body.y,Math.floor(Math.min(...pts.map(p=>p[1])))-pad),w=Math.max(body.x+body.w,Math.ceil(Math.max(...pts.map(p=>p[0])))+pad)-x,h=Math.max(body.y+body.h,Math.ceil(Math.max(...pts.map(p=>p[1])))+pad)-y;
   const mat=frame(x,y,w,h),wire=frame(x,y,w,h),bp=frame(x,y,w,h),weapon=new Painter(mat),strings=new Painter(wire);blit(new Painter(bp),body);

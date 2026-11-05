@@ -173,18 +173,19 @@ test("lightStrength dims native HDR and its packed mirror together in 2D and 3D"
   }
 });
 
-test("emission strength applies after mirror resolution without changing independent world radiance", () => {
+test("emission strength applies to authoritative HDR without changing independent world radiance", () => {
   const f = enableHDRLight(createFrame(2, 1));
   f.light[0] = color3D("#808080"); f.hdrLight.set([0.04, 0.4, 0.08]);
-  // A manually written legacy pixel with no native HDR still participates.
+  // Packed-only light is supplied separately; frame.light is only a mirror when HDR exists.
   f.light[1] = color3D("#804020");
+  const legacyLight = new Uint32Array([0, f.light[1]]);
   const extra = new Float32Array([0.15, 0.1, 0.05, 0.03, 0.02, 0.01]);
   const film = new CinematicCompositor();
   const actual = film.render(f, new Uint8ClampedArray(8), { ...ungraded, lightStrength: 0, radiance: extra });
   const expected = film.render(createFrame(2, 1), new Uint8ClampedArray(8), { ...ungraded, radiance: extra });
   assert.deepEqual(actual, expected, "world light is not an emission control");
-  const scaled = film.render(f, new Uint8ClampedArray(8), { ...ungraded, lightStrength: 0.5 });
-  assert.ok(Math.abs(linear(scaled[0]) - linear(128) * 0.5) < 0.004);
+  const scaled = film.render(f, new Uint8ClampedArray(8), { ...ungraded, lightStrength: 0.5, legacyLight });
+  assert.ok(Math.abs(linear(scaled[0]) - 0.04 * 0.5) < 0.004);
   assert.ok(Math.abs(linear(scaled[1]) - 0.4 * 0.5) < 0.004);
   assert.ok(scaled[4] > scaled[5] && scaled[5] > scaled[6]);
 });

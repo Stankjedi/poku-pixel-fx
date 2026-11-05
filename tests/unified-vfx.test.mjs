@@ -87,7 +87,8 @@ test("lens warp reuses snapshots and keeps HDR, depth and legacy light registere
   painter.lensWarp([0, 0, 0], 0.5, 5, 1.5);
   assert.deepEqual([painter.warpColor, painter.warpLight, painter.warpDepth, painter.warpHDR].map((v, i) => v === snapshots[i]), [true, true, true, true]);
   painter.begin("#000");
-  painter.glow([0, 0, 0], 2, "#fff", 4);
+  // Surface emission is occluded; explicit screen-space glow is a separate contract.
+  painter.point([0, 0, 0], 0.8, "#fff", 1, 4);
   const center = painter.project([0, 0, 0]);
   const i = Math.floor(center.y) * frame.w + Math.floor(center.x);
   assert.ok(frame.hdrLight[i * 3] > 0);

@@ -17,7 +17,7 @@ try {
   if (![w, h, fps, n].every(Number.isSafeInteger) || w < 1 || h < 1 || w > 480 || h > 480
     || fps < 1 || fps > 120 || n > 4096 || w * h * n > 16_777_216)
     throw new RangeError('Review supports 1..480 px, 1..120 fps and at most 4096 frames / 16M native pixels');
-  const result = renderFrames(fx), sheet = spriteSheet(fx, result, id.split('/')[1]);
+  const result = renderFrames(fx, { diagnostics: true }), sheet = spriteSheet(fx, result, id.split('/')[1]);
   const identity = reviewIdentity(fx, result, sheet, readFileSync(fx.file, 'utf8'));
   const dir = join(ROOT, 'records', 'review', id);
   if (flag === '--record') {

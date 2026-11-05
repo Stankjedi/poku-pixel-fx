@@ -45,8 +45,8 @@
     "sync:site": "npm run build && node build-tools/tools/sync-site.mjs",
     "render:3d": "node build-tools/tools/render-3d.mjs",
     "render:3d:gif": "node build-tools/tools/render-3d-gif.mjs",
-    "test:3d": "node --test tests/3d.test.mjs tests/black-hole-3d.test.mjs tests/cinematic.test.mjs tests/lighting3d-quality.test.mjs tests/wind-rasenshuriken-3d.test.mjs tests/wind-pressure-3d.test.mjs tests/unified-vfx.test.mjs tests/ice-shatter-3d.test.mjs tests/thermal-plume-3d.test.mjs tests/discharge-3d.test.mjs tests/liquid-3d.test.mjs tests/camera3d-export.test.mjs tests/void-rift-3d.test.mjs tests/meteor-3d.test.mjs tests/beam-3d.test.mjs tests/shield-3d.test.mjs",
-    "test:export": "node --test tests/video-export.test.mjs tests/sprite-sheet-alpha.test.mjs",
+    "test:3d": "node --test tests/3d.test.mjs tests/black-hole-3d.test.mjs tests/cinematic.test.mjs tests/lighting3d-quality.test.mjs tests/wind-rasenshuriken-3d.test.mjs tests/wind-pressure-3d.test.mjs tests/unified-vfx.test.mjs tests/ice-shatter-3d.test.mjs tests/thermal-plume-3d.test.mjs tests/discharge-3d.test.mjs tests/liquid-3d.test.mjs tests/camera3d-export.test.mjs tests/void-rift-3d.test.mjs tests/meteor-3d.test.mjs tests/beam-3d.test.mjs tests/shield-3d.test.mjs tests/render-contracts-3d.test.mjs",
+    "test:export": "node --test tests/video-export.test.mjs tests/sprite-sheet-alpha.test.mjs tests/export-contracts.test.mjs",
     "test:quality": "node --test tests/coverage-quality.test.mjs tests/curves-quality.test.mjs tests/particle-quality.test.mjs tests/painter-quality.test.mjs tests/raster3d-quality.test.mjs tests/shared-quality.test.mjs tests/catalog-quality.test.mjs tests/lightning-quality.test.mjs tests/flow-quality.test.mjs tests/water-quality.test.mjs tests/effect-boundaries.test.mjs tests/arrow-shot-quality.test.mjs tests/smoke-quality.test.mjs tests/air-quality.test.mjs tests/stone-quality.test.mjs tests/composition-quality.test.mjs tests/sigil-quality.test.mjs tests/propulsion-quality.test.mjs tests/ground-impact-quality.test.mjs tests/contact-timing.test.mjs tests/glass-quality.test.mjs tests/frost-quality.test.mjs tests/restoration-quality.test.mjs tests/corrosion-quality.test.mjs tests/human-quality.test.mjs tests/human-view-quality.test.mjs tests/human-orientation-quality.test.mjs tests/human-action-quality.test.mjs tests/human-character-quality.test.mjs tests/human-combat-quality.test.mjs tests/creature-quality.test.mjs tests/human-weapon-quality.test.mjs tests/human-portrait-quality.test.mjs tests/human-motion-refinement.test.mjs tests/sprite-placement-quality.test.mjs tests/particle-ground.test.mjs tests/canvas-bounds.test.mjs tests/detail-particles.test.mjs tests/point-light-2d.test.mjs tests/sprite-edit.test.mjs tests/material-ramp.test.mjs tests/actor-pixels.test.mjs tests/particle-cycle-guard.test.mjs tests/timing-curve.test.mjs tests/timing-comet.test.mjs",
     "test:human": "node --test tests/human-quality.test.mjs tests/human-view-quality.test.mjs tests/human-orientation-quality.test.mjs tests/human-action-quality.test.mjs tests/human-character-quality.test.mjs tests/human-combat-quality.test.mjs tests/human-weapon-quality.test.mjs tests/human-portrait-quality.test.mjs tests/human-motion-refinement.test.mjs",
     "preview:human": "node tools/preview-humans.mjs",
@@ -62,7 +62,8 @@
     "review": "node build-tools/tools/review.mjs",
     "test:review": "node --test tests/visual-review.test.mjs",
     "aseprite": "node build-tools/tools/aseprite.mjs",
-    "test:aseprite": "node --test tests/sprite-clip.test.mjs tests/aseprite-data.test.mjs tests/aseprite-bridge.test.mjs tests/sprite-sheet-alpha.test.mjs"
+    "test:aseprite": "node --test tests/sprite-clip.test.mjs tests/aseprite-data.test.mjs tests/aseprite-bridge.test.mjs tests/sprite-sheet-alpha.test.mjs",
+    "test:contracts": "node --test tests/report-*.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

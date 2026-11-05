@@ -1,5 +1,6 @@
 /** Pixel buffer format matches the 2D engine: color/light are packed ABGR Uint32. */
 import type { AlphaMode } from "../render/coverage.js";
+import { resetSurfaces3D } from "./surface.js";
 
 export type Color3D = number | string;
 export interface Frame3D {
@@ -11,7 +12,7 @@ export interface Frame3D {
   alphaMode?: AlphaMode;
   /** Optional unclamped linear RGB emission for cinematic output. */
   hdrLight?: Float32Array;
-  /** Camera depth; larger means nearer. */
+  /** Nearest visible camera depth for lighting; opaque occlusion is tracked separately. Larger means nearer. */
   depth: Float32Array;
 }
 
@@ -32,6 +33,7 @@ export function clearFrame3D(frame: Frame3D, background: Color3D = "#0a1424"): F
   frame.light.fill(0);
   frame.hdrLight?.fill(0);
   frame.depth.fill(-Infinity);
+  resetSurfaces3D(frame);
   return frame;
 }
 /** Output can be a Uint8ClampedArray or an ImageData.data buffer. */

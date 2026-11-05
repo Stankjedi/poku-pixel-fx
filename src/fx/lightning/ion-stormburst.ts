@@ -7,7 +7,7 @@ export const meta = {
   name: 'Ion stormburst',
   desc: 'A violet storm condenses into a falling ion core; branching lightning erupts, then a spinning electrical shock ring shatters into drifting sparks.',
   tags: ['lightning', 'electric', 'storm', 'ion', 'thunder', 'burst', 'shockwave', 'magic', 'one-shot'],
-  size: [232, 184], origin: [116, 154], duration: 2.4, loop: false, fps: 30, bg: 'ground',
+  size: [234, 184], origin: [116, 154], duration: 2.4, loop: false, fps: 30, bg: 'ground',
   options: { palette: ['#100e3a', '#342f9e', '#7055e4', '#58a9ff', '#8deaff', '#e7ffff', '#ffffff'], seed: 43 },
 };
 

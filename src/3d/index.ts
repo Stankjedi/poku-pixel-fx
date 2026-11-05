@@ -11,7 +11,7 @@ export * as windRasenshurikenLegacy3D from "./effects/wind-rasenshuriken-legacy.
 export * from "./lighting.js";
 export { CinematicCompositor } from "../render/cinematic.js";
 export type { CinematicFrame, CinematicOptions, BloomOptions } from "../render/cinematic.js";
-export { enableHDRLight } from "../render/hdr.js";
+export { enableHDRLight, importPackedLight } from "../render/hdr.js";
 export type { HDRLightFrame } from "../render/hdr.js";
 
 export * from "./fragments.js";

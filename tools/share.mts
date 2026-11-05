@@ -18,7 +18,7 @@ try {
   if (![w, h, fps, n].every(Number.isInteger) || w < 1 || h < 1 || fps < 1 || fps > 60 || n < 2 || n > 4096 || cols*w > 2048 || rows*h > 2048) {
     throw new Error('공유 사이트의 프레임 또는 2048×2048 크기 제한을 초과합니다.');
   }
-  const result = renderFrames(fx), name = id.split('/')[1];
+  const result = renderFrames(fx, { diagnostics: true }), name = id.split('/')[1];
   const sheet = spriteSheet(fx, result, name);
   if (sheet.png.byteLength > 5 * 1024 * 1024) throw new Error('공유 PNG가 5 MiB 제한을 초과합니다.');
   const identity = reviewIdentity(fx, result, sheet, readFileSync(fx.file, 'utf8'));

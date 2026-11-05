@@ -67,7 +67,7 @@ test('salvo contacts own exactly the authored landing times and ground anchors',
   for(const [i,c]of fx.contacts.entries()){close(c.at,salvo.missileTimings[i].launch+salvo.missileTimings[i].flight);assert.deepEqual(c.position,[salvo.missileTimings[i].target,0]);assert.deepEqual(c.normal,[0,-1]);}
 });
 test('preview camera moves opaque scene only; raw/transparent exports and fixed pivots are identical',async()=>{
-  const fx=await loadEffect('projectiles/missile-salvo'),moving=renderFrames(fx,{fps:10}),still=renderFrames(fx,{fps:10,cameraMotion:0});
+  const fx=await loadEffect('projectiles/missile-salvo'),moving=renderFrames(fx,{fps:10,diagnostics:true}),still=renderFrames(fx,{fps:10,cameraMotion:0,diagnostics:true});
   assert.equal(moving.frames.length,still.frames.length);
   assert.ok(moving.frames.some((f,i)=>!Buffer.from(f.color).equals(Buffer.from(still.frames[i].color))));
   for(const [i,f]of moving.frames.entries()){assert.deepEqual(f.clear,still.frames[i].clear);assert.deepEqual(f.raw,still.frames[i].raw);assert.deepEqual(f.light,still.frames[i].light);}

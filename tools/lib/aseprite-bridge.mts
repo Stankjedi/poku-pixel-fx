@@ -1,7 +1,7 @@
 import {existsSync,mkdirSync,readdirSync,readFileSync,statSync,writeFileSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 import {spawnSync} from 'node:child_process';
-import {loadEffect,renderFrames,spriteSheet} from './fxlib.mjs';
+import {loadEffect,renderSequence,spriteSheet,frameDurationMs} from './fxlib.mjs';
 import {importAsepriteSheet} from './aseprite-data.mjs';
 import type {SpriteClipData2D} from '../../src/core/sprite-clip.js';
 const {createSpriteClip2D}=await import(new URL('../../../build/core/index.js',import.meta.url).href);
@@ -63,9 +63,11 @@ export async function exportAsepriteProject(id:string,output:string,options:{fps
   if(!Number.isInteger(fps)||fps<1||fps>240)throw new Error('Export fps must be an integer from 1 to 240');
   const expected=Math.round(fx.meta.duration*fps)+(fx.meta.loop?0:1),[width,height]=fx.meta.size;
   if(![width,height,expected].every(Number.isSafeInteger)||width<1||height<1||width>4096||height>4096||expected<1||expected>4096||width*height*expected>16_777_216)throw new Error('Export exceeds sprite-clip bounds; reduce fps, canvas size or duration');
-  const frames=renderFrames(fx,{fps,bg:'none',actor:false,options:options.effectOptions}),sheet=spriteSheet(fx,frames,'source');
+  const frames=renderSequence(fx,{fps,bg:'none',actor:false,options:options.effectOptions});
+  if(frames.w>4096||frames.h>4096||frames.w*frames.h*frames.n>16_777_216)throw new Error('Transformed export exceeds sprite-clip bounds');
+  const sheet=spriteSheet(fx,frames,'source');
   if(sheet.json.meta.size.w*sheet.json.meta.size.h>16_777_216)throw new Error('Padded atlas exceeds PNG import bounds; reduce fps, canvas size or duration');
-  const durationsMs=frames.frames.map((_,i)=>Math.round((i+1)*1000/fps)-Math.round(i*1000/fps));
+  const durationsMs=Array.from({length:frames.n},(_,i)=>frameDurationMs(i,fps));
   sheet.json.frames.forEach((f,i)=>f.duration=durationsMs[i]);
   const project:AsepriteProject={format:'poku-aseprite-project',version:1,effectId:id,width:frames.w,height:frames.h,
     pivot:frames.pivot as [number,number],fps,durationsMs,loop:!!fx.meta.loop,tags:sheet.json.meta.frameTags,flattened:true,bakedEmission:true};

@@ -19,6 +19,7 @@ export function create(options: EnergyShield3DOptions) {
   const radius = clamp3(Number.isFinite(options.radius) ? options.radius : 2.8, 1.2, 3.4), intensity = clamp3(Number.isFinite(options.intensity) ? options.intensity : 1, 0, 2);
   const palette = options.palette?.length ? options.palette : meta.options.palette, tone = (q: number) => palette[Math.round(clamp3(q) * (palette.length - 1))];
   const surface = createShieldSurface3D([0.6, radius + 0.4, 0.65], [0.14, 0, 1], radius * 1.22, radius);
+  const activeSurface = { ...surface };
   const impacts = SHIELD_TIMING_3D.hits.map((at, i) => ({ at, normal: shieldNormal3D(surface, [-0.27, 0.38, -0.04][i] * radius, [0.24, -0.19, 0.03][i] * radius)!, strength: [0.9, 0.72, 1.2][i] }));
   const incoming = impacts.map((hit, i) => { const end = shieldPoint3D(surface, hit.normal), direction = norm3([-0.85 + i * 0.13, 0.12 + i * 0.04, 1]); return { end, direction, start: add3(end, mul3(direction, 4.4)) }; });
   const rng = new Rng3D(options.seed);
@@ -34,8 +35,8 @@ export function create(options: EnergyShield3DOptions) {
       if (visibility <= 0) return;
       // The deployed surface remains the same shape. The scan front expands across it instead of scaling a flat disc.
       const growth = smooth3(0.04, 0.52, time), shrink = 1 - smooth3(3.32, 3.86, time), aperture = surface.aperture * Math.max(0.015, growth * shrink);
-      const activeSurface = { ...surface, aperture, capCos: Math.sqrt(1 - (aperture / surface.radius) ** 2) };
-      drawShieldSurface3D(p, activeSurface, { time, impacts, visibility, palette, emission: intensity * 0.24, cellSize: radius * 0.145 });
+      activeSurface.aperture = aperture; activeSurface.capCos = Math.sqrt(1 - (aperture / surface.radius) ** 2);
+      drawShieldSurface3D(p, surface, { time, impacts, visibility, aperture, palette, emission: intensity * 0.24, cellSize: radius * 0.145 });
       for (let index = 0; index < impacts.length; index++) {
         const hit = impacts[index], age = time - hit.at, bolt = incoming[index];
         if (age > -0.28 && age < 0) {

@@ -13,6 +13,9 @@ on:
       - "tests/**"
       - "package*.json"
       - "tsconfig*.json"
+      - "site/public/effects/**"
+      - "site/scripts/prepare-engine.mjs"
+      - "site/package.json"
       - ".github/workflows/render-engine.yml"
 
 permissions:
@@ -30,6 +33,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Verify prepared gallery and catalog match the source
+        run: node site/scripts/prepare-engine.mjs --check
       - name: Ensure optional GIF encoder is available for integration QA
         run: |
           if ! command -v ffmpeg >/dev/null 2>&1; then
@@ -41,6 +46,7 @@ jobs:
       - run: npm run test:export
       - run: npm run test:review
       - run: npm run test:aseprite
+      - run: npm run test:contracts
       - name: Smoke-test integrated cinematic image exports
         run: |
           for effect in frost slash blackhole wind windOriginal water shield; do

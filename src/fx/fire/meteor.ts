@@ -9,7 +9,7 @@ export const meta = {
   name: "Meteor",
   desc: "A burning rock streaks in from the upper left in a comet of fire and smashes into the floor: a white flash, a fireball, rocks and brands thrown, a glowing crater that cools.",
   tags: ["fire", "meteor", "impact", "explosion", "spell", "debris", "one-shot"],
-  size: [272, 232],
+  size: [272, 233],
   origin: [150, 208],
   duration: 5,
   loop: false,

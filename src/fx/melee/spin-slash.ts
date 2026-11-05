@@ -8,7 +8,7 @@ export const meta = {
   name: "Spin slash",
   desc: "The blade whirls once round the waist on a tilted plane, behind the body and back in front; the closed ring flares white, dissolves into a dotted trace and throws sparks.",
   tags: ["melee", "slash", "spin", "sword", "aoe", "combat", "one-shot"],
-  size: [208, 104],
+  size: [209, 104],
   origin: [104, 84],
   duration: 0.8,
   loop: false,

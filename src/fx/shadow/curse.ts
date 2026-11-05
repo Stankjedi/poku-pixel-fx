@@ -123,6 +123,9 @@ export function create(o: typeof meta.options & { actor?: ReturnType<typeof stoc
   let t = 0, stamped = false, broke = false, acc = 0;
   const light = (x: number, y: number, r: number, c: number, k: number, life: number) => lights.push({ x, y, r, c, k, life, max: life });
   const head = A ? A.y : -38;
+  // The last impact dust can outlive the broken skull. Give that residue its
+  // own short dissolve so the authored one-shot ends clear at its deadline.
+  const residue = () => 1 - smooth(meta.duration - 0.24, meta.duration, t);
 
   return {
     update(dt: number) {
@@ -198,11 +201,18 @@ export function create(o: typeof meta.options & { actor?: ReturnType<typeof stoc
       dust.update(dt);
     },
     drawBack(p: Painter) {
+      const fade = p.fade, tail = residue();
+      if (tail <= 0) return;
+      p.fade *= tail;
       puffs.draw(p, PK.SOOT, { x: 0, y: SY, k: stamped && !broke ? 0.8 : 0.3, reach: 50 });
       dust.draw(p, PK.SOOT);
       ps.draw(p, "back");
+      p.fade = fade;
     },
     draw(p: Painter) {
+      const fade = p.fade, tail = residue();
+      if (tail <= 0) return;
+      p.fade *= tail;
       // the curse floods down the body from the head, a bright front ahead of it, then ebbs
       const flood = smooth(STAMP + 0.04, STAMP + 0.42, t), ebb = 1 - smooth(BREAK + 0.15, BREAK + 0.75, t);
       if (A && flood > 0 && ebb > 0) {
@@ -255,6 +265,7 @@ export function create(o: typeof meta.options & { actor?: ReturnType<typeof stoc
           const u = Math.floor(x + SW / 2), v = Math.floor(y - SY + SH / 2);
           return inSkull(u, v) && SKULL[v][u] !== "e";
         }, 0.2);
+      p.fade = fade;
     },
   };
 }

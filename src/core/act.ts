@@ -5,12 +5,16 @@
 
 import { Rng, clamp } from "./math.js";
 import { hex, mix } from "./color.js";
-import { createFrame, clearFrame, createFx, painterFor } from "./fx.js";
+import { createFrame, clearFrame, createFx, painterFor, FX_TICK_RATE } from "./fx.js";
 import { stockActor, drawActor, actorAlphaOf, HERO2, DUMMY_PAL } from "./actor.js";
 import { posed, STAND, type Pose } from "./rig.js";
 import type { EffectModule, EffectOptions, EffectInputOptions } from "./fx.js";
 import type { PaintFrame } from "./painter.js";
 import type { ImpactContact2D } from "./impact-contact.js";
+import { blendOver } from "../render/coverage.js";
+import { channelToLinear } from "../render/linear.js";
+import { createActorAdapter2D, actorEffectOffset2D, type ActorAdapter2D, type ActorSelection2D } from "./actor-adapter.js";
+import { exportLayout2D } from "../render/export.js";
 
 type PoseKey = [number, Pose, ("out" | "in" | "line" | "snap")?];
 /** A contact in effect-local seconds. at selects a target index; y is local pixels (+Y down). */
@@ -21,10 +25,16 @@ export interface ActTimingHit {
   push: number; straw: number; flash: number; skin?: string | null; shiver: number; y: number; contact?: ImpactContact2D;
 }
 interface ActDust { t: number; x: number; n?: number; dir?: number; c?: string | number }
-interface ActSpec { poses?: PoseKey[]; targets?: {x?:number}[]; target?: {x?:number}; hits?: ActHit[]; dust?: ActDust[]; ghost?: string | number; onBody?: boolean; follow?: number }
+interface ActSpec { poses?: PoseKey[]; targets?: {x?:number}[]; target?: {x?:number}; hits?: ActHit[]; dust?: ActDust[]; ghost?: string | number; onBody?: boolean; follow?: number;
+  /** Extra native pixels for light outside meta.size; defaults to half the larger native dimension. */
+  scratchPadding?: number;
+  /** Native actors: stateful silhouette transformations default to an effect-start snapshot. */
+  actorSampling?: "live" | "snapshot";
+}
 type ActInput = Omit<ActSpec, "poses"> & { poses?: readonly (readonly (number | Pose | string)[])[] };
 type ActModule<O extends EffectOptions = EffectOptions> = EffectModule<O> & { act?: ActInput; actorAlpha?: (t: number, options: any) => number; meta: NonNullable<EffectModule["meta"]> & { size: number[]; origin: number[]; options?: { seed?: number; palette?: (string | number)[] } } };
-type ActOptions = EffectOptions & { seed?: number; palette?: (string | number)[]; actor?: ReturnType<typeof stockActor> };
+type ActOptions = EffectOptions & { seed?: number; palette?: (string | number)[]; actor?: ReturnType<typeof stockActor>;
+  actorSelection?: ActorSelection2D; actorAdapter?: ActorAdapter2D };
 interface Straw { x: number; y: number; vx: number; vy: number; age: number; life: number; big: boolean }
 interface Speck extends Straw { c: number }
 interface ActInstance { fx: ReturnType<typeof createFx>; meta: ActModule["meta"]; act: ActSpec; targets: Target[]; readonly t: number; readonly shake: number[]; readonly frozen: boolean; readonly pose: Pose | null; onHit?: (hit: ActHit) => void; update(dt: number): void; draw(frame: PaintFrame, options?: {body?:boolean;target?:boolean}): void; stop(): void; done(): boolean }
@@ -229,7 +239,14 @@ export function actSpan<O extends EffectOptions>(mod: ActModule<O>) {
  */
 export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectInputOptions<O> & ActOptions = {}) {
   const a = (mod.act ?? {}) as ActSpec, meta = mod.meta ?? {}, D = meta.duration ?? 1, flip = !!o.flip, seed = o.seed ?? meta.options?.seed ?? 1;
-  const fx = createFx(mod, o), track = a.poses ?? [[0, { ...STAND }]], span = actSpan(mod);
+  const track:PoseKey[] = a.poses ?? [[0, { ...STAND }]], span = actSpan(mod);
+  const adapter = o.actorAdapter ?? (o.actorSelection ? createActorAdapter2D(o.actorSelection) : undefined);
+  const actorSampling = a.actorSampling ?? (mod.create && a.onBody ? "snapshot" : "live");
+  // Stateful body transformations precompute a silhouette. Bind that immutable
+  // start sample to both the simulation and its visible body; never let a browser
+  // draw cadence mutate a shape that the simulation has already captured.
+  const startActor = adapter?.sample(0, poseAt(track,0));
+  const fx = createFx(mod, startActor ? { ...o, actor: startActor.actor } : o);
   const X = o.x ?? 0, Y = o.y ?? 0;
   const targets = (a.targets ?? (a.target ? [a.target] : [])).map((g, i) => new Target(g.x ?? 66, seed + 4 + i));
   const hits = (a.hits ?? []).map((h) => ({ ...h })).sort((p, q) => p.t - q.t), dust = (a.dust ?? []).slice().sort((p, q) => p.t - q.t);
@@ -240,6 +257,7 @@ export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectI
   // after-images take the effect's own color unless the act names one
   const ramp = o.palette ?? meta.options?.palette, ghosts: {q: Pose; age: number}[] = [], gc = hex(a.ghost ?? ramp?.[Math.floor(ramp.length * 0.7)] ?? "#8fb4ff");
   let t = span.from, stop = 0, stopped = false, shakeT = 0, shake0 = 0, amp = 0, nh = 0, nd = 0, loopN = 0, gAcc = 0;
+  let integratedAt = t, nextTick = Math.floor(t * FX_TICK_RATE + 1e-9) + 1;
   let last: Pose | null = null;
   const poseNow = () => {
     let tt = t;
@@ -254,8 +272,43 @@ export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectI
     return q;
   };
   let scratch: {a: PaintFrame; b: PaintFrame} | null = null;
-  const scratchFor = (f: PaintFrame) => {
-    if (!scratch || scratch.a.w !== f.w || scratch.a.h !== f.h) scratch = { a: createFrame(f.w, f.h, f.ox, f.oy), b: createFrame(f.w, f.h, f.ox, f.oy) };
+  const maxShiftX = Math.ceil(Math.max(...track.map(([,q])=>Math.abs((q.lean??0)*(a.follow??1))+Math.abs(q.x??0))))+2;
+  const maxShiftY = Math.ceil(Math.max(...track.map(([,q])=>Math.abs((q.crouch??0)*(a.follow??1))+Math.abs(q.y??0))))+3;
+  const scratchFor = (f: PaintFrame, q: Pose, r: ReturnType<typeof posed>) => {
+    // Work in world coordinates around this effect, rather than allocating two
+    // viewport-sized frames for every status. The native halo retains authored
+    // glow beyond the color canvas; callers can declare a larger scratchPadding.
+    const [w, h] = meta.size, [ox, oy] = meta.origin;
+    const halo = typeof a.scratchPadding === "number" ? a.scratchPadding : Math.ceil(Math.max(w, h) / 2);
+    const angle = fx.options.angle ?? 0, cs = Math.cos(angle), sn = Math.sin(angle), sign = flip ? -1 : 1;
+    let left = X - 12, top = Y - 38, right = X + 12, bottom = Y;
+    for (let corner = 0; corner < 4; corner++) {
+      const x = corner & 1 ? w - ox + halo : -ox - halo, y = corner & 2 ? h - oy + halo : -oy - halo;
+      const px = X + sign * x * cs - y * sn, py = Y + sign * x * sn + y * cs;
+      left = Math.min(left, px); right = Math.max(right, px);
+      top = Math.min(top, py); bottom = Math.max(bottom, py);
+    }
+    const follow = a.follow ?? 1, rx = Math.round(q.x ?? 0), ry = Math.round(q.y ?? 0);
+    const shiftX = maxShiftX, shiftY = maxShiftY;
+    left = Math.max(Math.floor(left), (f.ox | 0) - shiftX);
+    right = Math.min(Math.ceil(right), (f.ox | 0) + f.w + shiftX);
+    top = Math.max(Math.floor(top), (f.oy | 0) - shiftY);
+    bottom = Math.min(Math.ceil(bottom), (f.oy | 0) + f.h + shiftY);
+    // A visible posed limb may sample the rest sprite outside the output crop.
+    const px0 = X + sign * rx + (flip ? -r.x1 : r.x0), px1 = X + sign * rx + (flip ? -r.x0 : r.x1);
+    if (px0 < f.ox + f.w && px1 >= f.ox && Y + ry + r.y0 < f.oy + f.h && Y + ry + r.y1 >= f.oy) {
+      left = Math.min(left, X - 12); right = Math.max(right, X + 12);
+      top = Math.min(top, Y - 38); bottom = Math.max(bottom, Y);
+    }
+    left = Math.floor(left); top = Math.floor(top); right = Math.ceil(right); bottom = Math.ceil(bottom);
+    const sw = Math.max(1, right - left), sh = Math.max(1, bottom - top);
+    if (!scratch || scratch.a.w !== sw || scratch.a.h !== sh)
+      scratch = { a: createFrame(sw, sh, left, top), b: createFrame(sw, sh, left, top) };
+    for (const frame of [scratch.a, scratch.b]) {
+      frame.ox = left; frame.oy = top; frame.alphaMode = f.alphaMode;
+      if (f.hdrLight && !frame.hdrLight) frame.hdrLight = new Float32Array(sw * sh * 3);
+      else if (!f.hdrLight) frame.hdrLight = undefined;
+    }
     return scratch;
   };
   const out: ActInstance = {
@@ -282,7 +335,10 @@ export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectI
       // reaching it. Hits at the same instant share one freeze (the maximum).
       for (;;) {
         const offset = meta.loop ? loopN * D : 0;
-        for (; nh < hits.length && hits[nh].t + offset <= t + 1e-9; nh++) {
+        // The boundary step below normalizes roundoff before dispatch. Looking
+        // ahead here would apply an impulse before its preceding physics segment
+        // when a host frame happens to stop just short of the contact.
+        for (; nh < hits.length && hits[nh].t + offset <= t; nh++) {
           const h = hits[nh];
           if (h.stop) stop = Math.max(stop, h.stop);
           if (h.shake) {
@@ -292,7 +348,7 @@ export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectI
           if (h.target !== false) targets.forEach((g, i) => (h.at === undefined || h.at === i) && g.hit(h));
           out.onHit?.(h);
         }
-        for (; nd < dust.length && dust[nd].t + offset <= t + 1e-9; nd++) {
+        for (; nd < dust.length && dust[nd].t + offset <= t; nd++) {
           const d = dust[nd], n = d.n ?? 6;
           for (let i = 0; i < n; i++) {
             const dir = d.dir ?? (R.next() < 0.5 ? -1 : 1);
@@ -300,7 +356,7 @@ export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectI
           }
         }
         const boundary = meta.loop ? (loopN + 1) * D : Infinity;
-        if (meta.loop && t >= boundary - Math.min(1e-9, D * 1e-9)) {
+        if (meta.loop && t >= boundary) {
           // Finish the old cycle before dispatching the new cycle's t=0 events.
           // Negative wind-up events belong only to the first playback.
           t = boundary;
@@ -318,36 +374,44 @@ export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectI
           shakeT = Math.max(0, shakeT - frozen); // Shake uses wall time during hit-stop.
           continue;
         }
+        const tickTime = nextTick / FX_TICK_RATE;
         const next = Math.min(hits[nh] ? hits[nh].t + offset : Infinity,
-          dust[nd] ? dust[nd].t + offset : Infinity, boundary);
-        // Never integrate past a contact. Small steps also keep the target spring
-        // and debris stable when the host catches up after a delayed frame.
-        const step = Math.min(remaining, next - t, 1 / 120);
+          dust[nd] ? dust[nd].t + offset : Infinity, boundary, tickTime);
+        // The public clock and contacts retain exact authored times. Physics only
+        // integrates at timeline ticks or contacts, never at a host-frame endpoint.
+        // Contact-sized partial steps are therefore identical at every host FPS.
+        const step = Math.min(remaining, next - t);
         const t0 = t;
-        t += step;
+        t = step === next - t ? next : t + step;
+        if (next - t <= 1e-12) t = next;
         remaining = Math.max(0, remaining - step);
         shakeT = Math.max(0, shakeT - step);
         if (t > 0) fx.update(Math.max(0, t) - Math.max(0, t0));
+        if (t < next - 1e-12) continue;
+        const physicsStep = t - integratedAt;
+        integratedAt = t;
+        if (t >= tickTime - 1e-12) nextTick++;
         for (const k of specks) {
-          k.age += step;
-          k.vx *= 1 - 5 * step;
-          k.vy += 110 * step;
-          k.x += k.vx * step;
-          k.y = Math.min(-1, k.y + k.vy * step);
+          k.age += physicsStep;
+          k.vx *= 1 - 5 * physicsStep;
+          k.vy += 110 * physicsStep;
+          k.x += k.vx * physicsStep;
+          k.y = Math.min(-1, k.y + k.vy * physicsStep);
         }
         for (let i = specks.length - 1; i >= 0; i--) if (specks[i].age >= specks[i].life) specks.splice(i, 1);
         const q = poseNow();
-        for (const g of targets) g.step(step);
+        for (const g of targets) g.step(physicsStep);
         // after-images while a key asks for them
-        gAcc += step;
+        gAcc += physicsStep;
         if (q.ghost && gAcc >= 1 / 30) {
           gAcc = 0;
           ghosts.push({ q, age: 0 });
           if (ghosts.length > 7) ghosts.shift();
         }
-        for (const g of ghosts) g.age += step;
+        for (const g of ghosts) g.age += physicsStep;
         while (ghosts.length && ghosts[0].age > GHOST_LIFE) ghosts.shift();
       }
+      poseNow();
     },
     /** Paint it. { body: false } leaves the character out, { target: false } the target. */
     draw(frame: PaintFrame, { body = true, target: showTarget = true } = {}) {
@@ -365,6 +429,12 @@ export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectI
         }
       };
       const FX = X - (frame.ox | 0), FY = Y - (frame.oy | 0);
+      const native = actorSampling === "snapshot" && active ? startActor : adapter?.sample(t, q);
+      if (native && adapter) {
+        fx.options.actor = actorSampling === "snapshot" ? startActor!.actor : native.actor;
+        const [dx,dy] = actorEffectOffset2D(native,q,!!a.onBody,adapter.selection);
+        fx.options.x = X + (flip ? -dx : dx); fx.options.y = Y + dy;
+      }
       if (!body) {
         if (active) fx.draw(frame, "back");
         drawTargets();
@@ -372,14 +442,46 @@ export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectI
         drawStraw();
         return;
       }
+      if(native && adapter){
+        // A native adapter already samples the posed mask and anchors. It does not
+        // pass through the stock 24x38 rest-sprite remap a second time.
+        if(active)fx.draw(frame,"back");
+        drawTargets();
+        native.drawBack(painterFor(frame).place(X,Y,flip));
+        const p=painterFor(frame).place(X,Y,flip);
+        for(const ghost of ghosts){
+          const actor=adapter.sample(t-ghost.age,ghost.q).actor,k=.5*(1-ghost.age/GHOST_LIFE);
+          for(let y=0;y<actor.h;y++)for(let x=0;x<actor.w;x++)if(actor.mask.data[y*actor.w+x])p.light(actor.x+x,actor.y+y,gc,k);
+        }
+        const tt=meta.loop?(t<0?0:t%D):clamp(t,0,D),alpha=active?actorAlphaOf(mod,tt,fx.options):1;
+        native.drawFront(painterFor(frame).place(X,Y,flip),alpha);
+        if(ghosts.length){
+          const actor=native.actor;
+          for(let y=0;y<actor.h;y++)for(let x=0;x<actor.w;x++)if(actor.mask.data[y*actor.w+x]){
+            const px=FX+(flip?-actor.x-x-1:actor.x+x),py=FY+actor.y+y;
+            if(px<0||py<0||px>=W||py>=H)continue;
+            const j=py*W+px,keep=1-Math.min(1,Math.max(0,alpha))*(actor.pixels[y*actor.w+x]>>>24)/255,light=frame.light[j];
+            frame.light[j]=keep>0?((light&0xff000000)|(((light&255)*keep)|0)|(((((light>>>8)&255)*keep)|0)<<8)|(((((light>>>16)&255)*keep)|0)<<16)):0;
+            if(frame.hdrLight)for(let channel=0;channel<3;channel++)frame.hdrLight[j*3+channel]*=keep;
+          }
+        }
+        if(active)fx.draw(frame,"front");
+        drawStraw();drawDust();return;
+      }
       const rx = Math.round(q.x ?? 0), ry = Math.round(q.y ?? 0), BX = FX + (flip ? -rx : rx), BY = FY + ry;
       const r = posed(q), mirror = flip;
       const paint = (i: number, color: number) => {
         const px = mirror ? BX - r.xs[i] - 1 : BX + r.xs[i], py = BY + r.ys[i];
         if (px < 0 || py < 0 || px >= W || py >= H) return;
-        frame.color[py * W + px] = color;
+        const j = py * W + px;
+        frame.color[j] = blendOver(frame.color[j], color, 1);
         // he stays crisp in front of his own after-images
-        if (ghosts.length) frame.light[py * W + px] = 0;
+        if (ghosts.length) {
+          const keep = 1 - (color >>> 24) / 255, light = frame.light[j];
+          frame.light[j] = keep > 0 ? ((255 << 24) | (((((light >>> 16) & 255) * keep) | 0) << 16)
+            | (((((light >>> 8) & 255) * keep) | 0) << 8) | (((light & 255) * keep) | 0)) >>> 0 : 0;
+          if (frame.hdrLight) for (let channel = 0; channel < 3; channel++) frame.hdrLight[j * 3 + channel] *= keep;
+        }
       };
       const drawGhosts = () => {
         for (const g of ghosts) {
@@ -391,6 +493,11 @@ export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectI
             if (px < 0 || py < 0 || px >= W || py >= H) continue;
             const j = py * W + px, d = frame.light[j];
             frame.light[j] = (255 << 24) | (Math.min(255, ((d >>> 16) & 255) + b0) << 16) | (Math.min(255, ((d >>> 8) & 255) + g0) << 8) | Math.min(255, (d & 255) + r0);
+            if (frame.hdrLight) {
+              frame.hdrLight[j * 3] += channelToLinear(gc, 0) * k;
+              frame.hdrLight[j * 3 + 1] += channelToLinear(gc, 8) * k;
+              frame.hdrLight[j * 3 + 2] += channelToLinear(gc, 16) * k;
+            }
           }
         }
       };
@@ -416,52 +523,70 @@ export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectI
         drawDust();
         return;
       }
-      // the effect paints the standing body: draw it there, then carry each body pixel to where the pose put it
-      const { a: A, b: B } = scratchFor(frame);
+      // Keep back and body/front as separate source-over layers. In particular,
+      // the back layer must not be embedded in B and then painted a second time.
+      const { a: A, b: B } = scratchFor(frame, q, r);
       clearFrame(A);
       clearFrame(B);
       if (active) fx.draw(A, "back");
-      B.color.set(A.color);
-      B.light.set(A.light);
       const tt = meta.loop ? (t < 0 ? 0 : t % D) : clamp(t, 0, D), alpha = active ? actorAlphaOf(mod, tt, fx.options) : 1;
-      drawActor(painterFor(B).place(FX, FY, flip), (fx.options.actor as ReturnType<typeof stockActor> | undefined) ?? stockActor(2), alpha);
+      drawActor(painterFor(B).place(X, Y, flip), (fx.options.actor as ReturnType<typeof stockActor> | undefined) ?? stockActor(2), alpha);
       if (active) fx.draw(B, "front");
       const follow = a.follow ?? 1, lean = (q.lean ?? 0) * follow, cr = (q.crouch ?? 0) * follow;
-      // what's up on the body goes with it; what's on the floor stays on the floor
-      const shiftOf = (ly: number) => {
-        const k = clamp((-11 - ly) / 7, 0, 1), f = clamp((-1 - ly) / 6, 0, 1);
-        return [Math.round(lean * k + rx * f), Math.round(cr * k + ry * f)];
+      const C = frame.color, Ls = frame.light, hdr = frame.hdrLight, sw = A.w, sh = A.h;
+      const workX = A.ox, workY = A.oy, frameX = frame.ox | 0, frameY = frame.oy | 0;
+      const rest = (worldX: number, worldY: number) => {
+        const col = (flip ? X - worldX - 1 : worldX - X) + 12, row = worldY - Y + 38;
+        return col >= 0 && row >= 0 && col < 24 && row < 38 && REST_MASK[row * 24 + col] === 1;
       };
-      const rest = (sx: number, sy: number) => {
-        const c = (flip ? FX - sx - 1 : sx - FX) + 12, r0 = sy - FY + 38;
-        return c >= 0 && r0 >= 0 && c < 24 && r0 < 38 && REST_MASK[r0 * 24 + c] === 1;
-      };
-      const C = frame.color, Ls = frame.light;
-      const copy = (buf: Uint32Array, sx: number, sy: number, s: number) => {
-        const [dx, dy] = shiftOf(sy - FY), px = sx + (flip ? -dx : dx), py = sy + dy;
-        if (px < 0 || py < 0 || px >= W || py >= H) return;
-        const i = py * W + px;
-        if (buf === Ls) {
-          const d = Ls[i];
-          Ls[i] = (255 << 24) | (Math.min(255, ((d >>> 16) & 255) + ((s >>> 16) & 255)) << 16) | (Math.min(255, ((d >>> 8) & 255) + ((s >>> 8) & 255)) << 8) | Math.min(255, (d & 255) + (s & 255));
-        } else if (s >>> 24 === 255 || !C[i]) C[i] = s;
-        else {
-          const k = (s >>> 24) / 255, d = C[i];
-          const ch = (n: number) => Math.round(((s >>> n) & 255) * k + ((d >>> n) & 255) * (1 - k));
-          C[i] = (Math.max(s >>> 24, d >>> 24) << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0);
+      const copyLight = (source: PaintFrame, sourceIndex: number, destination: number) => {
+        const s = source.light[sourceIndex];
+        if (s & 0xffffff) {
+          const d = Ls[destination];
+          Ls[destination] = (255 << 24) | (Math.min(255, ((d >>> 16) & 255) + ((s >>> 16) & 255)) << 16)
+            | (Math.min(255, ((d >>> 8) & 255) + ((s >>> 8) & 255)) << 8) | Math.min(255, (d & 255) + (s & 255));
+        }
+        if (hdr && source.hdrLight) {
+          const to = destination * 3, from = sourceIndex * 3;
+          hdr[to] += source.hdrLight[from];
+          hdr[to + 1] += source.hdrLight[from + 1];
+          hdr[to + 2] += source.hdrLight[from + 2];
         }
       };
+      // shiftOf is constant across a row, so compute it once rather than allocate
+      // a pair for every color/light pixel. Only this effect's source region is visited.
+      const visit = (front: boolean) => {
+        for (let sy = 0; sy < sh; sy++) {
+          const worldY = workY + sy, ly = worldY - Y;
+          const k = clamp((-11 - ly) / 7, 0, 1), f = clamp((-1 - ly) / 6, 0, 1);
+          const dx = Math.round(lean * k + rx * f) * (flip ? -1 : 1), dy = Math.round(cr * k + ry * f);
+          const py = worldY + dy - frameY;
+          if (py < 0 || py >= H) continue;
+          const sx0 = Math.max(0, frameX - workX - dx), sx1 = Math.min(sw, frameX + W - workX - dx);
+          for (let sx = sx0; sx < sx1; sx++) {
+            const j = sy * sw + sx, worldX = workX + sx, i = py * W + worldX + dx - frameX;
+            if (!front) {
+              const c = A.color[j];
+              if (c) C[i] = blendOver(C[i], c, 1);
+            } else {
+              const c = B.color[j];
+              if (c && !rest(worldX, worldY)) C[i] = blendOver(C[i], c, 1);
+              // In 2D these are authored additive glows, not opaque surface emission.
+              // Both packed mirror and linear energy use the same pose displacement.
+              copyLight(A, j, i);
+              copyLight(B, j, i);
+            }
+          }
+        }
+      };
+      visit(false);
       drawTargets();
       shadow();
-      for (let sy = 0; sy < H; sy++)
-        for (let sx = 0; sx < W; sx++) {
-          const c = A.color[sy * W + sx];
-          if (c) copy(C, sx, sy, c);
-        }
       drawGhosts();
       const restIndex = (s: number) => {
-        const c = s % 24, r0 = (s / 24) | 0, sx = flip ? FX - (c - 12) - 1 : FX + c - 12, sy = FY + r0 - 38;
-        return sx >= 0 && sy >= 0 && sx < W && sy < H ? sy * W + sx : -1;
+        const col = s % 24, row = (s / 24) | 0;
+        const sx = (flip ? X - (col - 12) - 1 : X + col - 12) - workX, sy = Y + row - 38 - workY;
+        return sx >= 0 && sy >= 0 && sx < sw && sy < sh ? sy * sw + sx : -1;
       };
       for (let i = 0; i < r.n; i++) {
         const s = r.src[i] >= 0 ? NEAREST[r.src[i]] : -1;
@@ -469,17 +594,11 @@ export function createAct<O extends EffectOptions>(mod: ActModule<O>, o: EffectI
           if (alpha > 0.5) paint(i, r.color[i]);
           continue;
         }
-        const j = restIndex(s), v = j >= 0 ? B.color[j] : REST_PX[s];
+        const j = restIndex(s), v = j >= 0 ? B.color[j] : 0;
         if (!v) continue;
-        // the effect left this bit of body alone, or changed it: carry the change, on top of this pixel's own shading
         paint(i, v === REST_PX[s] ? r.color[i] : carry(v, REST_PX[s], r.color[i]));
       }
-      for (let sy = 0; sy < H; sy++)
-        for (let sx = 0; sx < W; sx++) {
-          const j = sy * W + sx;
-          if (B.color[j] && B.color[j] !== A.color[j] && !rest(sx, sy)) copy(C, sx, sy, B.color[j]);
-          if (B.light[j] & 0xffffff) copy(Ls, sx, sy, B.light[j]);
-        }
+      visit(true);
       drawStraw();
       drawDust();
     },
@@ -509,6 +628,7 @@ export function actTiming<O extends EffectOptions>(mod: ActModule<O>) {
     windup: -from,
     recovery: mod.meta?.loop ? 0 : Math.max(0, to - D),
     onBody: !!a.onBody,
+    actorSampling: a.actorSampling ?? (mod.create && a.onBody ? "snapshot" : "live"),
     targets: (a.targets ?? (a.target ? [a.target] : [])).map((g) => g.x ?? 66),
     hits: (a.hits ?? []).map((h): ActTimingHit => ({
       t: h.t, freeze: h.stop ?? 0, shake: h.shake ?? 0, amp: h.amp ?? (h.shake ? 2 : 0),
@@ -524,21 +644,42 @@ export function actTiming<O extends EffectOptions>(mod: ActModule<O>) {
 }
 
 /** The box an act needs in local space, so nothing gets cut off: { x0, y0, x1, y1 }, sampled over its poses. */
-export function actBounds<O extends EffectOptions>(mod: ActModule<O>) {
+export function actBounds<O extends EffectOptions>(mod: ActModule<O>, options: EffectOptions = {}) {
   const a = mod.act as ActSpec | undefined, [w, h] = mod.meta.size, [ox, oy] = mod.meta.origin;
   let x0 = -ox, y0 = -oy, x1 = w - ox, y1 = h - oy;
-  const see = (p: Pose) => {
-    const r = posed(p), X = Math.round(p.x ?? 0), Y = Math.round(p.y ?? 0), a = r.x0, b = r.x1;
-    x0 = Math.min(x0, a + X - 1); x1 = Math.max(x1, b + X + 1); y0 = Math.min(y0, r.y0 + Y - 1); y1 = Math.max(y1, r.y1 + Y + 1);
+  const adapter = (options.actorAdapter as ActorAdapter2D | undefined) ?? (options.actorSelection ? createActorAdapter2D(options.actorSelection as ActorSelection2D) : undefined);
+  const layout = exportLayout2D([w,h],[ox,oy],{angle:options.flip?-(options.angle??0):options.angle});
+  const effect = {x0:-layout.x,y0:-layout.y,x1:layout.w-layout.x,y1:layout.h-layout.y};
+  x0=Math.min(x0,effect.x0);y0=Math.min(y0,effect.y0);x1=Math.max(x1,effect.x1);y1=Math.max(y1,effect.y1);
+  const see = (p: Pose, time=0) => {
+    if(adapter){
+      const sample=adapter.sample(time,p),b=sample.bounds,[dx,dy]=actorEffectOffset2D(sample,p,!!a?.onBody,adapter.selection);
+      x0=Math.min(x0,b.x0-2,effect.x0+dx);y0=Math.min(y0,b.y0-2,effect.y0+dy);
+      x1=Math.max(x1,b.x1+2,effect.x1+dx);y1=Math.max(y1,b.y1+2,effect.y1+dy);
+      if(a?.onBody){
+        const extraX=Math.max(0,(b.x1-b.x0-24)/2),extraY=Math.max(0,b.y1-b.y0-38);
+        x0=Math.min(x0,effect.x0-extraX);x1=Math.max(x1,effect.x1+extraX);y0=Math.min(y0,effect.y0-extraY);
+      }
+      return;
+    }
+    const r = posed(p), X = Math.round(p.x ?? 0), Y = Math.round(p.y ?? 0), left = r.x0, right = r.x1;
+    x0 = Math.min(x0, left + X - 1); x1 = Math.max(x1, right + X + 1); y0 = Math.min(y0, r.y0 + Y - 1); y1 = Math.max(y1, r.y1 + Y + 1);
   };
   const k = a?.poses;
   if (k) {
-    for (let t = k[0][0]; t <= k[k.length - 1][0]; t += 1 / 12) see(poseAt(k, t));
-    for (const key of k) see(key[1]);
-  } else see(STAND);
+    for (let t = k[0][0]; t <= k[k.length - 1][0]; t += 1 / 12) see(poseAt(k, t),t);
+    for (const key of k) see(key[1],key[0]);
+  } else {
+    see(STAND);
+    if(adapter){
+      // No authored pose keys means the selected native motion is still free to
+      // move. Its declared envelope covers the complete cycle, including weapons.
+      const b=adapter.bounds;x0=Math.min(x0,b.x0);y0=Math.min(y0,b.y0);x1=Math.max(x1,b.x1);y1=Math.max(y1,b.y1);
+    }
+  }
   for (const g of a?.targets ?? (a?.target ? [a.target] : [])) {
     const tx = g.x ?? 66;
     x0 = Math.min(x0, tx - 30); x1 = Math.max(x1, tx + 36); y0 = Math.min(y0, -56);
   }
-  return { x0, y0, x1, y1 };
+  return { x0:Math.floor(x0), y0:Math.floor(y0), x1:Math.ceil(x1), y1:Math.ceil(y1) };
 }

@@ -55,7 +55,7 @@ export class Painter {
     return this;
   }
 
-  /** Put the effect's origin at (x, y) in frame space, mirrored if flip, rotated by angle (radians). */
+  /** Put the effect's origin at world (x, y), mirrored if flip, rotated by angle (radians). */
   place(x: number, y: number, flip = false, angle = 0) {
     this.tx = x; this.ty = y; this.fx = flip ? -1 : 1; this.cs = Math.cos(angle); this.sn = Math.sin(angle);
     return this;
@@ -189,16 +189,30 @@ export class Painter {
     this.lineCells(this.cellX(x0, y0), this.cellY(x0, y0), this.cellX(x1, y1), this.cellY(x1, y1), c, a);
   }
   private lineCells(sx: number, sy: number, ex: number, ey: number, c: PaintValue, a: PaintValue, opacity = 1) {
-    const dx = Math.abs(ex - sx), dy = -Math.abs(ey - sy), stepx = sx < ex ? 1 : -1, stepy = sy < ey ? 1 : -1;
-    const n = Math.max(dx, -dy) || 1, fc = typeof c === "function", fa = typeof a === "function";
-    let err = dx + dy, i = 0;
-    for (;;) {
-      const u = i++ / n;
-      this.put(sx, sy, (fc ? c(u, 0) : c) as number, ((fa ? a(u, 0) : a) as number) * opacity);
-      if (sx === ex && sy === ey) break;
-      const e2 = 2 * err;
-      if (e2 >= dy) { err += dy; sx += stepx; }
-      if (e2 <= dx) { err += dx; sy += stepy; }
+    const fc = typeof c === "function", fa = typeof a === "function";
+    this.visibleLineCells(sx, sy, ex, ey, (x, y, u) =>
+      this.put(x, y, (fc ? c(u, 0) : c) as number, ((fa ? a(u, 0) : a) as number) * opacity));
+  }
+  /** Skip invisible major-axis steps without moving endpoints or restarting the raster error. */
+  private visibleLineCells(sx: number, sy: number, ex: number, ey: number, visit: (x: number, y: number, u: number) => void) {
+    const dx = Math.abs(ex - sx), dy = Math.abs(ey - sy), stepX = sx < ex ? 1 : -1, stepY = sy < ey ? 1 : -1;
+    const xMajor = dx >= dy, major = xMajor ? dx : dy, n = major || 1;
+    const start = xMajor ? sx : sy, direction = xMajor ? stepX : stepY;
+    const lo = xMajor ? this.ox : this.oy, hi = lo + (xMajor ? this.w : this.h) - 1;
+    const first = Math.max(0, direction > 0 ? lo - start : start - hi);
+    const last = Math.min(major, direction > 0 ? hi - start : start - lo);
+    if (first > last) return;
+    // This is the closed form of the original inclusive Bresenham tie rule.
+    // Reconstructing its error preserves both pixel phase and the original global u.
+    const minorSteps = major ? Math.floor((first * (xMajor ? dy : dx) + major / 2) / major) : 0;
+    const nx = xMajor ? first : minorSteps, ny = xMajor ? minorSteps : first;
+    sx += nx * stepX; sy += ny * stepY;
+    let error = dx - dy - nx * dy + ny * dx;
+    for (let i = first; i <= last; i++) {
+      if (sx >= this.ox && sy >= this.oy && sx < this.ox + this.w && sy < this.oy + this.h) visit(sx, sy, i / n);
+      const twice = error * 2;
+      if (twice >= -dy) { error -= dy; sx += stepX; }
+      if (twice <= dx) { error += dx; sy += stepY; }
     }
   }
   /** Lines through a list of points [[x, y], ...]. */
@@ -261,19 +275,10 @@ export class Painter {
       const [ax, ay] = pts[j - 1], [bx, by] = pts[j];
       const start = lengths ? lengths[j - 1] / total : 0, span = lengths ? (lengths[j] - lengths[j - 1]) / total : 1;
       if (thin) {
-        let sx = globalU ? Math.floor(this.toX(ax, ay)) : this.cellX(ax, ay), sy = globalU ? Math.floor(this.toY(ax, ay)) : this.cellY(ax, ay);
+        const sx = globalU ? Math.floor(this.toX(ax, ay)) : this.cellX(ax, ay), sy = globalU ? Math.floor(this.toY(ax, ay)) : this.cellY(ax, ay);
         const ex = globalU ? Math.floor(this.toX(bx, by)) : this.cellX(bx, by), ey = globalU ? Math.floor(this.toY(bx, by)) : this.cellY(bx, by);
-        const dx = Math.abs(ex - sx), dy = -Math.abs(ey - sy), stepX = sx < ex ? 1 : -1, stepY = sy < ey ? 1 : -1;
-        const n = Math.max(dx, -dy) || 1;
-        let error = dx + dy, step = 0;
-        for (;;) {
-          visit(sx, sy, 0, preferHead && dx === 0 && dy === 0 ? start + span : start + span * step / n);
-          step++;
-          if (sx === ex && sy === ey) break;
-          const e2 = error * 2;
-          if (e2 >= dy) { error += dy; sx += stepX; }
-          if (e2 <= dx) { error += dx; sy += stepY; }
-        }
+        this.visibleLineCells(sx, sy, ex, ey, (x, y, u) =>
+          visit(x, y, 0, preferHead && sx === ex && sy === ey ? start + span : start + span * u));
       } else {
         const x0 = this.toX(ax, ay), y0 = this.toY(ax, ay), x1 = this.toX(bx, by), y1 = this.toY(bx, by);
         const dx = x1 - x0, dy = y1 - y0, length2 = dx * dx + dy * dy;
