@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, loadEffect, renderFrames, spriteSheet } from './lib/fxlib.mjs';
 import { readReviewManifest, reviewIdentity, validateReviewRecord, writeReviewEvidence } from './lib/visual-review.mjs';
+const { readIntentBrief, prepareIntentReview } = await import(new URL('../../tools/lib/effect-intent.mjs', import.meta.url).href);
 
 const [id, flag, file, ...rest] = process.argv.slice(2);
 if (!id || !/^[a-z0-9-]+\/[a-z0-9-]+$/.test(id) || rest.length
@@ -12,7 +13,10 @@ if (!id || !/^[a-z0-9-]+\/[a-z0-9-]+$/.test(id) || rest.length
   process.exit(1);
 }
 try {
+  const brief = readIntentBrief(ROOT, id);
   const fx = await loadEffect(id), [w, h] = fx.meta.size, fps = fx.meta.fps;
+  if (brief.timeline.durationSeconds !== fx.meta.duration || brief.timeline.loop !== !!fx.meta.loop)
+    throw new Error('Intent duration/loop must match the current effect meta.duration/meta.loop');
   const n = Math.max(1, Math.round(fx.meta.duration * fps) + (fx.meta.loop ? 0 : 1));
   if (![w, h, fps, n].every(Number.isSafeInteger) || w < 1 || h < 1 || w > 480 || h > 480
     || fps < 1 || fps > 120 || n > 4096 || w * h * n > 16_777_216)
@@ -29,9 +33,10 @@ try {
   } else {
     mkdirSync(dir, { recursive: true });
     const manifest = writeReviewEvidence(dir, fx, result, sheet, identity);
+    const intent = prepareIntentReview(ROOT, id);
     console.log(JSON.stringify({ id, evidence: join(dir, 'playback.html'), template: join(dir, 'review-template.json'),
-      fingerprint: identity.fingerprint, samples: manifest.samples.length,
-      next: 'Inspect the images and full-speed playback. Write your own intent, observations and limitations, then submit with --record. No review is granted automatically.' }, null, 2));
+      fingerprint: identity.fingerprint, samples: manifest.samples.length, intentTemplate: intent.path,
+      next: 'Inspect images and full-speed playback. Record visual observations with --record, then record the intent review using node tools/effect-intent.mjs record <id> <file>. Record the observed first impression separately from intended meaning. Human or agent self-assessment is not user approval; neither review is generated automatically.' }, null, 2));
   }
 } catch (e) {
   console.error(`Visual review: ${e instanceof Error ? e.message : e}`);
