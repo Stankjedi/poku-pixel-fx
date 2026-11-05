@@ -1,7 +1,8 @@
 // The gallery: every effect playing live from its own code. Tiles start when they scroll into view; a click
 // opens one effect with its options, a sprite sheet and the code to use it.
 
-import { effects, categories as catalogCategories } from "../src/fx/index.js";
+import { categories as catalogCategories } from "../src/fx/categories.js";
+import { catalogEntries, loadCatalogEffect } from "../src/authoring/registry.js";
 import { createFrame, clearFrame, createFx, createAct, actBounds, composite, backdrop, drawActor, painterFor, stockActor, actorAlphaOf, sceneCameraOffset, PAL, BACKDROPS, resolveEffectExport, edgeFade, frameDurationMs, effectExampleCode2D, type ActorSelection2D, atlasMetadata, actTiming, transformImpactContact2D, defineRestorationTiming2D, FrameRenderer } from "../src/core/index.js";
 import { effectsKo, tagsKo } from "../src/i18n/ko/index.js";
 import { encodeAnimatedWebP } from "./animated-webp.js";
@@ -29,14 +30,15 @@ const palettesKo: Record<string, string> = {
 };
 
 interface GalleryMeta { name: string; desc: string; size: [number, number]; origin: [number, number]; fps: number; bg: string; loop: boolean; duration: number; tags: string[]; options: Record<string, unknown>; actor?: number | boolean }
-interface GalleryEffect { id: string; cat: string; name: string; originalName: string; originalDesc: string; searchIndex: string; meta: GalleryMeta; mod: any }
-interface Tile { fx: GalleryEffect; fig: HTMLElement; cv: HTMLCanvasElement; player: Player | null; visible: boolean; hover: boolean }
+interface GalleryEffect { id: string; cat: string; name: string; originalName: string; originalDesc: string; searchIndex: string; meta: GalleryMeta; mod: any; hasAct: boolean; loaded?: boolean }
+interface Tile { fx: GalleryEffect; fig: HTMLElement; cv: HTMLCanvasElement; player: Player | null; visible: boolean; hover: boolean; loading?: boolean }
 interface Section { c: (typeof categories)[number]; sec: HTMLElement; list: GalleryEffect[] }
 // Shared submissions stay in the standalone library, but the sharing site displays
 // those records from its own store so an imported source does not duplicate them.
 const hideSharedSources = document.body.hasAttribute("data-exclude-shared-sources");
-const FX: GalleryEffect[] = (Object.entries(effects) as [string, any][]).filter(([, mod]) => !hideSharedSources || mod.meta.sharedSource !== true).map(([id, mod]) => {
-  const meta = { fps: 30, bg: "dark", loop: false, duration: 1, tags: [], options: {}, ...mod.meta };
+const FX: GalleryEffect[] = catalogEntries.filter(entry => !hideSharedSources || entry.meta.sharedSource !== true).map(entry => {
+  const {id} = entry, mod = {meta: entry.meta};
+  const meta = { fps: 30, bg: "dark", loop: false, duration: 1, tags: [], options: {}, ...mod.meta } as unknown as GalleryMeta;
   const originalName = meta.name, originalDesc = meta.desc;
   const translation = effectsKo[id];
   if (translation) Object.assign(meta, translation);
@@ -44,8 +46,11 @@ const FX: GalleryEffect[] = (Object.entries(effects) as [string, any][]).filter(
   const searchIndex = searchText([id, meta.name, meta.desc, originalName, originalDesc,
     category?.name ?? "", category?.blurb ?? "", originalCategory?.name ?? "", originalCategory?.blurb ?? "",
     ...meta.tags, ...meta.tags.map(tagLabel)].join(" "));
-  return { id, cat, name: meta.name, originalName, originalDesc, searchIndex, mod: { ...mod, meta }, meta };
+  return { id, cat, name: meta.name, originalName, originalDesc, searchIndex, mod: { ...mod, meta }, meta, hasAct: entry.hasAct };
 });
+async function ensureLoaded(fx: GalleryEffect) {
+  if (!fx.loaded) { const mod = await loadCatalogEffect(fx.id); fx.mod = {...mod,meta:fx.meta}; fx.loaded = true; }
+}
 const motionPreference = matchMedia("(prefers-reduced-motion: reduce)");
 let reduced = motionPreference.matches;
 motionPreference.addEventListener("change", event => {
@@ -121,13 +126,14 @@ class Player {
   }
   tick(dt: number) {
     const m = this.fx.meta, step = 1 / m.fps;
-    if (this.playing) this.acc = Math.min(this.acc + dt * this.speed, 0.25);
+    if (this.playing) this.acc += dt * this.speed;
     let moved = false;
-    while (this.acc >= step) {
+    let advanced = 0;
+    while (this.acc >= step && advanced++ < 120) {
       this.acc -= step;
       if (!m.loop && (this.acted ? this.inst.done() : this.inst.t >= m.duration)) {
         this.wait += step;
-        if (this.wait > 0.45) this.restart();
+        if (this.wait > 0.45) { const carry = this.acc; this.restart(); this.acc = carry; }
       } else this.inst.update(step);
       moved = true;
     }
@@ -187,16 +193,16 @@ function build() {
     sections.push({ c, sec, list });
     for (const fx of list) {
       const cv = el("canvas", { ariaLabel: fx.name });
-      const b = fx.mod.act ? actBounds(fx.mod) : null, [fw, fh] = b ? [b.x1 - b.x0, b.y1 - b.y0] : fx.meta.size;
-      const fig = el("figure", { className: isScreen(fx) ? "tile big screen" : fw > 200 || fh > 170 || (b && (fw > 130 || fx.mod.act.target || fx.mod.act.targets)) ? "tile big" : "tile", tabIndex: 0 }, [
+      const b = null, [fw, fh] = fx.meta.size;
+      const fig = el("figure", { className: isScreen(fx) ? "tile big screen" : fw > 200 || fh > 170 || (fx.hasAct && fw > 130) ? "tile big" : "tile", tabIndex: 0 }, [
         el("div", { className: "stage" }, cv),
         el("figcaption", {}, [el("b", { textContent: fx.name }), el("small", { textContent: fx.meta.loop ? "반복" : `${+fx.meta.duration.toFixed(2)}초` })]),
       ]);
       fig.dataset.effectId = fx.id;
-      const t = { fx, fig, cv, player: null, visible: false, hover: false };
+      const t: Tile = { fx, fig, cv, player: null, visible: false, hover: false };
       fig.addEventListener("click", () => openDetail(fx));
       fig.addEventListener("keydown", (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), openDetail(fx)));
-      fig.addEventListener("pointerenter", () => (t.hover = true));
+      fig.addEventListener("pointerenter", () => { t.hover = true; t.player?.restart(); });
       fig.addEventListener("pointerleave", () => (t.hover = false));
       grid.append(fig);
       tiles.push(t);
@@ -208,9 +214,14 @@ function build() {
       const t = tiles.find((x) => x.fig === e.target);
       if (!t) continue;
       t.visible = e.isIntersecting;
-      if (t.visible && !t.player) {
-        t.player = isScreen(t.fx) ? new Player(t.cv, t.fx, 16 / 9, 1) : new Player(t.cv, t.fx, 6 / 5, 1.25);
-        if (reduced) t.player.seek(t.fx.meta.duration * 0.4);
+      if(!t.visible)t.player=null;
+      if (t.visible && !t.player && !t.loading) {
+        t.loading = true;
+        void ensureLoaded(t.fx).then(() => {
+          if (!t.visible || t.fig.hidden || t.player) return;
+          t.player = isScreen(t.fx) ? new Player(t.cv, t.fx, 16 / 9, 1) : new Player(t.cv, t.fx, 6 / 5, 1.25);
+          t.player.seek(t.fx.meta.duration * 0.4);
+        }).catch(error => { t.fig.title = `불러오기 실패: ${String(error)}`; }).finally(() => {t.loading=false;});
       }
     }
   }, { rootMargin: "200px" });
@@ -247,6 +258,7 @@ function filter() {
       const hit = (state.cat === "all" || state.cat === s.c.id) && words.every(word => fx.searchIndex.includes(word));
       if (!t) continue;
       t.fig.hidden = !hit;
+      if(!hit)t.player=null;
       any ||= hit;
       shown += Number(hit);
     }
@@ -267,7 +279,11 @@ function gpuStatus(player: Player) {
     ? 'WebGL2 합성 · 픽셀 작성/시뮬레이션은 CPU'
     : status?.reason ? `CPU 대체 · ${status.reason}` : 'CPU 합성';
 }
-function openDetail(fx: GalleryEffect) {
+let detailRequest = 0;
+async function openDetail(fx: GalleryEffect) {
+  const request = ++detailRequest;
+  try { await ensureLoaded(fx); } catch(error) { alert(`이펙트를 불러오지 못했습니다: ${String(error)}`); return; }
+  if (request !== detailRequest) return;
   detail?.dispose();
   clearDownloadURLs();
   const d = $("#detail");
@@ -298,9 +314,21 @@ function openDetail(fx: GalleryEffect) {
   $("#d-sheet").replaceChildren();
   code(fx);
   d.showModal();
+  applyExactPixels();
   d.scrollTop = 0;
 }
 // what the body does around the effect, in a line: the wind-up, the freeze, the recovery
+let exactPixels = false;
+function applyExactPixels() {
+  if (!detail) return;
+  const c = detail.canvas, box = c.parentElement!.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+  if (exactPixels) {
+    const scale = Math.max(1, Math.floor(Math.min(box.width * dpr / detail.W, box.height * dpr / detail.H)));
+    Object.assign(c.style, {width:`${detail.W * scale / dpr}px`,height:`${detail.H * scale / dpr}px`,maxWidth:'none',maxHeight:'none',imageRendering:'pixelated',margin:'auto'});
+    $('#d-pixels').textContent = `정확한 픽셀 ${scale}×`;
+  } else { c.style.width='';c.style.height='';c.style.maxWidth='';c.style.maxHeight='';c.style.margin='';$('#d-pixels').textContent='화면 맞춤'; }
+  $('#d-pixels').setAttribute('aria-pressed',String(exactPixels));
+}
 function actFacts(mod: any) {
   const k = mod.act.poses, lead = Math.max(0, -k[0][0]), end = k[k.length - 1][0] - mod.meta.duration, hits = (mod.act.hits ?? []).filter((h: { stop?: number }) => h.stop);
   const parts = [];
@@ -329,28 +357,33 @@ function actorControls() {
   const character=select('배우',[['stock','기본'],['human','Human'],['cat','고양이'],['fox','여우'],['owl','부엉이'],['dragon','드래곤']]);
   const size=select('원화 높이',[[32,'32px'],[48,'48px'],[64,'64px'],[96,'96px'],[128,'128px'],[192,'192px']].map(([a,b])=>[String(a),String(b)]));size.value='96';
   const view=select('시점',[['three-quarter','3/4'],['side','측면'],['front','정면'],['back','후면']]);
-  const motion=select('동작',[['act','ACT 타임라인'],['idle','대기'],['walk','걷기'],['guard','방어']]);
+  const humanMotions:[string,string][]=[['act','ACT 타임라인'],['idle','대기'],['walk','걷기'],['run','달리기'],['jump','점프'],['punch','펀치'],['block','막기'],['hit','피격'],['sword','검격'],['bow','활'],['guard','방어']];
+  const motion=select('동작',humanMotions);
+  const hair=select('머리',['crop','bob','curls','swept','bun','shaved','ponytail','parted'].map(v=>[v,v]));hair.value='ponytail';
+  const outfit=select('의상',['shirt','tunic','jacket','sleeveless','sweater','overalls'].map(v=>[v,v]));outfit.value='jacket';
+  const build=select('체형',['slender','regular','broad'].map(v=>[v,v]));build.value='regular';
+  const skin=select('피부',['light','warm','brown','deep'].map(v=>[v,v]));skin.value='warm';
   const weapon=select('무기',[['auto','ACT 무기'],['none','없음'],['sword','검'],['bow','활']]);
   if(detail!.fx.mod.create&&detail!.fx.mod.act?.onBody)host.append(el('small',{textContent:'몸이 변형되는 효과는 시작 자세를 기준으로 재생합니다.'}));
   const sync=(resetMotion=false)=>{
     const kind=character.value,human=kind==='human',stock=kind==='stock';
-    size.disabled=stock;view.disabled=!human;weapon.disabled=!human;motion.disabled=stock;
+    size.disabled=stock;view.disabled=weapon.disabled=hair.disabled=outfit.disabled=build.disabled=skin.disabled=!human;motion.disabled=stock;
     if(resetMotion){
-      const choices:[string,string][]=human?[['act','ACT 타임라인'],['idle','대기'],['walk','걷기'],['guard','방어']]:kind==='owl'||kind==='dragon'?[['idle','대기'],['fly','비행']]:[['idle','대기'],['walk','걷기'],['trot','달리기']];
+      const choices:[string,string][]=human?humanMotions:kind==='owl'||kind==='dragon'?[['idle','대기'],['fly','비행']]:[['idle','대기'],['walk','걷기'],['trot','달리기']];
       motion.replaceChildren(...choices.map(([value,textContent])=>el('option',{value,textContent})));
     }
     if(stock)delete detail!.opts.actorSelection;
     else{
-      const selection:ActorSelection2D=human?{kind:'human',height:+size.value,style:{view:view.value as any,hair:'ponytail',outfit:'jacket'},motion:motion.value as any,weapon:weapon.value as any}:
+      const selection:ActorSelection2D=human?{kind:'human',height:+size.value,style:{view:view.value as any,hair:hair.value as any,outfit:outfit.value as any,build:build.value as any,skin:skin.value as any},motion:motion.value as any,weapon:weapon.value as any}:
         {kind:'creature',species:kind as any,height:+size.value,motion:motion.value as any};
       detail!.opts.actorSelection=selection;
       detail!.actor=true;$('#d-actor').hidden=false;$('#d-actor').setAttribute('aria-pressed','true');
     }
     detail!.layout(detail!.aspect,detail!.pad);code(detail!.fx);$('#d-sheet').replaceChildren();
   };
-  size.disabled=view.disabled=motion.disabled=weapon.disabled=true;
+  size.disabled=view.disabled=motion.disabled=weapon.disabled=hair.disabled=outfit.disabled=build.disabled=skin.disabled=true;
   character.addEventListener('change',()=>sync(true));
-  for(const input of[size,view,motion,weapon])input.addEventListener('change',()=>sync());
+  for(const input of[size,view,motion,weapon,hair,outfit,build,skin])input.addEventListener('change',()=>sync());
 }
 function code(fx: GalleryEffect) {
   const p = detail!;
@@ -530,13 +563,18 @@ function wireDetail() {
 // ---- the clock
 let last = performance.now();
 function frameLoop(now: number) {
-  const dt = Math.min(0.1, (now - last) / 1000);
+  const dt = document.hidden ? 0 : Math.max(0, (now - last) / 1000);
   last = now;
   if (detail) detail!.tick(dt);
-  else for (const t of tiles) if (t.visible && t.player && !t.fig.hidden && (!reduced || t.hover)) t.player.tick(dt);
+  else for (const t of tiles) if (t.visible && t.player && !t.fig.hidden && t.hover) t.player.tick(dt);
   requestAnimationFrame(frameLoop);
 }
 
+document.addEventListener("visibilitychange", () => { last = performance.now(); });
+$('#d-pixels').addEventListener('click',()=>{exactPixels=!exactPixels;applyExactPixels();});
+$('#d-studio').addEventListener('click',()=>{ if(detail) location.href=`studio.html?effect=${encodeURIComponent(detail.fx.id)}`; });
+new ResizeObserver(applyExactPixels).observe($('#big').parentElement!);
+addEventListener('resize',applyExactPixels);
 build();
 chips();
 wireDetail();

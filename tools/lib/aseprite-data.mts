@@ -1,4 +1,5 @@
 import type { SpriteClipData2D } from "../../src/core/sprite-clip.js";
+import type { AssetSocket } from "../../src/render/export.js";
 import { decodePNG } from "./png-read.mjs";
 
 const MAX_DIMENSION = 4096, MAX_FRAMES = 4096, MAX_CELLS = 16_777_216;
@@ -21,6 +22,87 @@ function rect(value: unknown, label: string) {
     x: integer(obj.x, `${label}.x`, 0, 65_535), y: integer(obj.y, `${label}.y`, 0, 65_535),
     w: integer(obj.w, `${label}.w`, 1, MAX_DIMENSION), h: integer(obj.h, `${label}.h`, 1, MAX_DIMENSION),
   };
+}
+
+function socketExtras(value: RecordValue): Partial<AssetSocket> {
+  if (value.angle !== undefined && (typeof value.angle !== "number" || !Number.isFinite(value.angle))) throw new Error("Socket angle must be finite radians");
+  if (value.visible !== undefined && typeof value.visible !== "boolean") throw new Error("Socket visibility must be boolean");
+  const hasBasis = value.basisX !== undefined || value.basisY !== undefined;
+  let basis: Partial<AssetSocket> = {};
+  if (hasBasis) {
+    const x = pivotPair(value.basisX, "socket basisX"), y = pivotPair(value.basisY, "socket basisY");
+    if (Math.abs(x[0] * y[1] - x[1] * y[0]) < 1e-12) throw new Error("Socket basis must be invertible");
+    basis = { basisX: x, basisY: y };
+  }
+  if (value.mirrorPolicy !== undefined && !["reflect", "swap-hand", "authored"].includes(value.mirrorPolicy as string)) throw new Error("Invalid socket mirror policy");
+  return { ...basis, ...(value.angle === undefined ? {} : { angle: value.angle as number }),
+    ...(value.visible === undefined ? {} : { visible: value.visible as boolean }),
+    ...(value.mirrorPolicy === undefined ? {} : { mirrorPolicy: value.mirrorPolicy as AssetSocket["mirrorPolicy"] }) };
+}
+
+/** Aseprite slice pivots are relative to slice bounds, not atlas rectangles. */
+export function asepriteSocketFrames(meta: RecordValue, frameCount: number): Record<string, AssetSocket>[] {
+  const result = Array.from({ length: frameCount }, () => Object.create(null) as Record<string, AssetSocket>);
+  const poku = meta.pokuFx && typeof meta.pokuFx === "object" ? meta.pokuFx as RecordValue : undefined;
+  if (poku?.socketSamples !== undefined) {
+    if (!Array.isArray(poku.socketSamples) || poku.socketSamples.length > frameCount) throw new Error("Invalid socket samples");
+    poku.socketSamples.forEach((value, frame) => {
+      if (value === null || value === undefined) return;
+      for (const [name, raw] of Object.entries(record(value, "socket sample"))) {
+        const socket = record(raw, "socket");
+        if (!/^[a-zA-Z0-9_.-]+$/.test(name) || ["__proto__", "constructor", "prototype"].includes(name)
+          || typeof socket.x !== "number" || typeof socket.y !== "number" || ![socket.x, socket.y].every(Number.isFinite)) throw new Error("Invalid socket sample");
+        result[frame][name] = { x: socket.x, y: socket.y, ...socketExtras(socket) };
+      }
+    });
+  }
+  if (meta.slices === undefined) return result;
+  if (!Array.isArray(meta.slices)) throw new Error("meta.slices must be an array");
+  const names = new Set<string>();
+  for (const value of meta.slices) {
+    const slice = record(value, "slice");
+    if (typeof slice.name !== "string" || !Array.isArray(slice.keys)) throw new Error("Slices require a name and keys");
+    if (!slice.name.startsWith("socket:") && slice.name !== "pivot") continue;
+    const name = slice.name === "pivot" ? "pivot" : slice.name.slice(7);
+    if (!/^[a-zA-Z0-9_.-]+$/.test(name) || ["__proto__", "constructor", "prototype"].includes(name) || names.has(name))
+      throw new Error("Socket slice names must be unique safe identifiers");
+    names.add(name);
+    let settings: RecordValue = {};
+    if (typeof slice.data === "string" && slice.data.trim().startsWith("{")) {
+      const parsed = record(JSON.parse(slice.data), "slice data");
+      if (parsed.pokuSocket !== undefined) settings = record(parsed.pokuSocket, "pokuSocket");
+    }
+    const defaults = socketExtras(settings);
+    const seen = new Set<number>();
+    const keys = slice.keys.map((raw, index) => {
+      const key = record(raw, `slice.keys[${index}]`), frame = integer(key.frame, "slice frame", 0, frameCount - 1);
+      if (seen.has(frame)) throw new Error("Duplicate slice key frame"); seen.add(frame);
+      const bounds = record(key.bounds, "slice bounds"), x = integer(bounds.x, "slice x", -65535, 65535), y = integer(bounds.y, "slice y", -65535, 65535);
+      const w = integer(bounds.w, "slice width", 1, 65535), h = integer(bounds.h, "slice height", 1, 65535);
+      const pivot = key.pivot === undefined ? { x: w / 2, y: h / 2 } : record(key.pivot, "slice pivot");
+      if (typeof pivot.x !== "number" || typeof pivot.y !== "number" || !Number.isFinite(pivot.x) || !Number.isFinite(pivot.y)) throw new Error("Slice pivot must be finite");
+      return { frame, socket: { x: x + pivot.x, y: y + pivot.y, ...defaults } };
+    }).sort((a, b) => a.frame - b.frame);
+    const perFrame = settings.frames === undefined ? {} : record(settings.frames, "per-frame socket data");
+    for (let i = 0; i < keys.length; i++) for (let f = keys[i].frame; f < (keys[i + 1]?.frame ?? frameCount); f++) {
+      const extra = perFrame[f] === undefined ? {} : record(perFrame[f], "socket frame data");
+      result[f][name] = { ...keys[i].socket, ...socketExtras(extra) };
+    }
+  }
+  // Optional companion direction slices give genuinely per-frame orientation.
+  for (const frame of result) for (const [name, socket] of Object.entries(frame)) {
+    const direction = frame[`${name}.direction`];
+    if (direction && (direction.x !== socket.x || direction.y !== socket.y)) {
+      const angle = Math.atan2(direction.y - socket.y, direction.x - socket.x);
+      if (socket.basisX && socket.basisY) {
+        const delta = angle - Math.atan2(socket.basisX[1], socket.basisX[0]), c = Math.cos(delta), s = Math.sin(delta);
+        const rotate = ([x, y]: [number, number]): [number, number] => [c * x - s * y, s * x + c * y];
+        socket.basisX = rotate(socket.basisX); socket.basisY = rotate(socket.basisY);
+      }
+      socket.angle = angle;
+    }
+  }
+  return result;
 }
 
 /** Row-major count/color pairs. Colors use unsigned R | G<<8 | B<<16 | A<<24. */
@@ -49,6 +131,7 @@ export function importAsepriteSheet(png: Uint8Array, json: unknown, options: { p
   const entries: [string, unknown][] = isArray ? Array.from(root.frames as unknown[], (value, i) => [String(i), value]) : Object.entries(record(root.frames, "frames"));
   if (!entries.length || entries.length > MAX_FRAMES) throw new Error("Aseprite frames must contain 1..4096 frames.");
   const sheet = decodePNG(png), warnings = [...(sheet.warnings ?? [])];
+  const socketFrames = asepriteSocketFrames(meta, entries.length);
   if (meta.size !== undefined) {
     const size = record(meta.size, "meta.size");
     if (size.w !== sheet.width || size.h !== sheet.height) throw new Error("Aseprite meta.size does not match the PNG dimensions; check the PNG/JSON pair.");
@@ -58,6 +141,7 @@ export function importAsepriteSheet(png: Uint8Array, json: unknown, options: { p
   else {
     const pokuFx = meta.pokuFx === undefined ? undefined : record(meta.pokuFx, "meta.pokuFx");
     if (pokuFx?.pivot !== undefined) pivot = pivotPair(pokuFx.pivot, "meta.pokuFx.pivot");
+    else if (socketFrames[0].pivot) pivot = [socketFrames[0].pivot.x, socketFrames[0].pivot.y];
     else {
       pivot = [0, 0];
       warnings.push("No pivot was supplied; using [0, 0] (top-left). Supply an explicit pixel pivot for actor/effect alignment.");
@@ -109,13 +193,13 @@ export function importAsepriteSheet(png: Uint8Array, json: unknown, options: { p
   }
   const data: SpriteClipData2D = {
     version: 1, width, height, pivot,
-    frames: frames.map(({ area, target, durationMs }) => {
+    frames: frames.map(({ area, target, durationMs }, index) => {
       const rgba = new Uint8Array(width * height * 4);
       for (let y = 0; y < area.h; y++) {
         const start = ((area.y + y) * sheet.width + area.x) * 4;
         rgba.set(sheet.rgba.subarray(start, start + area.w * 4), ((target.y + y) * width + target.x) * 4);
       }
-      return { durationMs, runs: encodeSpriteRuns2D(rgba) };
+      return { durationMs, runs: encodeSpriteRuns2D(rgba), ...(Object.keys(socketFrames[index]).length ? { sockets: socketFrames[index] } : {}) };
     }),
     ...(tags !== undefined ? { tags } : {}),
     source: { format: "aseprite-sheet", frameFormat: isArray ? "array" : "hash", frameNames: frames.map(f => f.name), meta },

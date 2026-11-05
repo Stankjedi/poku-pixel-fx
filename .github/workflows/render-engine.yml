@@ -13,9 +13,11 @@ on:
       - "tests/**"
       - "package*.json"
       - "tsconfig*.json"
-      - "site/public/effects/**"
-      - "site/scripts/prepare-engine.mjs"
-      - "site/package.json"
+      - "scripts/**"
+      - "native/**"
+      - "authoring/**"
+      - "examples/**"
+      - "site/**"
       - ".github/workflows/render-engine.yml"
 
 permissions:
@@ -24,7 +26,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,6 +50,9 @@ jobs:
       - run: npm run test:gpu
       - run: npm run test:aseprite
       - run: npm run test:contracts
+      - run: npm run test:studio
+      - run: npm run test:export-studio
+      - run: npm run test:install
       - name: Smoke-test integrated cinematic image exports
         run: |
           for effect in frost slash blackhole wind windOriginal water shield; do
@@ -60,3 +65,105 @@ jobs:
           name: unified-cinematic-render-sheets
           path: /tmp/*-cinematic.png
           retention-days: 7
+
+  windows-package:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:studio
+      - run: npm run test:export-studio
+      - run: npm run test:install
+
+  site-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            site/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: node site/scripts/prepare-engine.mjs --check
+      - run: npm run install:ci
+        working-directory: site
+      - name: Check real React and shared-gallery types
+        run: node node_modules/typescript/bin/tsc --noEmit
+        working-directory: site
+      - name: Build the production website
+        run: npm run build
+        working-directory: site
+
+  browser-studio:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Locate the runner browser without changing its sandbox
+        run: echo "GPU_BROWSER_PATH=$(command -v google-chrome || command -v chromium || command -v chromium-browser)" >> "$GITHUB_ENV"
+      - name: Exercise actual Studio UI, worker export, and explicit CPU fallback
+        env:
+          STUDIO_REQUIRED: "1"
+          STUDIO_REPORT_PATH: studio-browser-result.json
+          STUDIO_SCREENSHOT_PATH: studio-browser.png
+        run: node tools/studio-browser-harness.mjs
+      - name: Probe actual browser WebGPU capability and shaders
+        env:
+          GPU_REPORT_PATH: gpu-browser-result.json
+        run: node tools/gpu-browser-harness.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-studio-evidence
+          path: |
+            studio-browser-result.json
+            studio-browser.png
+            gpu-browser-result.json
+
+  native-wgpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native
+      - run: cargo test --locked --manifest-path native/Cargo.toml
+      - name: Install a software Vulkan adapter for reproducible shader execution
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+      - name: Execute shared WGSL through native wgpu
+        run: cargo run --locked --manifest-path native/Cargo.toml --bin poku-player -- native/examples/draw-scene.json --out native-evidence --frames 2
+      - name: Compare actual WGSL and exported 3D assets with the CPU reference
+        env:
+          GPU_NATIVE_REQUIRED: "1"
+          GPU_NATIVE_REPORT_PATH: native-evidence/comparison.json
+        run: node tools/gpu-native-harness.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-wgpu-evidence
+          path: native-evidence/

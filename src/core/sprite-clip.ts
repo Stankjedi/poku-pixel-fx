@@ -1,10 +1,21 @@
 import type { Painter } from "./painter.js";
+import { addLinearLight2D } from "../render/surface2d.js";
+
+export interface SpriteClipSocket2D {
+  /** Original source canvas coordinates; socketAt subtracts the clip pivot. */
+  x: number; y: number; angle?: number; visible?: boolean;
+  basisX?: readonly [number, number]; basisY?: readonly [number, number];
+  mirrorPolicy?: "reflect" | "swap-hand" | "authored";
+}
 
 export interface SpriteClipFrame2D {
   /** Positive, finite milliseconds. */
   durationMs: number;
   /** Row-major run-length pairs: count, unsigned packed RGBA (R in the low byte). */
   runs: readonly number[];
+  sockets?: Readonly<Record<string, SpriteClipSocket2D>>;
+  /** Coverage-weighted linear RGB radiance, row-major width * height * 3; independent of color alpha. */
+  emission?: readonly number[];
 }
 
 export interface SpriteClipTag2D {
@@ -31,6 +42,8 @@ export interface SpriteClipOptions2D {
   tag?: string;
   /** False by default. Negative and non-finite times are invisible even when looping. */
   loop?: boolean;
+  /** Optical glow by default; surface emission is occluded by later foreground color. */
+  emissionKind?: "surface" | "optical";
 }
 
 export interface SpriteClip2D {
@@ -45,10 +58,18 @@ export interface SpriteClip2D {
   frameAt(time: number): number;
   /** Independent decoded copy, including hidden RGB in fully transparent pixels. */
   framePixels(index: number): Uint32Array;
-  /** Draws into color only, using the painter's existing transform, fade and alpha mode. */
-  draw(painter: Pick<Painter, "rect">, time: number): void;
+  /** Copies preserve interchange coordinates; runtime sockets subtract the pivot. */
+  frameSockets(index: number): Record<string, SpriteClipSocket2D>;
+  socketAt(name: string, time: number): SpriteClipSocket2D | null;
+  frameEmission(index: number): Float32Array | null;
+  /** Inverse-cell draw on Painter; legacy rect-only mocks remain supported for color-only clips. */
+  draw(painter: Pick<Painter, "rect"> & Partial<Pick<Painter, "mask" | "each" | "frame" | "fade" | "lightK">>, time: number): void;
 }
 
+const copySocket = (socket: SpriteClipSocket2D): SpriteClipSocket2D => ({ ...socket,
+  ...(socket.basisX ? { basisX: [socket.basisX[0], socket.basisX[1]] as const } : {}),
+  ...(socket.basisY ? { basisY: [socket.basisY[0], socket.basisY[1]] as const } : {}),
+});
 const MAX_DIMENSION = 4096;
 const MAX_FRAMES = 4096;
 const MAX_CELLS = 16_777_216;
@@ -74,7 +95,8 @@ export function createSpriteClip2D(data: SpriteClipData2D, options: SpriteClipOp
   if (data.source !== undefined && !object(data.source))
     throw new RangeError("Sprite clip source metadata must be an object");
   if (!object(options) || (options.tag !== undefined && (typeof options.tag !== "string" || !options.tag.length))
-    || (options.loop !== undefined && typeof options.loop !== "boolean"))
+    || (options.loop !== undefined && typeof options.loop !== "boolean")
+    || (options.emissionKind !== undefined && !["surface", "optical"].includes(options.emissionKind)))
     throw new RangeError("Sprite clip options need a tag name and/or a boolean loop flag");
 
   const count = width * height, frameCount = data.frames.length;
@@ -94,7 +116,8 @@ export function createSpriteClip2D(data: SpriteClipData2D, options: SpriteClipOp
   const tag = options.tag === undefined ? undefined : tags.get(options.tag);
   if (options.tag !== undefined && !tag) throw new RangeError(`Unknown sprite clip tag: ${options.tag}`);
 
-  const pixels: Uint32Array[] = [], durations: number[] = [];
+  const pixels: Uint32Array[] = [], durations: number[] = [], masks: Uint8Array[] = [];
+  const sockets: Record<string, SpriteClipSocket2D>[] = [], emissions: (Float32Array | null)[] = [];
   for (const frame of data.frames) {
     if (!object(frame) || !Number.isFinite(frame.durationMs) || !(frame.durationMs / 1000 > 0)
       || !Array.isArray(frame.runs) || !frame.runs.length || frame.runs.length % 2 || frame.runs.length > count * 2)
@@ -109,8 +132,37 @@ export function createSpriteClip2D(data: SpriteClipData2D, options: SpriteClipOp
       offset += length;
     }
     if (offset !== count) throw new RangeError("Sprite clip runs must fill exactly width * height pixels");
-    pixels.push(decoded);
-    durations.push(frame.durationMs);
+    const socketMap: Record<string, SpriteClipSocket2D> = Object.create(null);
+    if (frame.sockets !== undefined) {
+      if (!object(frame.sockets) || Object.keys(frame.sockets).length > 128)
+        throw new RangeError("Sprite clip sockets must be a map of at most 128 named sockets");
+      for (const [name, rawSocket] of Object.entries(frame.sockets)) {
+        const socket = rawSocket as SpriteClipSocket2D;
+        if (!name || ["__proto__", "prototype", "constructor"].includes(name) || !object(socket) || !Number.isFinite(socket.x) || !Number.isFinite(socket.y)
+          || (socket.angle !== undefined && !Number.isFinite(socket.angle))
+          || (socket.visible !== undefined && typeof socket.visible !== "boolean"))
+          throw new RangeError("Sprite clip sockets need names and finite coordinates/angles");
+        if ((socket.basisX === undefined) !== (socket.basisY === undefined)
+          || [socket.basisX, socket.basisY].some(v => v !== undefined && (!Array.isArray(v) || v.length !== 2 || !v.every(Number.isFinite)))
+          || socket.basisX && socket.basisY && (!Number.isFinite(socket.basisX[0] * socket.basisY[1] - socket.basisX[1] * socket.basisY[0]) || Math.abs(socket.basisX[0] * socket.basisY[1] - socket.basisX[1] * socket.basisY[0]) < 1e-12)
+          || socket.mirrorPolicy !== undefined && !["reflect", "swap-hand", "authored"].includes(socket.mirrorPolicy))
+          throw new RangeError("Sprite socket basis needs two finite invertible vectors and a valid mirror policy");
+        socketMap[name] = copySocket({ x: socket.x, y: socket.y,
+          ...(socket.angle === undefined ? {} : { angle: socket.angle }),
+          ...(socket.visible === undefined ? {} : { visible: socket.visible }),
+          ...(socket.basisX === undefined ? {} : { basisX: socket.basisX, basisY: socket.basisY }),
+          ...(socket.mirrorPolicy === undefined ? {} : { mirrorPolicy: socket.mirrorPolicy }) });
+      }
+    }
+    let emission: Float32Array | null = null;
+    if (frame.emission !== undefined) {
+      if (!Array.isArray(frame.emission) || frame.emission.length !== count * 3
+        || !frame.emission.every((value: number) => Number.isFinite(value) && value >= 0 && value <= 3.4028234663852886e38))
+        throw new RangeError("Sprite clip emission must contain width * height * 3 nonnegative finite float32 radiances");
+      emission = Float32Array.from(frame.emission);
+    }
+    pixels.push(decoded); masks.push(Uint8Array.from(decoded, color => color >>> 24 ? 1 : 0));
+    sockets.push(socketMap); emissions.push(emission); durations.push(frame.durationMs);
   }
 
   const from = tag?.from ?? 0, to = tag?.to ?? frameCount - 1, direction = tag?.direction ?? "forward";
@@ -130,7 +182,7 @@ export function createSpriteClip2D(data: SpriteClipData2D, options: SpriteClipOp
       throw new RangeError("Sprite clip sequence duration must be finite with distinguishable frame boundaries");
     return end;
   });
-  const duration = durationMs / 1000, loop = options.loop ?? false;
+  const duration = durationMs / 1000, loop = options.loop ?? false, emissionKind = options.emissionKind ?? "optical";
   const frameAt = (time: number): number => {
     if (!Number.isFinite(time) || time < 0 || (!loop && time >= duration)) return -1;
     if (loop) {
@@ -154,13 +206,40 @@ export function createSpriteClip2D(data: SpriteClipData2D, options: SpriteClipOp
       if (!integer(index, 0, frameCount - 1)) throw new RangeError("Sprite clip frame index is out of bounds");
       return pixels[index].slice();
     },
-    draw(painter: Pick<Painter, "rect">, time: number): void {
+    frameSockets(index: number): Record<string, SpriteClipSocket2D> {
+      if (!integer(index, 0, frameCount - 1)) throw new RangeError("Sprite clip frame index is out of bounds");
+      return Object.fromEntries(Object.entries(sockets[index]).map(([name, socket]) => [name, copySocket(socket)]));
+    },
+    socketAt(name: string, time: number): SpriteClipSocket2D | null {
+      const index = frameAt(time), socket = index < 0 ? undefined : sockets[index][name];
+      return socket ? { ...copySocket(socket), x: socket.x - pivot[0], y: socket.y - pivot[1] } : null;
+    },
+    frameEmission(index: number): Float32Array | null {
+      if (!integer(index, 0, frameCount - 1)) throw new RangeError("Sprite clip frame index is out of bounds");
+      return emissions[index]?.slice() ?? null;
+    },
+    draw(painter: Pick<Painter, "rect"> & Partial<Pick<Painter, "mask" | "each" | "frame" | "fade" | "lightK">>, time: number): void {
       const index = frameAt(time);
       if (index < 0) return;
-      const frame = pixels[index];
-      for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+      const frame = pixels[index], emission = emissions[index];
+      if (emission && (!painter.frame || !painter.each))
+        throw new TypeError("Drawing an emissive sprite clip requires a Painter with frame and inverse-cell each()");
+      if (painter.mask) painter.mask({ w: width, h: height, data: masks[index] }, -pivot[0], -pivot[1],
+        (x, y) => frame[y * width + x]);
+      else for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
         const color = frame[y * width + x];
         if (color >>> 24) painter.rect(x - pivot[0], y - pivot[1], 1, 1, color);
+      }
+      if (emission) {
+        const destination = painter.frame!, gain = Math.max(0, (painter.fade ?? 1) * (painter.lightK ?? 1));
+        if (!(gain > 0)) return;
+        painter.each!(-pivot[0], -pivot[1], width - pivot[0], height - pivot[1], (x, y, sx, sy) => {
+          const ix = Math.floor(x + pivot[0]), iy = Math.floor(y + pivot[1]);
+          if (ix < 0 || iy < 0 || ix >= width || iy >= height) return;
+          const j = (iy * width + ix) * 3, cell = (sy - destination.oy) * destination.w + sx - destination.ox;
+          addLinearLight2D(destination, cell, emission[j] * gain, emission[j + 1] * gain,
+            emission[j + 2] * gain, emissionKind);
+        });
       }
     },
   });

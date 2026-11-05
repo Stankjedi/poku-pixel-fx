@@ -41,7 +41,7 @@ The original variant uses four simple pairs of triangles and sparse sparks. The 
 
 ## Compatibility and limits
 
-The cinematic black-hole shader still performs custom light-buffer writes and reprojection. Gallery/export clients therefore retain its legacy emission fallback instead of enabling the auxiliary Painter HDR buffer for that effect; it still receives cinematic composition and world-light radiance. Other built-in 3D effects use unclamped HDR capture. Custom effects that manipulate light buffers directly must keep their HDR buffers synchronized.
+The cinematic black-hole effect synchronizes its custom light-buffer writes and reprojection with native HDR. Current gallery/export clients enable HDR for it as for the other built-in 3D effects. Custom effects that manipulate light buffers directly must keep their HDR buffers synchronized or explicitly import a separate packed-light result. Shared preview/export defaults live in `RenderProfile3D`; see [GPU rendering](GPU_RENDERING.md) for the additional optional WebGPU pipeline.
 
 This remains a CPU software renderer, not a GPU AAA renderer, path tracer or scientific gravitational-lensing solver. GIF palette reduction can alter colors; use PNG output for exact pixel colors. No performance multiplier or cross-device benchmark is claimed.
 

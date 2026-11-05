@@ -26,6 +26,7 @@ export interface ReviewManifest {
   size: [number, number]; fps: number; frames: number; loop: boolean;
   samples: Array<{ frame: number; time: number; reasons: string[] }>;
   evidence: Record<string, string>;
+  context?: Record<string, unknown>;
 }
 export interface ReviewRecord {
   schema: string; fingerprint: string; manifestSha256: string;
@@ -214,10 +215,10 @@ export function requireVisualReview(dir: string, identity: ReviewIdentity): Revi
   return record;
 }
 
-export function writeReviewEvidence(dir: string, fx: EffectData, result: RenderResult, sheet: ReturnType<typeof spriteSheet>, identity: ReviewIdentity) {
+export function writeReviewEvidence(dir: string, fx: EffectData, result: RenderResult, sheet: ReturnType<typeof spriteSheet>, identity: ReviewIdentity, context?: Record<string, unknown>) {
   const { files, samples } = makeReviewEvidence(fx, result, sheet);
   const manifest: ReviewManifest = { schema: REVIEW_SCHEMA, identity, size: [result.w, result.h], fps: result.fps,
-    frames: result.frames.length, loop: !!fx.meta.loop, samples, evidence: {} };
+    frames: result.frames.length, loop: !!fx.meta.loop, samples, evidence: {}, ...(context ? { context } : {}) };
   for (const [file, data] of Object.entries(files)) {
     writeFileSync(join(dir, file), data);
     manifest.evidence[file] = sha256(data);

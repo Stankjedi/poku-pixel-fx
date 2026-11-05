@@ -1,0 +1,80 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "melee/socket-ribbon-slash",
+  "intent": {
+    "oneSentence": "금속 검이 호를 그리며 앞서 움직이고 테이퍼가 있는 잔상이 짧게 뒤따른다.",
+    "firstRead": "검이 이끄는 베기",
+    "mustNotReadAs": "두께가 같은 발광 링",
+    "useContext": "게임 전투 화면과 독립 자산. 기본 320×180 원화에서 형태를 읽고 정수 배율로 표시한다."
+  },
+  "readability": {
+    "primaryShape": "검 끝과 리본 선단이 읽히고 시작점 쪽으로 가늘어지는 호",
+    "focalPoint": "주형태와 접촉점의 대비를 우선한다. 보조 광학 발광은 고체의 경계를 대체하지 않는다.",
+    "depthAndOverlap": "환경 뒤에 잔상과 주형태를 놓고, 파편과 광학 빛을 별도 레이어로 검토한다.",
+    "contrast": "원래 색상, 명암, 실루엣과 어둡고 밝은 배경을 함께 검사한다.",
+    "intendedBackgrounds": [
+      "dark",
+      "light",
+      "ground",
+      "transparent checker"
+    ],
+    "secondaryDetailBudget": "기본 20개 이하 보조 입자. 주형태 레이어 단독으로도 의도가 읽혀야 한다."
+  },
+  "mechanics": {
+    "model": "stylized-physical",
+    "source": "검이 이끄는 베기의 국소적인 발생점 또는 유지 면",
+    "driver": "각도 곡선이 호를 훑으며 주형태, 잔상, 접촉 파편의 역할을 분리한다.",
+    "direction": "각도 곡선이 호를 훑으며 주형태, 잔상, 접촉 파편의 역할을 분리한다.",
+    "weightAndMaterial": "무게는 빠른 공격과 짧은 잔상 감쇠 차이로 읽히며 물리 접촉 해석은 스타일화된다.",
+    "causalChain": "금속 검이 호를 그리며 앞서 움직이고 테이퍼가 있는 잔상이 짧게 뒤따른다.",
+    "endingRule": "주형태가 끝난 뒤 잔상과 파편이 먼저 설정된 수명 안에 사라지고 마지막 프레임은 비워진다.",
+    "exaggerationAndLimits": "제작용 원본 템플릿이다. 화면 가독성을 위해 시간과 모양을 과장하며, 수치 검사만으로 전문 아트 디렉션 통과를 선언하지 않는다."
+  },
+  "timeline": {
+    "durationSeconds": 1.2,
+    "loop": false,
+    "phases": [
+      {
+        "name": "preparation",
+        "from": 0,
+        "to": 0.12,
+        "action": "공격 시작 전 비움 또는 짧은 형성",
+        "cause": "발사 또는 에너지 형성 직전",
+        "visibleCue": "아직 주형태를 완전히 노출하지 않는다."
+      },
+      {
+        "name": "action",
+        "from": 0.12,
+        "to": 0.4,
+        "action": "금속 검이 호를 그리며 앞서 움직이고 테이퍼가 있는 잔상이 짧게 뒤따른다.",
+        "cause": "각도 곡선이 호를 훑으며 주형태, 잔상, 접촉 파편의 역할을 분리한다.",
+        "visibleCue": "검 끝과 리본 선단이 읽히고 시작점 쪽으로 가늘어지는 호"
+      },
+      {
+        "name": "response",
+        "from": 0.4,
+        "to": 1.2,
+        "action": "접촉 이후 파편 또는 냉각 연기가 남는다.",
+        "cause": "무게는 빠른 공격과 짧은 잔상 감쇠 차이로 읽히며 물리 접촉 해석은 스타일화된다.",
+        "visibleCue": "주형태와 다른 속도·밝기의 후속 반응"
+      },
+      {
+        "name": "ending",
+        "from": 1.2,
+        "to": 1.2,
+        "action": "잔여 구조가 정해진 수명에 따라 사라진다.",
+        "cause": "주동력이 종료되어 후속 반응만 감쇠한다.",
+        "visibleCue": "마지막 프레임은 빈 상태"
+      }
+    ],
+    "omittedPhases": {}
+  },
+  "references": [
+    {
+      "source": "src/authoring/recipes.ts",
+      "observed": "본체·잔상·발광·파편·환경을 분리한 파라미터화된 절차적 제작 구조",
+      "application": "같은 프로젝트가 미리보기, 시간 이동, CLI 내보내기에서 같은 경로와 레이어를 사용하도록 한다.",
+      "limits": "외부 작품의 완성도를 주장하는 참조가 아니다. 시각 검토는 이 템플릿 자체의 실제 렌더에 근거해야 한다."
+    }
+  ]
+}

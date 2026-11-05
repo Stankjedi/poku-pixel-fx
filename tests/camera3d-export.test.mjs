@@ -17,7 +17,7 @@ test("invalid orbit overrides fail explicitly",()=>{
 test("contact sheet export records the selected water camera in its metadata",()=>{
   const dir=mkdtempSync(join(tmpdir(),"poku-water-camera-"));try {
     const file=join(dir,"water.png");const result=spawnSync(process.execPath,["build-tools/tools/render-3d.mjs","water","--frames","3","--width","96","--height","72","--yaw","90","--elevation","45","--zoom","1.1","--target-y","1.3","--out",file],{encoding:"utf8"});assert.equal(result.status,0,result.stderr);
-    const meta=JSON.parse(readFileSync(join(dir,"water.json"),"utf8"));assert.equal(meta.id,"water/crown-splash-3d");assert.deepEqual(meta.camera,{yaw:Math.PI/2,elevation:Math.PI/4,zoom:1.1,target:[0,1.3,0]});
+    const meta=JSON.parse(readFileSync(join(dir,"water.json"),"utf8"));assert.equal(meta.id,"water/crown-splash-3d");assert.deepEqual(meta.camera,{yaw:Math.PI/2,elevation:Math.PI/4,zoom:1.1,target:[0,1.3,0],projection:'orthographic'});
     assert.ok(readFileSync(file).length>100);
   } finally {rmSync(dir,{recursive:true,force:true});}
 });

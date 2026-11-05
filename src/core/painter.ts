@@ -8,6 +8,7 @@ import { blendOver, type AlphaMode } from "../render/coverage.js";
 import { cubicBezier, quadraticBezier, catmullRom, pathLengths, type CurveOptions } from "./curves.js";
 import { hex } from "./color.js";
 import { rasterText, textWidth, FONTS } from "./font.js";
+import { enableSurfaceLight2D, attenuateSurfaceLight2D, addSurfaceLight2D, addOpticalLight2D } from '../render/surface2d.js';
 
 // 4x4 ordered (Bayer) thresholds: a pixel at alpha a is drawn when a is above its cell's threshold.
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => (v + 0.5) / 16);
@@ -82,6 +83,7 @@ export class Painter {
       if (a < 1 && a <= BAYER[((sy & 3) << 2) | (sx & 3)]) return;
       this.C[i] = c;
     } else this.C[i] = a >= 1 && (c >>> 24) === 255 ? c : blendOver(this.C[i], c, a);
+    attenuateSurfaceLight2D(this.frame, i, (this.frame.alphaMode === 'dither' ? 1 : Math.min(1, a)) * (c >>> 24) / 255);
   }
   add(sx: number, sy: number, c: number, k = 1) {
     k *= this.fade * this.lightK;
@@ -89,6 +91,7 @@ export class Painter {
     const x = sx - this.ox, y = sy - this.oy;
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
     const i = y * this.w + x, d = this.L[i];
+    if (addOpticalLight2D(this.frame, i, c, k)) return;
     // Optional physically meaningful accumulation without 8-bit channel saturation.
     const hdr = this.frame.hdrLight;
     if (hdr) {
@@ -113,6 +116,22 @@ export class Painter {
     if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
     const i = y * this.w + x;
     this.C[i] = blendOver(this.C[i], c, a);
+    attenuateSurfaceLight2D(this.frame, i, Math.min(1, a) * (c >>> 24) / 255);
+  }
+  /** Draw a surface pixel whose emission is attenuated by later foreground color. Legacy light() stays optical. */
+  surfacePixel(sx: number, sy: number, color: number, opacity = 1, emissionColor = color, emission = 1) {
+    const x = sx - this.ox, y = sy - this.oy;
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= this.w || y >= this.h || !color) return;
+    enableSurfaceLight2D(this.frame);
+    const coverage = clamp(opacity * this.fade) * (color >>> 24) / 255;
+    if (this.frame.alphaMode === 'dither' && opacity * this.fade < 1 && opacity * this.fade <= BAYER[((sy & 3) << 2) | (sx & 3)]) return;
+    this.put(sx, sy, color, opacity);
+    addSurfaceLight2D(this.frame, y * this.w + x, emissionColor,
+      (this.frame.alphaMode === 'dither' ? (color >>> 24) / 255 : coverage) * Math.max(0, emission) * this.lightK);
+  }
+  /** Local-coordinate companion to surfacePixel(). */
+  surface(x: number, y: number, color: number, opacity = 1, emissionColor = color, emission = 1) {
+    this.surfacePixel(this.cellX(x, y), this.cellY(x, y), color, opacity, emissionColor, emission);
   }
   /** Translucent pixel at a local point. */
   blend(x: number, y: number, c: number, a: number) { this.blendPx(this.cellX(x, y), this.cellY(x, y), c, a); }
@@ -143,7 +162,7 @@ export class Painter {
     const sx = this.cellX(x, y), sy = this.cellY(x, y);
     if (a * this.fade <= BAYER[((sy & 3) << 2) | (sx & 3)]) return;
     const px = sx - this.ox, py = sy - this.oy;
-    if (c && px >= 0 && py >= 0 && px < this.w && py < this.h) this.C[py * this.w + px] = c;
+    if (c && px >= 0 && py >= 0 && px < this.w && py < this.h) { const i = py * this.w + px; this.C[i] = c; attenuateSurfaceLight2D(this.frame, i, (c >>> 24) / 255); }
   }
   /** Add light to one pixel. */
   light(x: number, y: number, c: number, k = 1) { this.add(this.cellX(x, y), this.cellY(x, y), c, k); }

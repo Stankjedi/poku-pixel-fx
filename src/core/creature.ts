@@ -1,3 +1,4 @@
+import { blitSprite2D } from './sprite-raster.js';
 /** Authored side-view creature studies. Pure 2D, seekable and independent of the human rig. */
 import { Painter, type PaintFrame } from './painter.js';
 import { hex, mix } from './color.js';
@@ -269,7 +270,7 @@ export function renderCreature2D(style:CreatureStyle={},motion:CreatureMotion='i
 /** Draw with the caller's Painter placement, mirroring, opacity and rotation. */
 export function drawCreature2D(p:Painter,style:CreatureStyle={},motion:CreatureMotion='idle',seconds=0,options:CreatureOptions={}):CreatureSprite{
   const sp=renderCreature2D(style,motion,seconds,options);
-  for(let y=0;y<sp.h;y++)for(let x=0;x<sp.w;x++){const c=sp.pixels[y*sp.w+x];if(c)p.px(sp.x+x,sp.y+y,c);}
+  blitSprite2D(p,sp);
   return sp;
 }
 

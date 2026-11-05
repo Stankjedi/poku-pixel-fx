@@ -1,0 +1,128 @@
+{
+  "schema": "poku.project/v1",
+  "id": "arcane/depth-portal",
+  "name": "portal",
+  "kind": "recipe",
+  "seed": 1,
+  "options": {
+    "seed": 1
+  },
+  "fps": 30,
+  "bg": "dark",
+  "actor": false,
+  "target": false,
+  "layers": {},
+  "edits": [],
+  "notes": "어두운 타원형 입구와 전후면 테두리가 통과 가능한 문을 유지한다.",
+  "recipe": {
+    "schema": "poku.effect-recipe/v1",
+    "kind": "portal",
+    "intentRef": "../../authoring/arcane/depth-portal.intent.json",
+    "duration": 3,
+    "loop": true,
+    "seed": 1,
+    "size": [
+      320,
+      180
+    ],
+    "origin": [
+      50,
+      146
+    ],
+    "parameters": {
+      "width": 5,
+      "spin": 1.8,
+      "travel": 1.1,
+      "density": 20,
+      "glow": 0.45,
+      "trail": 0.11,
+      "material": "metal",
+      "palette": [
+        "#101c32",
+        "#284c70",
+        "#3c8fc1",
+        "#70d9ee",
+        "#d0fbf3",
+        "#f8fff4"
+      ]
+    },
+    "path": [
+      [
+        0,
+        -36
+      ],
+      [
+        76,
+        -79
+      ],
+      [
+        162,
+        -59
+      ],
+      [
+        210,
+        -27
+      ]
+    ],
+    "tracks": {
+      "environment": [
+        {
+          "time": 0,
+          "value": 1
+        },
+        {
+          "time": 3,
+          "value": 1
+        }
+      ],
+      "trail": [
+        {
+          "time": 0,
+          "value": 1
+        },
+        {
+          "time": 3,
+          "value": 1
+        }
+      ],
+      "body": [
+        {
+          "time": 0,
+          "value": 1
+        },
+        {
+          "time": 3,
+          "value": 1
+        }
+      ],
+      "debris": [
+        {
+          "time": 0,
+          "value": 1
+        },
+        {
+          "time": 3,
+          "value": 1
+        }
+      ],
+      "glow": [
+        {
+          "time": 0,
+          "value": 1
+        },
+        {
+          "time": 3,
+          "value": 1
+        }
+      ]
+    },
+    "layers": {
+      "body": true,
+      "trail": true,
+      "glow": true,
+      "debris": true,
+      "environment": true
+    }
+  },
+  "intentRef": "../../authoring/arcane/depth-portal.intent.json"
+}

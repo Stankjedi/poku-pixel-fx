@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "source": "poku-pixel-fx",
-  "count": 264,
+  "count": 272,
   "categories": [
     {
       "id": "moves",
@@ -450,6 +450,45 @@
       ]
     },
     {
+      "id": "arcane/depth-portal",
+      "category": "arcane",
+      "name": {
+        "ko": "Depth Portal",
+        "en": "Depth Portal"
+      },
+      "description": {
+        "ko": "A stable elliptical opening, rear rim and front rim preserve the passage silhouette.",
+        "en": "A stable elliptical opening, rear rim and front rim preserve the passage silhouette."
+      },
+      "tags": [
+        {
+          "id": "recipe",
+          "ko": "recipe"
+        },
+        {
+          "id": "portal",
+          "ko": "포털"
+        },
+        {
+          "id": "metal",
+          "ko": "금속"
+        }
+      ],
+      "animation": {
+        "durationSeconds": 3,
+        "fps": 30,
+        "loop": true
+      },
+      "frameSize": [
+        320,
+        180
+      ],
+      "origin": [
+        50,
+        146
+      ]
+    },
+    {
       "id": "arcane/dimensional-convergence",
       "category": "arcane",
       "addedAt": "2026-11-02T13:49:39Z",
@@ -693,6 +732,57 @@
       "origin": [
         104,
         124
+      ]
+    },
+    {
+      "id": "arcane/point-lit-rupture",
+      "category": "arcane",
+      "name": {
+        "ko": "Point-lit Rupture",
+        "en": "Point-lit Rupture"
+      },
+      "description": {
+        "ko": "A moving charge and short rupture illuminate nearby stone faces and the floor through position, normals and finite-range material lighting.",
+        "en": "A moving charge and short rupture illuminate nearby stone faces and the floor through position, normals and finite-range material lighting."
+      },
+      "tags": [
+        {
+          "id": "arcane",
+          "ko": "비전"
+        },
+        {
+          "id": "point-light",
+          "ko": "point-light"
+        },
+        {
+          "id": "material",
+          "ko": "material"
+        },
+        {
+          "id": "rupture",
+          "ko": "rupture"
+        },
+        {
+          "id": "scene",
+          "ko": "scene"
+        },
+        {
+          "id": "one-shot",
+          "ko": "일회성"
+        }
+      ],
+      "animation": {
+        "durationSeconds": 2.6,
+        "fps": 50,
+        "loop": false
+      },
+      "frameSize": [
+        256,
+        224
+      ],
+      "origin": [
+        128,
+        154
       ]
     },
     {
@@ -2043,6 +2133,45 @@
       ]
     },
     {
+      "id": "explosions/layered-detonation",
+      "category": "explosions",
+      "name": {
+        "ko": "Layered Detonation",
+        "en": "Layered Detonation"
+      },
+      "description": {
+        "ko": "A rapid pressure front is followed by heavy fragments and cooling smoke.",
+        "en": "A rapid pressure front is followed by heavy fragments and cooling smoke."
+      },
+      "tags": [
+        {
+          "id": "recipe",
+          "ko": "recipe"
+        },
+        {
+          "id": "explosion",
+          "ko": "폭발"
+        },
+        {
+          "id": "metal",
+          "ko": "금속"
+        }
+      ],
+      "animation": {
+        "durationSeconds": 2.4,
+        "fps": 30,
+        "loop": false
+      },
+      "frameSize": [
+        320,
+        180
+      ],
+      "origin": [
+        50,
+        146
+      ]
+    },
+    {
       "id": "explosions/nuke",
       "category": "explosions",
       "name": {
@@ -2786,6 +2915,45 @@
       "origin": [
         30,
         60
+      ]
+    },
+    {
+      "id": "fire/folded-flame",
+      "category": "fire",
+      "name": {
+        "ko": "Folded Flame",
+        "en": "Folded Flame"
+      },
+      "description": {
+        "ko": "Connected rising flame folds feed a quieter, non-emissive smoke plume.",
+        "en": "Connected rising flame folds feed a quieter, non-emissive smoke plume."
+      },
+      "tags": [
+        {
+          "id": "recipe",
+          "ko": "recipe"
+        },
+        {
+          "id": "flame",
+          "ko": "불꽃"
+        },
+        {
+          "id": "metal",
+          "ko": "금속"
+        }
+      ],
+      "animation": {
+        "durationSeconds": 3,
+        "fps": 30,
+        "loop": true
+      },
+      "frameSize": [
+        320,
+        180
+      ],
+      "origin": [
+        50,
+        146
       ]
     },
     {
@@ -5225,6 +5393,45 @@
       ]
     },
     {
+      "id": "lightning/focused-arc",
+      "category": "lightning",
+      "name": {
+        "ko": "Focused Arc",
+        "en": "Focused Arc"
+      },
+      "description": {
+        "ko": "A dominant lightning channel leads thinner branches into one grounded contact.",
+        "en": "A dominant lightning channel leads thinner branches into one grounded contact."
+      },
+      "tags": [
+        {
+          "id": "recipe",
+          "ko": "recipe"
+        },
+        {
+          "id": "lightning",
+          "ko": "번개"
+        },
+        {
+          "id": "metal",
+          "ko": "금속"
+        }
+      ],
+      "animation": {
+        "durationSeconds": 1.6,
+        "fps": 30,
+        "loop": false
+      },
+      "frameSize": [
+        320,
+        180
+      ],
+      "origin": [
+        50,
+        146
+      ]
+    },
+    {
       "id": "lightning/ion-stormburst",
       "category": "lightning",
       "addedAt": "2026-11-02T13:49:39Z",
@@ -6052,6 +6259,45 @@
       ]
     },
     {
+      "id": "melee/socket-ribbon-slash",
+      "category": "melee",
+      "name": {
+        "ko": "Socket Ribbon Slash",
+        "en": "Socket Ribbon Slash"
+      },
+      "description": {
+        "ko": "A blade sweep leads a tapered ribbon with a compact contact response.",
+        "en": "A blade sweep leads a tapered ribbon with a compact contact response."
+      },
+      "tags": [
+        {
+          "id": "recipe",
+          "ko": "recipe"
+        },
+        {
+          "id": "ribbon-slash",
+          "ko": "ribbon-slash"
+        },
+        {
+          "id": "metal",
+          "ko": "금속"
+        }
+      ],
+      "animation": {
+        "durationSeconds": 1.2,
+        "fps": 30,
+        "loop": false
+      },
+      "frameSize": [
+        320,
+        180
+      ],
+      "origin": [
+        50,
+        146
+      ]
+    },
+    {
       "id": "melee/spear-sweep",
       "category": "melee",
       "name": {
@@ -6222,6 +6468,45 @@
       "origin": [
         44,
         108
+      ]
+    },
+    {
+      "id": "melee/tempered-crescent",
+      "category": "melee",
+      "name": {
+        "ko": "Tempered Crescent",
+        "en": "Tempered Crescent"
+      },
+      "description": {
+        "ko": "A visible forged blade spins independently along its thrown path, then strikes metal.",
+        "en": "A visible forged blade spins independently along its thrown path, then strikes metal."
+      },
+      "tags": [
+        {
+          "id": "recipe",
+          "ko": "recipe"
+        },
+        {
+          "id": "thrown-blade",
+          "ko": "thrown-blade"
+        },
+        {
+          "id": "metal",
+          "ko": "금속"
+        }
+      ],
+      "animation": {
+        "durationSeconds": 2.2,
+        "fps": 30,
+        "loop": false
+      },
+      "frameSize": [
+        320,
+        180
+      ],
+      "origin": [
+        50,
+        146
       ]
     },
     {
@@ -9192,6 +9477,49 @@
       "origin": [
         252,
         42
+      ]
+    },
+    {
+      "id": "projectiles/timing-comet",
+      "category": "projectiles",
+      "name": {
+        "ko": "Timing Comet",
+        "en": "Timing Comet"
+      },
+      "description": {
+        "ko": "A small amber comet demonstrates separately authored travel, width, opacity and light curves. The final motion key can hold or continue at its authored velocity.",
+        "en": "A small amber comet demonstrates separately authored travel, width, opacity and light curves. The final motion key can hold or continue at its authored velocity."
+      },
+      "tags": [
+        {
+          "id": "projectiles",
+          "ko": "projectiles"
+        },
+        {
+          "id": "timing",
+          "ko": "timing"
+        },
+        {
+          "id": "authoring-study",
+          "ko": "authoring-study"
+        },
+        {
+          "id": "curves",
+          "ko": "curves"
+        }
+      ],
+      "animation": {
+        "durationSeconds": 2.5,
+        "fps": 50,
+        "loop": false
+      },
+      "frameSize": [
+        320,
+        160
+      ],
+      "origin": [
+        112,
+        104
       ]
     },
     {

@@ -1,0 +1,6 @@
+**/target/**
+**/*.png
+**/*.f32
+**/*.rgba
+**/playback.json
+/native-output/

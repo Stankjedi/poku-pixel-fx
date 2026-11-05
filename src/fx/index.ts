@@ -22,6 +22,7 @@ import * as effect_666972652f666972652d746f726e61646f from "./fire/fire-tornado.
 import * as effect_666972652f6669726562616c6c from "./fire/fireball.js";
 import * as effect_666972652f666c616d652d70696c6c6172 from "./fire/flame-pillar.js";
 import * as effect_666972652f666c616d657468726f776572 from "./fire/flamethrower.js";
+import * as effect_666972652f666f6c6465642d666c616d65 from "./fire/folded-flame.js";
 import * as effect_666972652f6d6574656f72 from "./fire/meteor.js";
 import * as effect_666972652f736f6c61722d63726f776e2d6465746f6e6174696f6e from "./fire/solar-crown-detonation.js";
 import * as effect_666972652f7370697269742d666c616d65 from "./fire/spirit-flame.js";
@@ -35,6 +36,7 @@ import * as effect_6578706c6f73696f6e732f66697265776f726b2d6275727374 from "./ex
 import * as effect_6578706c6f73696f6e732f66697265776f726b2d726f636b6574 from "./explosions/firework-rocket.js";
 import * as effect_6578706c6f73696f6e732f6772656e616465 from "./explosions/grenade.js";
 import * as effect_6578706c6f73696f6e732f696d706c6f73696f6e from "./explosions/implosion.js";
+import * as effect_6578706c6f73696f6e732f6c6179657265642d6465746f6e6174696f6e from "./explosions/layered-detonation.js";
 import * as effect_6578706c6f73696f6e732f6e756b65 from "./explosions/nuke.js";
 import * as effect_6578706c6f73696f6e732f706c61736d612d6578706c6f73696f6e from "./explosions/plasma-explosion.js";
 import * as effect_6578706c6f73696f6e732f736d616c6c2d6578706c6f73696f6e from "./explosions/small-explosion.js";
@@ -68,6 +70,7 @@ import * as effect_6c696768746e696e672f62616c6c2d6c696768746e696e67 from "./ligh
 import * as effect_6c696768746e696e672f636861696e2d6c696768746e696e67 from "./lightning/chain-lightning.js";
 import * as effect_6c696768746e696e672f6368617267652d7570 from "./lightning/charge-up.js";
 import * as effect_6c696768746e696e672f656c656374726966696564 from "./lightning/electrified.js";
+import * as effect_6c696768746e696e672f666f63757365642d617263 from "./lightning/focused-arc.js";
 import * as effect_6c696768746e696e672f696f6e2d73746f726d6275727374 from "./lightning/ion-stormburst.js";
 import * as effect_6c696768746e696e672f6c696768746e696e672d737472696b65 from "./lightning/lightning-strike.js";
 import * as effect_6c696768746e696e672f706c61736d612d62616c6c from "./lightning/plasma-ball.js";
@@ -94,9 +97,11 @@ import * as effect_6d656c65652f646f75626c652d736c617368 from "./melee/double-sla
 import * as effect_6d656c65652f68616d6d65722d736d617368 from "./melee/hammer-smash.js";
 import * as effect_6d656c65652f68656176792d636c65617665 from "./melee/heavy-cleave.js";
 import * as effect_6d656c65652f7363797468652d72656170 from "./melee/scythe-reap.js";
+import * as effect_6d656c65652f736f636b65742d726962626f6e2d736c617368 from "./melee/socket-ribbon-slash.js";
 import * as effect_6d656c65652f73706561722d7377656570 from "./melee/spear-sweep.js";
 import * as effect_6d656c65652f7370696e2d736c617368 from "./melee/spin-slash.js";
 import * as effect_6d656c65652f73776f72642d736c617368 from "./melee/sword-slash.js";
+import * as effect_6d656c65652f74656d70657265642d6372657363656e74 from "./melee/tempered-crescent.js";
 import * as effect_6d656c65652f746872757374 from "./melee/thrust.js";
 import * as effect_6d656c65652f7570706572637574 from "./melee/uppercut.js";
 import * as effect_6d656c65652f776869702d637261636b from "./melee/whip-crack.js";
@@ -126,6 +131,7 @@ import * as effect_70726f6a656374696c65732f6d757a7a6c652d73686f7467756e from "./
 import * as effect_70726f6a656374696c65732f6d757a7a6c652d736d67 from "./projectiles/muzzle-smg.js";
 import * as effect_70726f6a656374696c65732f706c61736d612d73686f74 from "./projectiles/plasma-shot.js";
 import * as effect_70726f6a656374696c65732f726f636b6574 from "./projectiles/rocket.js";
+import * as effect_70726f6a656374696c65732f74696d696e672d636f6d6574 from "./projectiles/timing-comet.js";
 import * as effect_737061776e2f636f696e2d64726f70 from "./spawn/coin-drop.js";
 import * as effect_737061776e2f646973696e74656772617465 from "./spawn/disintegrate.js";
 import * as effect_737061776e2f646973736f6c76652d6275726e from "./spawn/dissolve-burn.js";
@@ -142,10 +148,12 @@ import * as effect_617263616e652f617263616e652d6f7262 from "./arcane/arcane-orb.
 import * as effect_617263616e652f626c696e6b2d696e from "./arcane/blink-in.js";
 import * as effect_617263616e652f626c696e6b2d6f7574 from "./arcane/blink-out.js";
 import * as effect_617263616e652f63656c65737469616c2d73757065726e6f7661 from "./arcane/celestial-supernova.js";
+import * as effect_617263616e652f64657074682d706f7274616c from "./arcane/depth-portal.js";
 import * as effect_617263616e652f64696d656e73696f6e616c2d636f6e76657267656e6365 from "./arcane/dimensional-convergence.js";
 import * as effect_617263616e652f6d616769632d636173746c65 from "./arcane/magic-castle.js";
 import * as effect_617263616e652f6d616769632d636972636c652d63617374 from "./arcane/magic-circle-cast.js";
 import * as effect_617263616e652f6d616e612d6275727374 from "./arcane/mana-burst.js";
+import * as effect_617263616e652f706f696e742d6c69742d72757074757265 from "./arcane/point-lit-rupture.js";
 import * as effect_617263616e652f706f7274616c from "./arcane/portal.js";
 import * as effect_617263616e652f72756e652d636972636c65 from "./arcane/rune-circle.js";
 import * as effect_617263616e652f7370656c6c2d636861726765 from "./arcane/spell-charge.js";
@@ -292,6 +300,7 @@ export const effects = {
   "fire/fireball": effect_666972652f6669726562616c6c,
   "fire/flame-pillar": effect_666972652f666c616d652d70696c6c6172,
   "fire/flamethrower": effect_666972652f666c616d657468726f776572,
+  "fire/folded-flame": effect_666972652f666f6c6465642d666c616d65,
   "fire/meteor": effect_666972652f6d6574656f72,
   "fire/solar-crown-detonation": effect_666972652f736f6c61722d63726f776e2d6465746f6e6174696f6e,
   "fire/spirit-flame": effect_666972652f7370697269742d666c616d65,
@@ -305,6 +314,7 @@ export const effects = {
   "explosions/firework-rocket": effect_6578706c6f73696f6e732f66697265776f726b2d726f636b6574,
   "explosions/grenade": effect_6578706c6f73696f6e732f6772656e616465,
   "explosions/implosion": effect_6578706c6f73696f6e732f696d706c6f73696f6e,
+  "explosions/layered-detonation": effect_6578706c6f73696f6e732f6c6179657265642d6465746f6e6174696f6e,
   "explosions/nuke": effect_6578706c6f73696f6e732f6e756b65,
   "explosions/plasma-explosion": effect_6578706c6f73696f6e732f706c61736d612d6578706c6f73696f6e,
   "explosions/small-explosion": effect_6578706c6f73696f6e732f736d616c6c2d6578706c6f73696f6e,
@@ -338,6 +348,7 @@ export const effects = {
   "lightning/chain-lightning": effect_6c696768746e696e672f636861696e2d6c696768746e696e67,
   "lightning/charge-up": effect_6c696768746e696e672f6368617267652d7570,
   "lightning/electrified": effect_6c696768746e696e672f656c656374726966696564,
+  "lightning/focused-arc": effect_6c696768746e696e672f666f63757365642d617263,
   "lightning/ion-stormburst": effect_6c696768746e696e672f696f6e2d73746f726d6275727374,
   "lightning/lightning-strike": effect_6c696768746e696e672f6c696768746e696e672d737472696b65,
   "lightning/plasma-ball": effect_6c696768746e696e672f706c61736d612d62616c6c,
@@ -364,9 +375,11 @@ export const effects = {
   "melee/hammer-smash": effect_6d656c65652f68616d6d65722d736d617368,
   "melee/heavy-cleave": effect_6d656c65652f68656176792d636c65617665,
   "melee/scythe-reap": effect_6d656c65652f7363797468652d72656170,
+  "melee/socket-ribbon-slash": effect_6d656c65652f736f636b65742d726962626f6e2d736c617368,
   "melee/spear-sweep": effect_6d656c65652f73706561722d7377656570,
   "melee/spin-slash": effect_6d656c65652f7370696e2d736c617368,
   "melee/sword-slash": effect_6d656c65652f73776f72642d736c617368,
+  "melee/tempered-crescent": effect_6d656c65652f74656d70657265642d6372657363656e74,
   "melee/thrust": effect_6d656c65652f746872757374,
   "melee/uppercut": effect_6d656c65652f7570706572637574,
   "melee/whip-crack": effect_6d656c65652f776869702d637261636b,
@@ -396,6 +409,7 @@ export const effects = {
   "projectiles/muzzle-smg": effect_70726f6a656374696c65732f6d757a7a6c652d736d67,
   "projectiles/plasma-shot": effect_70726f6a656374696c65732f706c61736d612d73686f74,
   "projectiles/rocket": effect_70726f6a656374696c65732f726f636b6574,
+  "projectiles/timing-comet": effect_70726f6a656374696c65732f74696d696e672d636f6d6574,
   "spawn/coin-drop": effect_737061776e2f636f696e2d64726f70,
   "spawn/disintegrate": effect_737061776e2f646973696e74656772617465,
   "spawn/dissolve-burn": effect_737061776e2f646973736f6c76652d6275726e,
@@ -412,10 +426,12 @@ export const effects = {
   "arcane/blink-in": effect_617263616e652f626c696e6b2d696e,
   "arcane/blink-out": effect_617263616e652f626c696e6b2d6f7574,
   "arcane/celestial-supernova": effect_617263616e652f63656c65737469616c2d73757065726e6f7661,
+  "arcane/depth-portal": effect_617263616e652f64657074682d706f7274616c,
   "arcane/dimensional-convergence": effect_617263616e652f64696d656e73696f6e616c2d636f6e76657267656e6365,
   "arcane/magic-castle": effect_617263616e652f6d616769632d636173746c65,
   "arcane/magic-circle-cast": effect_617263616e652f6d616769632d636972636c652d63617374,
   "arcane/mana-burst": effect_617263616e652f6d616e612d6275727374,
+  "arcane/point-lit-rupture": effect_617263616e652f706f696e742d6c69742d72757074757265,
   "arcane/portal": effect_617263616e652f706f7274616c,
   "arcane/rune-circle": effect_617263616e652f72756e652d636972636c65,
   "arcane/spell-charge": effect_617263616e652f7370656c6c2d636861726765,

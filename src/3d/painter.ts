@@ -2,6 +2,13 @@ import { type Frame3D, type Color3D, clearFrame3D, color3D } from "./frame.js";
 import { blendOver, type AlphaMode } from "../render/coverage.js";
 import { surfacesFor3D, type SurfaceFragments3D } from "./surface.js";
 import { type Vec3, clamp3, cross3, dot3, norm3, sub3, TAU3 } from "./math.js";
+import { channelToLinear } from '../render/linear.js';
+
+export interface TransparencyPolicy3D {
+  /** exact preserves source-over; cutout deliberately discards coverage; additive retains only depth-occluded emission. */
+  mode: 'exact' | 'cutout' | 'additive';
+  cutoff?: number;
+}
 
 const BAYER4 = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + 0.5) / 16);
 const LIGHT_DIRECTION = norm3([0.6, 1, -0.45]);
@@ -37,6 +44,7 @@ export class Painter3D {
   private ringDepth?: Float32Array;
   private readonly ringPixels: number[] = [];
   private readonly surfaces: SurfaceFragments3D;
+  private transparency: TransparencyPolicy3D = { mode: 'exact' };
 
   constructor(frame: Frame3D, camera: Camera3D = DEFAULT_CAMERA_3D) {
     this.frame = frame;
@@ -55,6 +63,14 @@ export class Painter3D {
   begin(background: Color3D = "#0a1424") { clearFrame3D(this.frame, background); return this; }
   get alphaMode(): AlphaMode { return this.frame.alphaMode ?? "coverage"; }
   set alphaMode(mode: AlphaMode) { this.frame.alphaMode = mode; }
+  /** Applies only to this painter and restores the previous policy even if the callback throws. */
+  withTransparency(policy: TransparencyPolicy3D, draw: (painter: Painter3D) => void): this {
+    if (!['exact', 'cutout', 'additive'].includes(policy.mode) || (policy.cutoff !== undefined && (!Number.isFinite(policy.cutoff) || policy.cutoff < 0 || policy.cutoff > 1)))
+      throw new RangeError('Invalid transparency policy');
+    const previous = this.transparency; this.transparency = policy;
+    try { draw(this); } finally { this.transparency = previous; }
+    return this;
+  }
   project(point: Vec3, out?: Projected3D): Projected3D {
     const x = point[0] - this.origin[0], y = point[1] - this.origin[1], z = point[2] - this.origin[2];
     const u = x * this.cy - z * this.sy, v = x * this.sy + z * this.cy;
@@ -73,6 +89,18 @@ export class Painter3D {
     const opacity = clamp3(alpha) * (color >>> 24) / 255;
     if (opacity <= 0 || (dither && opacity < 1 && opacity <= BAYER4[((y & 3) << 2) | (x & 3)])) return;
     const i = y * this.frame.w + x;
+    if (this.transparency.mode === 'cutout') {
+      if (opacity < (this.transparency.cutoff ?? .5)) return;
+      this.surfaces.put(i, depth, (color | 0xff000000) >>> 0, 1, emission, emissionColor);
+      return;
+    }
+    if (this.transparency.mode === 'additive') {
+      const k = Math.max(0, emission) * opacity;
+      this.surfaces.layer(i, depth, 0, 0, (emissionColor & 255) * k, ((emissionColor >>> 8) & 255) * k,
+        ((emissionColor >>> 16) & 255) * k, channelToLinear(emissionColor, 0) * k,
+        channelToLinear(emissionColor, 8) * k, channelToLinear(emissionColor, 16) * k, false);
+      return;
+    }
     this.surfaces.put(i, depth, dither ? (color | 0xff000000) >>> 0 : color, dither ? 1 : clamp3(alpha), emission, emissionColor);
   }
   /** A custom material sample using the same surface coverage and depth as primitives. */

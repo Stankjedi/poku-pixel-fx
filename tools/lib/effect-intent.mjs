@@ -1,7 +1,7 @@
 // Local authoring accountability, not a classifier, physics engine or proof of human inspection.
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 export const INTENT_SCHEMA = 'poku-effect-intent/v1';
 export const INTENT_REVIEW_SCHEMA = 'poku-effect-intent-review/v1';
@@ -23,7 +23,13 @@ export function checkId(id) {
   if (typeof id !== 'string' || !/^[a-z0-9-]+\/[a-z0-9-]+$/.test(id)) fail('Use category/effect in kebab-case');
   return id;
 }
-export const intentPath = (root, id) => join(root, 'authoring', `${checkId(id)}.intent.json`);
+const workspace = root => process.env.POKU_WORKSPACE ? resolve(process.env.POKU_WORKSPACE) : root;
+export const intentPath = (root, id) => join(workspace(root), 'authoring', `${checkId(id)}.intent.json`);
+export function reviewDirectory(root, id, variant) {
+  if (variant !== undefined && (typeof variant !== 'string' || !/^[0-9a-f]{64}$/.test(variant))) fail('Invalid project variant fingerprint');
+  return variant ? join(workspace(root), 'records', 'review', checkId(id), 'variants', variant)
+    : join(workspace(root), 'records', 'review', checkId(id));
+}
 
 export function intentTemplate(id) {
   return {
@@ -86,16 +92,29 @@ export function validateIntentBrief(brief, id = brief?.id) {
 export const readIntentBrief = (root, id) => validateIntentBrief(readJSON(intentPath(root, id)), id);
 
 /** Uses the existing rendered evidence. Never renders, runs source, reads arbitrary manifest paths or approves art. */
-export function readIntentContext(root, id, expectedIdentity) {
-  const brief = readIntentBrief(root, id), dir = join(root, 'records', 'review', checkId(id));
+export function readIntentContext(root, id, expectedIdentity, variant, expectedBrief) {
+  const dir = reviewDirectory(root, id, variant);
+  const brief = variant ? validateIntentBrief(readJSON(join(dir, 'intent.json')), id) : readIntentBrief(root, id);
+  if (expectedBrief && digest(expectedBrief) !== digest(brief)) fail('Current project intent differs from reviewed intent');
   const manifest = readJSON(join(dir, 'manifest.json')), identity = manifest?.identity;
   if (manifest?.schema !== 'poku-visual-review/v1' || identity?.id !== id
     || !Number.isSafeInteger(manifest.frames) || manifest.frames < 1
     || !Number.isFinite(manifest.fps) || manifest.fps <= 0 || typeof manifest.loop !== 'boolean') fail('Prepare the current visual review packet first');
-  const expectedFrames = Math.max(1, Math.round(brief.timeline.durationSeconds * manifest.fps) + (brief.timeline.loop ? 0 : 1));
-  if (brief.timeline.loop !== manifest.loop || expectedFrames !== manifest.frames)
-    fail('Intent duration/loop does not match the rendered evidence');
-  const sourcePath = join(root, 'src', 'fx', `${id}.ts`);
+  if (variant) {
+    const context = manifest.context;
+    if (!context || context.projectSha256 !== variant || context.effectDuration !== brief.timeline.durationSeconds
+      || context.effectLoop !== brief.timeline.loop) fail('Project intent duration/loop or variant does not match the evidence');
+    const projectBytes = readFileSync(join(dir, 'project.json'));
+    if (hash(projectBytes) !== variant) fail('Project snapshot changed since review');
+  } else {
+    const expectedFrames = Math.max(1, Math.round(brief.timeline.durationSeconds * manifest.fps) + (brief.timeline.loop ? 0 : 1));
+    if (brief.timeline.loop !== manifest.loop || expectedFrames !== manifest.frames)
+      fail('Intent duration/loop does not match the rendered evidence');
+  }
+  const source = variant ? manifest.context.source : `src/fx/${id}.ts`;
+  if (source !== 'project.json' && !/^src\/(?:fx\/[a-z0-9-]+\/[a-z0-9-]+|3d\/effects\/[a-z0-9-]+)\.ts$/.test(source))
+    fail('Unsupported review source path');
+  const sourcePath = source === 'project.json' ? join(dir, source) : join(root, source);
   if (hash(readFileSync(sourcePath)) !== identity.sourceSha256) fail('Source changed; rebuild and prepare new visual evidence');
   const fields = Object.fromEntries(['id', 'sourceSha256', 'pngSha256', 'jsonSha256', 'sceneSha256'].map(key => [key, identity[key]]));
   if (identity.fingerprint !== digest(fields)) fail('Invalid visual identity');
@@ -156,8 +175,8 @@ export function validateIntentReview(record, context) {
   return record;
 }
 
-export function prepareIntentReview(root, id) {
-  const context = readIntentContext(root, id), template = intentReviewTemplate(context);
+export function prepareIntentReview(root, id, variant) {
+  const context = readIntentContext(root, id, undefined, variant), template = intentReviewTemplate(context);
   const path = join(context.dir, `intent-review-template-${context.bindings.briefSha256.slice(0, 12)}-${context.bindings.manifestSha256.slice(0, 12)}.json`);
   const content = JSON.stringify(template, null, 2) + '\n';
   if (existsSync(path)) { if (readFileSync(path, 'utf8') !== content) fail('Template path contains authored edits; use that file for record, do not overwrite it'); }
@@ -165,14 +184,14 @@ export function prepareIntentReview(root, id) {
   return { path, playback: join(context.dir, 'playback.html'), bindings: context.bindings,
     notice: 'Template only. Inspect the actual frames/playback; no review or approval was generated.' };
 }
-export function recordIntentReview(root, id, file) {
-  const context = readIntentContext(root, id), record = validateIntentReview(readJSON(file), context);
+export function recordIntentReview(root, id, file, variant) {
+  const context = readIntentContext(root, id, undefined, variant), record = validateIntentReview(readJSON(file), context);
   const path = join(context.dir, 'intent-review.json');
   writeFileSync(path, JSON.stringify(record, null, 2) + '\n');
   return { path, decision: record.decision, notice: 'Recorded reviewer assertion; software cannot prove inspection or artistic/physical quality.' };
 }
-export function requireIntentReview(root, id, expectedIdentity) {
-  const context = readIntentContext(root, id, expectedIdentity);
+export function requireIntentReview(root, id, expectedIdentity, variant, expectedBrief) {
+  const context = readIntentContext(root, id, expectedIdentity, variant, expectedBrief);
   const record = validateIntentReview(readJSON(join(context.dir, 'intent-review.json')), context);
   if (record.decision !== 'ready') fail('Intent review is not ready; follow the recorded corrections/pending judgement');
   return { brief: context.brief, review: record };

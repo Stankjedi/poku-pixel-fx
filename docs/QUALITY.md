@@ -68,7 +68,7 @@ existing light buffer. Keep noise and dithering intentional rather than using th
    end. Frame-align a critical flash at the actual export fps; inspect motion, not just a hero image.
 5. Keep a dark/body/core separation. Broad bloom and more white pixels do not automatically mean quality.
    Test over both the intended scene and transparency/checkerboard at logical 1x and nearest-neighbor 3x.
-6. Render, inspect, and refine at least three passes. Record which visual defect each pass fixes.
+6. Render at native size and full playback speed. Record concrete observed defects; stop refining when the declared readability, timing, alpha and boundary criteria pass. A fixed number of iterations is not a quality measure.
 7. Run `npm run build`, `npm run test:quality`, and `npm run check -- <id>`. Also run `test:3d` after shared
    renderer changes and `test:export` after export changes. A technical pass does not certify aesthetics.
 8. Export GIF/MP4 and a transparent sprite sheet. Check first/impact/last frames, complete playback,

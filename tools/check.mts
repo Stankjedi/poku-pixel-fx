@@ -11,7 +11,14 @@ const { shortfall } = await import(new URL("../../build/core/rig.js", import.met
 import { resolveIds, allIds, loadEffect } from "./lib/fxlib.mjs";
 const { createFrame, clearFrame, painterFor, createFx, createAct, poseAt, stockActor, resolveOptions, Painter, BACKDROPS, enableHDRLight } = await import(new URL("../../build/core/index.js", import.meta.url).href);
 
-const ids = process.argv.slice(2).length ? resolveIds(process.argv.slice(2)) : allIds();
+let ids: string[];
+try {
+  ids = process.argv.slice(2).length ? resolveIds(process.argv.slice(2), undefined, { strict: true }) : allIds();
+  if (!ids.length) throw new Error("검사할 이펙트가 없습니다");
+} catch (error) {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+}
 const signature = (frame:any) => {
   const hash=createHash('sha256');
   for(const a of [frame.color,frame.light,frame.hdrLight])if(a)hash.update(new Uint8Array(a.buffer,a.byteOffset,a.byteLength));

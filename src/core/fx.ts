@@ -2,6 +2,7 @@
 
 import { defineImpactContact2D, type ImpactContact2D } from "./impact-contact.js";
 import { Painter, type PaintFrame } from "./painter.js";
+import { resetSurfaceLight2D } from "../render/surface2d.js";
 
 export type DrawLayer = "back" | "front";
 export interface EffectOptions {
@@ -23,6 +24,12 @@ export interface EffectImplementation<O extends EffectOptions = EffectOptions> {
   advanceTime?: (time: number, options: O) => void;
   draw: (painter: Painter, time: number, options: O) => void;
   drawBack?: (painter: Painter, time: number, options: O) => void;
+  /** Optional complete deterministic state, including RNG and pending spawns. Both methods are required together. */
+  captureState?: () => unknown;
+  restoreState?: (state: unknown) => void;
+}
+export interface EffectCheckpoint {
+  schema:'poku.fx-checkpoint/v1';time:number;timeError:number;tick:number;stopAt:number|null;state:unknown;
 }
 export interface EffectModule<O extends EffectOptions = any> {
   meta?: EffectMeta;
@@ -41,6 +48,9 @@ export interface EffectInstance {
   readonly t: number; readonly tick: number; readonly simulatedTime: number;
   readonly shake: readonly [number, number]; readonly contacts: readonly ImpactContact2D[]; meta: EffectMeta; options: EffectOptions;
   update(dt: number): void; draw(frame: PaintFrame, layer?: DrawLayer, parent?: EffectDrawContext): void; stop(): void; done(): boolean;
+  readonly supportsCheckpoint:boolean;
+  capture():EffectCheckpoint;
+  restore(snapshot:EffectCheckpoint):void;
 }
 /** Parent-local placement and style for a nested effect. A Painter satisfies this interface. */
 export interface EffectDrawContext {
@@ -64,6 +74,8 @@ export function clearFrame(f: PaintFrame) {
   f.color.fill(0);
   f.light.fill(0);
   f.hdrLight?.fill(0);
+  for(const mask of Object.values((f as PaintFrame & {semanticMasks?:Record<string,Uint8Array>}).semanticMasks??{}))mask.fill(0);
+  resetSurfaceLight2D(f);
   return f;
 }
 
@@ -111,10 +123,23 @@ export function createFx<O extends EffectOptions>(mod: EffectModule<O>, o: Effec
   const contacts = Object.freeze((mod.contacts?.(opts) ?? []).map(defineImpactContact2D));
   const D = meta.duration ?? 1;
   let t = 0, timeError = 0, tick = 0, stopAt = Infinity;
+  const pure=!impl.update&&!impl.advanceTime;
+  const supportsCheckpoint=pure||!!(impl.captureState&&impl.restoreState);
   return {
     meta,
     contacts,
     options: opts,
+    supportsCheckpoint,
+    capture(){
+      if(!supportsCheckpoint)throw new Error('This effect must declare captureState/restoreState before it can be checkpointed');
+      return{schema:'poku.fx-checkpoint/v1',time:t,timeError,tick,stopAt:Number.isFinite(stopAt)?stopAt:null,state:pure?null:structuredClone(impl.captureState!())};
+    },
+    restore(snapshot){
+      if(!supportsCheckpoint)throw new Error('This effect does not support checkpoints');
+      if(snapshot.schema!=='poku.fx-checkpoint/v1'||![snapshot.time,snapshot.timeError].every(Number.isFinite)||snapshot.time<0||!Number.isSafeInteger(snapshot.tick)||snapshot.tick<0||snapshot.tick!==Math.floor(snapshot.time*FX_TICK_RATE+1e-9)||(snapshot.stopAt!==null&&(!Number.isFinite(snapshot.stopAt)||snapshot.stopAt<0)))throw new RangeError('Invalid effect checkpoint clock');
+      if(!pure)impl.restoreState!(structuredClone(snapshot.state));
+      t=snapshot.time;timeError=snapshot.timeError;tick=snapshot.tick;stopAt=snapshot.stopAt??Infinity;
+    },
     get t() {
       return t;
     },

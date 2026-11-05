@@ -10,6 +10,8 @@ export interface VolumeSample3D {
   density: number;
   color: Color3D;
   emission?: number;
+  /** Independent linear RGB emission per unit absorbed coverage; used for mixed media. */
+  emissionRGB?: readonly [number, number, number];
 }
 export type VolumeField3D = (x: number, y: number, z: number) => VolumeSample3D | undefined;
 export interface VolumeOptions3D {
@@ -83,7 +85,16 @@ export function drawVolume3D(p: Painter3D, bounds: VolumeBounds3D, field: Volume
       r += (c & 255) * weight; g += ((c >>> 8) & 255) * weight; b += ((c >>> 16) & 255) * weight;
       const light = Number.isFinite(sample.emission) ? Math.max(0, sample.emission ?? 0) * weight : 0;
       lr += (c & 255) * light; lg += ((c >>> 8) & 255) * light; lb += ((c >>> 16) & 255) * light;
-      if (f.hdrLight && light > 0) { hr += channelToLinear(c, 0) * light; hg += channelToLinear(c, 8) * light; hb += channelToLinear(c, 16) * light; }
+      if (sample.emissionRGB) {
+        const e = sample.emissionRGB;
+        if (e.length !== 3 || !e.every(v => Number.isFinite(v) && v >= 0)) throw new RangeError('Volume emissionRGB must be finite nonnegative linear RGB');
+        const encode = (v: number) => 255 * (v <= .0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - .055);
+        // Independent emission replaces the scalar legacy contribution for this medium.
+        lr += encode(Math.max(0, e[0])) * weight - (c & 255) * light;
+        lg += encode(Math.max(0, e[1])) * weight - ((c >>> 8) & 255) * light;
+        lb += encode(Math.max(0, e[2])) * weight - ((c >>> 16) & 255) * light;
+        hr += Math.max(0, e[0]) * weight; hg += Math.max(0, e[1]) * weight; hb += Math.max(0, e[2]) * weight;
+      } else if (f.hdrLight && light > 0) { hr += channelToLinear(c, 0) * light; hg += channelToLinear(c, 8) * light; hb += channelToLinear(c, 16) * light; }
       transmittance *= 1 - a;
     }
     const alpha = 1 - transmittance;
@@ -130,6 +141,12 @@ export class VolumeGrid3D {
   private readonly materials: Uint32Array;
   private readonly uniformMaterials: Uint32Array;
   private hasEmission = false;
+  private rgbEmission?: Float32Array;
+  private rgbCells?: Uint8Array;
+  private hasRGBEmission = false;
+  private sampleIndices = new Float64Array(8);
+  private sampleWeights = new Float64Array(8);
+  private readonly outputRGB: [number, number, number] = [0, 0, 0];
   private readonly inverse: Vec3;
   private readonly output: VolumeSample3D = { density: 0, color: 0, emission: 0 };
   constructor(bounds: VolumeBounds3D, cellSize = 0.16) {
@@ -150,6 +167,7 @@ export class VolumeGrid3D {
     this.data.fill(0);
     this.materials.fill(0);
     this.hasEmission = false;
+    this.hasRGBEmission = false; this.rgbEmission?.fill(0); this.rgbCells?.fill(0);
     let i = 0;
     for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++, i += 5) {
       const sample = field(min[0] + x / this.inverse[0], min[1] + y / this.inverse[1], min[2] + z / this.inverse[2]);
@@ -163,6 +181,15 @@ export class VolumeGrid3D {
       if (!this.hasEmission) this.materials[i / 5] = Number.isFinite(this.data[i + 1] + this.data[i + 2] + this.data[i + 3]) ? (c | 0xff000000) >>> 0 : 1;
       this.data[i + 4] = Number.isFinite(sample.emission) ? Math.max(0, sample.emission ?? 0) * d : 0;
       if (this.data[i + 4] > 0) this.hasEmission = true;
+      if (sample.emissionRGB) {
+        this.rgbEmission ??= new Float32Array(this.materials.length * 3);
+        this.rgbCells ??= new Uint8Array(this.materials.length);
+        if (sample.emissionRGB.length !== 3 || !sample.emissionRGB.every(v => Number.isFinite(v) && v >= 0)) throw new RangeError('Volume emissionRGB must be finite nonnegative linear RGB');
+        this.rgbCells[i / 5] = 1;
+        const j = i / 5 * 3;
+        for (let ch = 0; ch < 3; ch++) this.rgbEmission[j + ch] = Math.max(0, sample.emissionRGB[ch]) * d;
+        this.hasRGBEmission = true;
+      }
     }
     // Mark interpolation cells, not individual vertices: a ray may be inside an
     // empty cell next to a nonempty one. Reject only when all eight corners are
@@ -219,6 +246,60 @@ export class VolumeGrid3D {
     const emission = this.hasEmission || !Number.isFinite(density) ? data[i0 + 4] * w0 + data[i1 + 4] * w1 + data[i2 + 4] * w2 + data[i3 + 4] * w3 +
       data[i4 + 4] * w4 + data[i5 + 4] * w5 + data[i6 + 4] * w6 + data[i7 + 4] * w7 : 0;
     this.output.emission = emission / density;
+    delete this.output.emissionRGB;
+    if (this.hasRGBEmission && this.rgbEmission) {
+      const indices = this.sampleIndices, weights = this.sampleWeights;
+      indices[0]=i0; indices[1]=i1; indices[2]=i2; indices[3]=i3;
+      indices[4]=i4; indices[5]=i5; indices[6]=i6; indices[7]=i7;
+      weights[0]=w0; weights[1]=w1; weights[2]=w2; weights[3]=w3;
+      weights[4]=w4; weights[5]=w5; weights[6]=w6; weights[7]=w7;
+      for (let ch = 0; ch < 3; ch++) {
+        let value = 0;
+        for (let k = 0; k < 8; k++) {
+          const address = indices[k], rgb = this.rgbEmission[address / 5 * 3 + ch];
+          // Scalar-emissive cells also contribute when mixed with independent-RGB cells.
+          value += (this.rgbCells?.[address / 5] ? rgb : (data[address + 4] > 0 && data[address] > 0
+            ? channelToLinear((0xff000000 | (Math.round(data[address + 3] / data[address]) << 16) | (Math.round(data[address + 2] / data[address]) << 8) | Math.round(data[address + 1] / data[address])) >>> 0, ch * 8) * data[address + 4] : 0)) * weights[k];
+        }
+        this.outputRGB[ch] = value / density;
+      }
+      this.output.emissionRGB = this.outputRGB;
+    }
     return this.output;
   };
+}
+
+export interface VolumeMedium3D { bounds: VolumeBounds3D; field: VolumeField3D; densityScale?: number }
+/** Combine extinction and source radiance in world space BEFORE ray integration. */
+export function combineVolumeFields3D(media: readonly VolumeMedium3D[]): { bounds: VolumeBounds3D; field: VolumeField3D } {
+  if (!media.length) throw new RangeError('A combined volume needs at least one medium');
+  for (const m of media) {
+    if (!Number.isFinite(m.densityScale ?? 1) || (m.densityScale ?? 1) < 0) throw new RangeError('Invalid medium density scale');
+    for (let axis = 0; axis < 3; axis++) if (!Number.isFinite(m.bounds.min[axis]) || !Number.isFinite(m.bounds.max[axis]) || m.bounds.max[axis] <= m.bounds.min[axis]) throw new RangeError('Invalid medium bounds');
+  }
+  const bounds: VolumeBounds3D = {
+    min: [0, 1, 2].map(axis => Math.min(...media.map(m => m.bounds.min[axis]))) as unknown as Vec3,
+    max: [0, 1, 2].map(axis => Math.max(...media.map(m => m.bounds.max[axis]))) as unknown as Vec3,
+  };
+  const e: [number, number, number] = [0, 0, 0], output: VolumeSample3D = { density: 0, color: 0, emissionRGB: e };
+  const field: VolumeField3D = (x, y, z) => {
+    let density = 0, r = 0, g = 0, b = 0; e.fill(0);
+    for (const m of media) {
+      if (x < m.bounds.min[0] || y < m.bounds.min[1] || z < m.bounds.min[2] || x > m.bounds.max[0] || y > m.bounds.max[1] || z > m.bounds.max[2]) continue;
+      const s = m.field(x, y, z); if (!s || !(s.density > 0) || !Number.isFinite(s.density)) continue;
+      if (s.emissionRGB && (s.emissionRGB.length !== 3 || !s.emissionRGB.every(v => Number.isFinite(v) && v >= 0))) throw new RangeError('Volume emissionRGB must be finite nonnegative linear RGB');
+      const c = color3D(s.color), d = s.density * (m.densityScale ?? 1) * (c >>> 24) / 255;
+      density += d; r += (c & 255) * d; g += ((c >>> 8) & 255) * d; b += ((c >>> 16) & 255) * d;
+      for (let ch = 0; ch < 3; ch++) e[ch] += (s.emissionRGB?.[ch] ?? channelToLinear(c, ch * 8) * Math.max(0, s.emission ?? 0)) * d;
+    }
+    if (!(density > 0)) return;
+    output.density = density;
+    output.color = (0xff000000 | (Math.round(b / density) << 16) | (Math.round(g / density) << 8) | Math.round(r / density)) >>> 0;
+    for (let ch = 0; ch < 3; ch++) e[ch] /= density;
+    return output;
+  };
+  return { bounds, field };
+}
+export function drawCombinedVolumes3D(painter: Painter3D, media: readonly VolumeMedium3D[], options: VolumeOptions3D = {}): void {
+  const combined = combineVolumeFields3D(media); drawVolume3D(painter, combined.bounds, combined.field, options);
 }

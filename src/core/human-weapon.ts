@@ -1,3 +1,4 @@
+import { blitSprite2D } from './sprite-raster.js';
 /** Held sword/bow studies, painted with the human's connected material silhouette. */
 import { humanRig2D, renderHuman2D } from './human.js';
 import { humanLimbTarget2D } from './human-action.js';
@@ -20,7 +21,7 @@ export interface HumanWeaponSample {
   cueActive:boolean;projectile:{tail:HumanPoint;tip:HumanPoint}|null;
 }
 export type HumanWeaponPixels=Pick<HumanSprite,'w'|'h'|'x'|'y'|'pixels'|'mask'>;
-export interface HumanWeaponFrame { actor:HumanSprite;projectile:HumanWeaponPixels|null;sample:HumanWeaponSample }
+export interface HumanWeaponFrame { actor:HumanSprite;projectile:HumanWeaponPixels|null;sample:HumanWeaponSample;/** Visible held equipment, already respecting palms and back-view body occlusion. */held:HumanWeaponPixels }
 export const HUMAN_WEAPON_TIMING=Object.freeze({
   sword:Object.freeze({duration:1.2,windup:.28,cue:.44,follow:.56,recover:.66}),
   bow:Object.freeze({duration:1.4,draw:.4,cue:.7,settle:.9}),
@@ -107,11 +108,11 @@ export function humanWeapon2D(kind:HumanWeapon,time:number,style:HumanStyle={},r
 function frame(x:number,y:number,w:number,h:number):PaintFrame{return{w,h,ox:x,oy:y,color:new Uint32Array(w*h),light:new Uint32Array(w*h)};}
 function layer(f:PaintFrame):HumanWeaponPixels{return{x:f.ox,y:f.oy,w:f.w,h:f.h,pixels:f.color,mask:{w:f.w,h:f.h,data:Uint8Array.from(f.color,c=>c?1:0)}};}
 function mirror<T extends HumanWeaponPixels>(a:T):T{const pixels=new Uint32Array(a.pixels.length),data=new Uint8Array(a.pixels.length);for(let y=0;y<a.h;y++)for(let x=0;x<a.w;x++){const i=y*a.w+x,j=y*a.w+a.w-1-x;pixels[j]=a.pixels[i];data[j]=a.mask.data[i];}return{...a,x:-a.x-a.w,pixels,mask:{w:a.w,h:a.h,data}};}
-function blit(p:Painter,a:HumanWeaponPixels){for(let y=0;y<a.h;y++)for(let x=0;x<a.w;x++){const c=a.pixels[y*a.w+x];if(c)p.px(a.x+x,a.y+y,c);}}
+function blit(p:Painter,a:HumanWeaponPixels){blitSprite2D(p,a);}
 function arrow(p:Painter,tail:HumanPoint,tip:HumanPoint,s:number){const d=unit(tail,tip),v:HumanPoint=[-d[1],d[0]],a=add(tip,d,-5*s);p.line(Math.round(tail[0]),Math.round(tail[1]),Math.round(a[0]),Math.round(a[1]),hex('#b99b68'));p.poly([tip,add(a,v,2*s),add(a,v,-2*s)].map(q=>q.map(Math.round) as [number,number]),hex('#aab9bd'));const f=add(tail,d,4*s);p.line(Math.round(tail[0]),Math.round(tail[1]),Math.round(add(f,v,2*s)[0]),Math.round(add(f,v,2*s)[1]),hex('#ba7668'));}
 /** Render the actor/held item and the released arrow as separate reusable pixel layers. */
 export function renderHumanWeapon2D(kind:HumanWeapon,time:number,style:HumanStyle={},reducedMotion=false):HumanWeaponFrame {
-  if(style.facing==='left'){const a=renderHumanWeapon2D(kind,time,{...style,facing:'right'},reducedMotion),sample=humanWeapon2D(kind,time,style,reducedMotion);return{actor:{...mirror(a.actor),rig:humanRig2D(style,sample.pose)},projectile:a.projectile?mirror(a.projectile):null,sample};}
+  if(style.facing==='left'){const a=renderHumanWeapon2D(kind,time,{...style,facing:'right'},reducedMotion),sample=humanWeapon2D(kind,time,style,reducedMotion);return{actor:{...mirror(a.actor),rig:humanRig2D(style,sample.pose)},projectile:a.projectile?mirror(a.projectile):null,held:mirror(a.held),sample};}
   return renderWeaponSample(humanWeapon2D(kind,time,style,reducedMotion),style);
 }
 /** Attach the authored weapon materials to an external pose, such as an ACT timeline. */
@@ -173,9 +174,12 @@ function renderWeaponSample(sample:HumanWeaponSample,style:HumanStyle):HumanWeap
   if(ink)for(let yy=1;yy<h-1;yy++)for(let xx=1;xx<w-1;xx++){const i=yy*w+xx;const neighbors=style.outline!==undefined||kind!=='sword'?color:bp.color;if(!color[i]&&(neighbors[i-1]||neighbors[i+1]||neighbors[i-w]||neighbors[i+w]))pixels[i]=ink;}
   // The string/shaft is a single colored line, never a thick black triangle.
   for(let yy=0;yy<h;yy++)for(let xx=0;xx<w;xx++){const i=yy*w+xx;if(wire.color[i]&&!mat.color[i]&&!(bp.color[i]&&(back||palm(x+xx,y+yy))))pixels[i]=wire.color[i];}
+  const heldPixels=new Uint32Array(w*h);
+  for(let yy=0;yy<h;yy++)for(let xx=0;xx<w;xx++){const i=yy*w+xx;if(bp.color[i]&&(back||palm(x+xx,y+yy)))continue;heldPixels[i]=mat.color[i]||wire.color[i];}
+  const held:HumanWeaponPixels={x,y,w,h,pixels:heldPixels,mask:{w,h,data:Uint8Array.from(heldPixels,c=>c>>>24?1:0)}};
   const actor:HumanSprite={...body,x,y,w,h,pixels,mask:{w,h,data:Uint8Array.from(pixels,c=>c?1:0)}};
   let projectile:HumanWeaponPixels|null=null;
   if(sample.projectile){const a=sample.projectile,pp=Math.ceil(4*s)+3,px=Math.floor(Math.min(a.tail[0],a.tip[0]))-pp,py=Math.floor(Math.min(a.tail[1],a.tip[1]))-pp,pw=Math.ceil(Math.max(a.tail[0],a.tip[0]))-px+pp+1,ph=Math.ceil(Math.max(a.tail[1],a.tip[1]))-py+pp+1,f=frame(px,py,pw,ph);arrow(new Painter(f),a.tail,a.tip,s);projectile=layer(f);}
-  return{actor,projectile,sample};
+  return{actor,projectile,sample,held};
 }
 export function drawHumanWeapon2D(p:Painter,kind:HumanWeapon,time:number,style:HumanStyle={},reducedMotion=false):HumanWeaponFrame {const a=renderHumanWeapon2D(kind,time,style,reducedMotion);blit(p,a.actor);if(a.projectile)blit(p,a.projectile);return a;}

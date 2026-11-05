@@ -46,6 +46,8 @@ export interface CinematicOptions {
   vignette?: number;
   /** Subpixel RGB separation, applied only to bloom, never to silhouette/color. */
   chromaticFringe?: number;
+  /** Optional final encoded-RGB palette lock. Quantizes after bloom/grade; preserves alpha. */
+  finalPalette?: readonly number[];
 }
 
 interface BloomLevel {
@@ -183,6 +185,7 @@ export class CinematicCompositor {
     if (options.legacyLight && options.legacyLight.length < n) throw new RangeError("Additional packed light buffer is too small");
     if (frame.hdrLight && frame.hdrLight.length < n * 3) throw new RangeError("HDR emission buffer is too small");
     if (options.occlusion && options.occlusion.length < n) throw new RangeError("Occlusion buffer is too small");
+    if (options.finalPalette && (!options.finalPalette.length || options.finalPalette.length > 256 || !options.finalPalette.every(c => Number.isInteger(c) && c >= -0x80000000 && c <= 0xffffffff))) throw new RangeError('Final palette needs 1..256 packed RGB colors');
     const bloom = options.bloom === false ? null : options.bloom ?? {};
     const count = bloom ? Math.max(1, Math.min(6, Math.floor(bloom.levels ?? 4))) : 0;
     this.prepare(w, h, count);
@@ -266,6 +269,14 @@ export class CinematicCompositor {
       const o = i * 4;
       out[o] = toSRGB(r * fade); out[o + 1] = toSRGB(g * fade); out[o + 2] = toSRGB(b * fade);
       out[o + 3] = Math.round(alpha * 255);
+      if (options.finalPalette && out[o + 3]) {
+        let best = options.finalPalette[0], distance = Infinity;
+        for (const color of options.finalPalette) {
+          const d = (out[o] - (color & 255)) ** 2 + (out[o + 1] - ((color >>> 8) & 255)) ** 2 + (out[o + 2] - ((color >>> 16) & 255)) ** 2;
+          if (d < distance) { distance = d; best = color; }
+        }
+        out[o] = best & 255; out[o + 1] = (best >>> 8) & 255; out[o + 2] = (best >>> 16) & 255;
+      }
     }
     return out;
   }

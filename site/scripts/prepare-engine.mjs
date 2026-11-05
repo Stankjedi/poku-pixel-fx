@@ -37,9 +37,14 @@ if (full) {
   const copies = [
     ['build-gallery/app.js', 'app.js'],
     ['build-gallery/3d.js', '3d.js'],
+    ['build-gallery/studio.js', 'studio.js'],
+    ['build-gallery/studio-worker.js', 'studio-worker.js'],
     ['gallery/3d.html', '3d.html'],
+    ['gallery/studio.html', 'studio.html'],
+    ['gallery/studio.css', 'studio.css'],
     ['gallery/style.css', 'style.css'],
   ];
+  for (const name of Object.keys(manifest.files).filter(name => name.startsWith('chunks/'))) copies.push([`build-gallery/${name}`, name]);
   for (const [source, destination] of copies) {
     const sourcePath = join(root, source);
     // CI builds first; source-only checkouts can still validate the prepared

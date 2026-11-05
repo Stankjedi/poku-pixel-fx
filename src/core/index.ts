@@ -79,3 +79,12 @@ export { WebGLCompositor } from "../render/webgl-compositor.js";
 export type { CompositeBackground, WebGLCanvas } from "../render/webgl-compositor.js";
 export { FrameRenderer } from "../render/frame-renderer.js";
 export type { FrameRendererOptions, FrameRendererStatus } from "../render/frame-renderer.js";
+
+export * from './sprite-raster.js';
+export * from './pixel-tools.js';
+export * from './pixel-style.js';
+export * from './material-surface.js';
+export * from './character-animation.js';
+export * from './character-identity.js';
+export * from './creature-asset.js';
+export * from './character-asset.js';

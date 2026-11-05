@@ -1,0 +1,60 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "arcane/depth-portal",
+  "intent": {
+    "oneSentence": "어두운 타원형 입구와 전후면 테두리가 통과 가능한 문을 유지한다.",
+    "firstRead": "깊이가 있는 출입구",
+    "mustNotReadAs": "밝은 타원이 꽉 찬 방패",
+    "useContext": "게임 전투 화면과 독립 자산. 기본 320×180 원화에서 형태를 읽고 정수 배율로 표시한다."
+  },
+  "readability": {
+    "primaryShape": "어두운 중심과 분명한 전면 테두리, 더 어두운 후면 테두리",
+    "focalPoint": "주형태와 접촉점의 대비를 우선한다. 보조 광학 발광은 고체의 경계를 대체하지 않는다.",
+    "depthAndOverlap": "환경 뒤에 잔상과 주형태를 놓고, 파편과 광학 빛을 별도 레이어로 검토한다.",
+    "contrast": "원래 색상, 명암, 실루엣과 어둡고 밝은 배경을 함께 검사한다.",
+    "intendedBackgrounds": [
+      "dark",
+      "light",
+      "ground",
+      "transparent checker"
+    ],
+    "secondaryDetailBudget": "기본 20개 이하 보조 입자. 주형태 레이어 단독으로도 의도가 읽혀야 한다."
+  },
+  "mechanics": {
+    "model": "magic-with-rules",
+    "source": "깊이가 있는 출입구의 국소적인 발생점 또는 유지 면",
+    "driver": "내부의 회전 방향을 통일하고 외곽 입자는 입구의 실루엣을 가리지 않는다.",
+    "direction": "내부의 회전 방향을 통일하고 외곽 입자는 입구의 실루엣을 가리지 않는다.",
+    "weightAndMaterial": "마법은 안정적인 입구를 유지한다는 규칙을 따르며 실제 광학 렌즈 해석은 하지 않는다.",
+    "causalChain": "어두운 타원형 입구와 전후면 테두리가 통과 가능한 문을 유지한다.",
+    "endingRule": "시작과 끝의 주형태·광학·보조 운동이 동일한 위상으로 돌아오는 3초 루프.",
+    "exaggerationAndLimits": "제작용 원본 템플릿이다. 화면 가독성을 위해 시간과 모양을 과장하며, 수치 검사만으로 전문 아트 디렉션 통과를 선언하지 않는다."
+  },
+  "timeline": {
+    "durationSeconds": 3,
+    "loop": true,
+    "phases": [
+      {
+        "name": "action",
+        "from": 0,
+        "to": 3,
+        "action": "어두운 타원형 입구와 전후면 테두리가 통과 가능한 문을 유지한다.",
+        "cause": "지속적인 에너지 공급 또는 유지 마법",
+        "visibleCue": "어두운 중심과 분명한 전면 테두리, 더 어두운 후면 테두리"
+      }
+    ],
+    "omittedPhases": {
+      "preparation": "지속 루프 템플릿에서 별도 시작/정지 전환은 포함하지 않는다. 호스트가 루프의 활성 수명을 제어한다.",
+      "response": "지속 루프 템플릿에서 별도 시작/정지 전환은 포함하지 않는다. 호스트가 루프의 활성 수명을 제어한다.",
+      "ending": "지속 루프 템플릿에서 별도 시작/정지 전환은 포함하지 않는다. 호스트가 루프의 활성 수명을 제어한다."
+    }
+  },
+  "references": [
+    {
+      "source": "src/authoring/recipes.ts",
+      "observed": "본체·잔상·발광·파편·환경을 분리한 파라미터화된 절차적 제작 구조",
+      "application": "같은 프로젝트가 미리보기, 시간 이동, CLI 내보내기에서 같은 경로와 레이어를 사용하도록 한다.",
+      "limits": "외부 작품의 완성도를 주장하는 참조가 아니다. 시각 검토는 이 템플릿 자체의 실제 렌더에 근거해야 한다."
+    }
+  ]
+}
