@@ -2159,9 +2159,10 @@ var Painter = class {
       if (sy < ay) ay = sy;
       if (sy > by) by = sy;
     }
-    const sx0 = Math.max(Math.ceil(ax - 0.5), this.ox), sx1 = Math.min(Math.floor(bx - 0.5), this.ox + this.w - 1);
-    const sy0 = Math.max(Math.ceil(ay - 0.5), this.oy), sy1 = Math.min(Math.floor(by - 0.5), this.oy + this.h - 1);
     const rotated = this.sn !== 0 || this.cs !== 1;
+    const lower = rotated ? Math.floor : Math.ceil, upper = rotated ? Math.ceil : Math.floor;
+    const sx0 = Math.max(lower(ax - 0.5), this.ox), sx1 = Math.min(upper(bx - 0.5), this.ox + this.w - 1);
+    const sy0 = Math.max(lower(ay - 0.5), this.oy), sy1 = Math.min(upper(by - 0.5), this.oy + this.h - 1);
     for (let sy = sy0; sy <= sy1; sy++)
       for (let sx = sx0; sx <= sx1; sx++) {
         const cx = sx + 0.5, cy = sy + 0.5, lx = this.fromX(cx, cy), ly = this.fromY(cx, cy);
@@ -5518,7 +5519,7 @@ var choices = { facing: ["right", "left"], face: ["oval", "angular", "long"], sk
 // src/core/example-code.ts
 function effectExampleCode2D(s) {
   if (!/^[a-z0-9-]+\/[a-z0-9-]+$/.test(s.id)) throw new RangeError("Invalid effect module id");
-  const make = s.acted ? "createAct" : "createFx";
+  const make = s.acted ? "createAct" : "createFx", gpu = s.renderer === "auto";
   const options = { ...s.options, x: s.x, y: s.y, flip: s.flip };
   delete options.actorAdapter;
   const draw130 = s.acted ? ["  fx.draw(frame, { body: true, target: true });"] : [
@@ -5530,15 +5531,17 @@ function effectExampleCode2D(s) {
     '  fx.draw(frame, "front");'
   ];
   return [
-    `import { createFrame, clearFrame, ${make}, composite, backdrop, drawActor, painterFor, stockActor, actorAlphaOf, sceneCameraOffset } from "poku-pixel-fx";`,
+    `import { createFrame, clearFrame, ${make}, ${gpu ? "FrameRenderer" : "composite"}, backdrop, drawActor, painterFor, stockActor, actorAlphaOf, sceneCameraOffset } from "poku-pixel-fx";`,
     `import * as effect from "poku-pixel-fx/fx/${s.id}";`,
     "",
     'const canvas = document.createElement("canvas");',
     `canvas.width = ${s.width}; canvas.height = ${s.height};`,
     'canvas.style.imageRendering = "pixelated";',
     "document.body.append(canvas);",
-    'const ctx = canvas.getContext("2d");',
-    "const imageData = ctx.createImageData(canvas.width, canvas.height);",
+    ...gpu ? ['const renderer = new FrameRenderer(canvas, { backend: "auto" });', "// renderer.status reports WebGL2 or a CPU fallback reason."] : [
+      'const ctx = canvas.getContext("2d");',
+      "const imageData = ctx.createImageData(canvas.width, canvas.height);"
+    ],
     `const frame = createFrame(${s.width}, ${s.height});`,
     `const options = ${JSON.stringify(options, null, 2)};`,
     `const background = ${s.background === "none" ? "null" : `backdrop(${JSON.stringify(s.background)}, canvas.width, canvas.height, options.y)`};`,
@@ -5551,15 +5554,275 @@ function effectExampleCode2D(s) {
     "  fx.update(dt);",
     "  clearFrame(frame);",
     ...draw130,
-    "  composite(frame, imageData.data, background);",
+    ...!gpu ? ["  composite(frame, imageData.data, background);"] : [],
     '  const [sx, sy] = sceneCameraOffset(fx.shake, matchMedia("(prefers-reduced-motion: reduce)").matches, background === null);',
-    "  ctx.clearRect(0, 0, canvas.width, canvas.height);",
-    "  ctx.putImageData(imageData, sx, sy);",
+    ...gpu ? ["  renderer.render(frame, background, 1, [sx, sy]);"] : [
+      "  ctx.clearRect(0, 0, canvas.width, canvas.height);",
+      "  ctx.putImageData(imageData, sx, sy);"
+    ],
     "  requestAnimationFrame(animate);",
     "}",
     "requestAnimationFrame(animate);"
   ].join("\n");
 }
+
+// src/render/webgl-compositor.ts
+function validateCompositeFrame(frame3, background, lightK) {
+  const n = frame3.w * frame3.h;
+  if (!Number.isSafeInteger(frame3.w) || !Number.isSafeInteger(frame3.h) || frame3.w < 1 || frame3.h < 1 || n > 16777216 || !(frame3.color instanceof Uint32Array) || !(frame3.light instanceof Uint32Array) || frame3.color.length !== n || frame3.light.length !== n)
+    throw new RangeError("Frame needs positive integer dimensions and matching Uint32 color/light buffers (at most 16,777,216 cells)");
+  if (background !== null && typeof background !== "number" && (!(background instanceof Uint32Array) || background.length !== n))
+    throw new RangeError("Background must be a packed color, null, or a matching Uint32 buffer");
+  if (typeof background === "number" && (!Number.isInteger(background) || background < -2147483648 || background > 4294967295))
+    throw new RangeError("Background color must be a packed 32-bit integer");
+  if (!Number.isFinite(lightK) || lightK < 0) throw new RangeError("Light strength must be finite and non-negative");
+}
+var VERTEX = `#version 300 es
+void main() {
+  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+}`;
+var FRAGMENT = `#version 300 es
+precision highp float;
+precision highp int;
+precision highp usampler2D;
+uniform usampler2D u_color;
+uniform usampler2D u_light;
+uniform usampler2D u_background;
+uniform uint u_flat;
+uniform int u_backgroundMode;
+uniform int u_height;
+uniform float u_lightK;
+out vec4 outColor;
+vec4 unpackColor(uint c) {
+  return vec4(float(c & 255u), float((c >> 8) & 255u), float((c >> 16) & 255u), float(c >> 24));
+}
+void main() {
+  // Uploaded row zero is the top row; gl_FragCoord counts from the bottom.
+  ivec2 p = ivec2(int(gl_FragCoord.x), u_height - 1 - int(gl_FragCoord.y));
+  uint pixelColor = texelFetch(u_color, p, 0).r;
+  uint light = texelFetch(u_light, p, 0).r & 0xffffffu;
+  vec4 c = unpackColor(pixelColor);
+  if (c.a != 255.0 && u_backgroundMode != 0) {
+    vec3 bg = unpackColor(u_backgroundMode == 1 ? u_flat : texelFetch(u_background, p, 0).r).rgb;
+    c.rgb = c.rgb * (c.a / 255.0) + bg * (1.0 - c.a / 255.0);
+    c.a = 255.0;
+  }
+  if (light != 0u) {
+    vec3 l = unpackColor(light).rgb * u_lightK;
+    if (c.a < 255.0) {
+      float pa = c.a / 255.0;
+      vec3 pr = c.rgb * pa + l;
+      float na = min(1.0, max(pa, max(l.r, max(l.g, l.b)) / 255.0));
+      if (na > 0.0) { c.rgb = min(vec3(255.0), pr / na); c.a = na * 255.0; }
+    } else c.rgb = min(vec3(255.0), c.rgb + l);
+  }
+  // Match Uint8ClampedArray's nearest-even byte conversion. Float32 arithmetic may differ by 1 byte.
+  outColor = roundEven(clamp(c, 0.0, 255.0)) / 255.0;
+}`;
+var WebGLCompositor = class {
+  constructor(canvas) {
+    this.canvas = canvas;
+    const gl = canvas.getContext("webgl2", {
+      alpha: true,
+      premultipliedAlpha: false,
+      antialias: false,
+      depth: false,
+      stencil: false,
+      preserveDrawingBuffer: true
+    });
+    if (!gl) throw new Error("WebGL2 context is unavailable");
+    this.gl = gl;
+    this.renderer = String(gl.getParameter(gl.RENDERER));
+    const shaders = [];
+    try {
+      const attributes = gl.getContextAttributes();
+      if (!attributes || !attributes.alpha || attributes.premultipliedAlpha || attributes.antialias)
+        throw new Error("WebGL context cannot preserve the requested straight-alpha, non-MSAA contract");
+      this.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+      for (const [type, source] of [[gl.VERTEX_SHADER, VERTEX], [gl.FRAGMENT_SHADER, FRAGMENT]]) {
+        const shader = gl.createShader(type);
+        if (!shader) throw new Error("Could not allocate WebGL shader");
+        shaders.push(shader);
+        gl.shaderSource(shader, source);
+        gl.compileShader(shader);
+        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(`WebGL shader compilation failed: ${gl.getShaderInfoLog(shader)}`);
+      }
+      const program = gl.createProgram();
+      if (!program) throw new Error("Could not allocate WebGL program");
+      this.program = program;
+      shaders.forEach((shader) => gl.attachShader(program, shader));
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`WebGL link failed: ${gl.getProgramInfoLog(program)}`);
+      gl.useProgram(program);
+      for (const name of ["color", "light", "background", "flat", "backgroundMode", "height", "lightK"])
+        this.uniforms[name] = gl.getUniformLocation(program, `u_${name}`);
+      for (let i = 0; i < 3; i++) {
+        const texture = gl.createTexture();
+        if (!texture) throw new Error("Could not allocate WebGL texture");
+        this.textures.push(texture);
+        gl.activeTexture(gl.TEXTURE0 + i);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      }
+      gl.uniform1i(this.uniforms.color, 0);
+      gl.uniform1i(this.uniforms.light, 1);
+      gl.uniform1i(this.uniforms.background, 2);
+      this.upload(2, 1, 1, new Uint32Array(1));
+      gl.disable(gl.BLEND);
+      gl.disable(gl.DITHER);
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.SCISSOR_TEST);
+      if (gl.getError() !== gl.NO_ERROR) throw new Error("WebGL compositor initialization failed");
+    } catch (error) {
+      this.dispose();
+      throw error;
+    } finally {
+      shaders.forEach((shader) => gl.deleteShader(shader));
+    }
+  }
+  gl;
+  renderer;
+  program;
+  textures = [];
+  uniforms = {};
+  widths = [0, 0, 0];
+  heights = [0, 0, 0];
+  disposed = false;
+  rendered = false;
+  maxTextureSize = 0;
+  upload(unit4, width2, height6, pixels2) {
+    const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE0 + unit4);
+    gl.bindTexture(gl.TEXTURE_2D, this.textures[unit4]);
+    if (this.widths[unit4] !== width2 || this.heights[unit4] !== height6) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32UI, width2, height6, 0, gl.RED_INTEGER, gl.UNSIGNED_INT, pixels2);
+      this.widths[unit4] = width2;
+      this.heights[unit4] = height6;
+    } else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, width2, height6, gl.RED_INTEGER, gl.UNSIGNED_INT, pixels2);
+  }
+  render(frame3, background = null, lightK = 1) {
+    validateCompositeFrame(frame3, background, lightK);
+    if (this.disposed || this.gl.isContextLost()) throw new Error("WebGL compositor is disposed or its context was lost");
+    if (!Number.isFinite(Math.fround(lightK))) throw new RangeError("Light strength exceeds GPU float precision");
+    const gl = this.gl;
+    if (frame3.w > this.maxTextureSize || frame3.h > this.maxTextureSize) throw new RangeError("Frame exceeds this GPU texture size limit");
+    if (this.canvas.width !== frame3.w) this.canvas.width = frame3.w;
+    if (this.canvas.height !== frame3.h) this.canvas.height = frame3.h;
+    if (gl.drawingBufferWidth !== frame3.w || gl.drawingBufferHeight !== frame3.h)
+      throw new Error("WebGL drawing buffer could not retain the native frame dimensions");
+    gl.viewport(0, 0, frame3.w, frame3.h);
+    gl.useProgram(this.program);
+    this.upload(0, frame3.w, frame3.h, frame3.color);
+    this.upload(1, frame3.w, frame3.h, frame3.light);
+    if (background instanceof Uint32Array) this.upload(2, frame3.w, frame3.h, background);
+    gl.uniform1ui(this.uniforms.flat, typeof background === "number" ? background >>> 0 : 0);
+    gl.uniform1i(this.uniforms.backgroundMode, background === null ? 0 : typeof background === "number" ? 1 : 2);
+    gl.uniform1i(this.uniforms.height, frame3.h);
+    gl.uniform1f(this.uniforms.lightK, lightK);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (gl.getError() !== gl.NO_ERROR || gl.isContextLost()) throw new Error("WebGL compositing failed or context was lost");
+    this.rendered = true;
+    return this.canvas;
+  }
+  /** Diagnostic/export readback only. Normal presentation never reads pixels back to the CPU. */
+  readPixels() {
+    if (this.disposed || this.gl.isContextLost() || !this.rendered) throw new Error("WebGL compositor has no available rendered frame");
+    const { width: w, height: h } = this.canvas, bottomUp = new Uint8Array(w * h * 4), out3 = new Uint8ClampedArray(bottomUp.length);
+    this.gl.readPixels(0, 0, w, h, this.gl.RGBA, this.gl.UNSIGNED_BYTE, bottomUp);
+    if (this.gl.getError() !== this.gl.NO_ERROR) throw new Error("WebGL pixel readback failed");
+    for (let y = 0; y < h; y++) out3.set(bottomUp.subarray((h - y - 1) * w * 4, (h - y) * w * 4), y * w * 4);
+    return out3;
+  }
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const texture of this.textures) this.gl.deleteTexture(texture);
+    if (this.program) this.gl.deleteProgram(this.program);
+    this.gl.getExtension("WEBGL_lose_context")?.loseContext();
+  }
+};
+
+// src/render/frame-renderer.ts
+var FrameRenderer = class {
+  constructor(canvas, options = {}) {
+    this.canvas = canvas;
+    this.options = options;
+    if (!["cpu", "auto", "webgl2"].includes(options.backend ?? "cpu")) throw new RangeError("Unknown frame renderer backend");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Presentation needs an available 2D canvas");
+    this.context = ctx;
+    if (options.backend && options.backend !== "cpu") {
+      try {
+        this.gpu = new WebGLCompositor(canvas.ownerDocument.createElement("canvas"));
+        this.current = { backend: "webgl2", reason: null };
+      } catch (error) {
+        this.current.reason = error instanceof Error ? error.message : String(error);
+      }
+    }
+    options.onStatus?.(this.status);
+  }
+  context;
+  gpu = null;
+  image = null;
+  current = { backend: "cpu", reason: null };
+  disposed = false;
+  get status() {
+    return Object.freeze({ ...this.current });
+  }
+  /** Integer native-pixel camera offset; clipping/clearing match ordinary canvas presentation. */
+  render(frame3, background = null, lightK = 1, offset = [0, 0]) {
+    if (this.disposed) throw new Error("Frame renderer is disposed");
+    validateCompositeFrame(frame3, background, lightK);
+    if (offset.length !== 2 || !offset.every(Number.isSafeInteger)) throw new RangeError("Camera offset must contain two integer pixel coordinates");
+    if (this.canvas.width !== frame3.w) this.canvas.width = frame3.w;
+    if (this.canvas.height !== frame3.h) this.canvas.height = frame3.h;
+    const ctx = this.context, [sx, sy] = offset;
+    if (this.gpu) {
+      try {
+        const rendered = this.gpu.render(frame3, background, lightK);
+        ctx.save();
+        try {
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.globalAlpha = 1;
+          ctx.globalCompositeOperation = "copy";
+          ctx.filter = "none";
+          ctx.shadowColor = "transparent";
+          ctx.shadowBlur = 0;
+          ctx.imageSmoothingEnabled = false;
+          ctx.clearRect(0, 0, frame3.w, frame3.h);
+          ctx.drawImage(rendered, sx, sy);
+        } finally {
+          ctx.restore();
+        }
+        return;
+      } catch (error) {
+        this.gpu.dispose();
+        this.gpu = null;
+        this.current = { backend: "cpu", reason: error instanceof Error ? error.message : String(error) };
+        this.options.onStatus?.(this.status);
+      }
+    }
+    if (!this.image || this.image.width !== frame3.w || this.image.height !== frame3.h) this.image = ctx.createImageData(frame3.w, frame3.h);
+    composite(frame3, this.image.data, background, lightK);
+    if (sx || sy) {
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, frame3.w, frame3.h);
+      ctx.restore();
+    }
+    ctx.putImageData(this.image, sx, sy);
+  }
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.gpu?.dispose();
+    this.gpu = null;
+  }
+};
 
 // src/fx/projectiles/arrow.ts
 var arrow_exports = {};
@@ -49093,6 +49356,8 @@ function el(tag2, props = {}, kids = []) {
   return e;
 }
 var Player = class {
+  gpuRequested = false;
+  presenter = null;
   constructor(canvas, fx, aspect, pad2) {
     Object.assign(this, { canvas, fx, ctx: canvas.getContext("2d"), opts: {}, flip: false, actor: true, speed: 1, playing: true });
     this.bg = fx.meta.bg;
@@ -49151,14 +49416,35 @@ var Player = class {
     this.inst.update(t);
     this.render();
   }
+  setGpu(enabled) {
+    this.presenter?.dispose();
+    this.presenter = null;
+    this.gpuRequested = enabled;
+    if (enabled) this.presenter = new FrameRenderer(this.canvas, { backend: "auto", onStatus: () => {
+      if (detail === this) queueMicrotask(() => {
+        if (detail === this) gpuStatus(this);
+      });
+    } });
+    this.dirty = true;
+  }
+  dispose() {
+    this.presenter?.dispose();
+    this.presenter = null;
+  }
+  present(frame3, sx, sy) {
+    if (this.presenter) this.presenter.render(frame3, this.bgBuf, 1, [sx, sy]);
+    else {
+      composite(frame3, this.img.data, this.bgBuf);
+      if (sx || sy) this.ctx.clearRect(0, 0, this.W, this.H);
+      this.ctx.putImageData(this.img, sx, sy);
+    }
+  }
   render() {
     const f = clearFrame(this.frame);
     if (this.acted) {
       this.inst.draw(f);
-      composite(f, this.img.data, this.bgBuf);
       const [sx2, sy2] = sceneCameraOffset(this.inst.shake, reduced, this.bg === "none");
-      if (sx2 || sy2) this.ctx.clearRect(0, 0, this.W, this.H);
-      this.ctx.putImageData(this.img, sx2, sy2);
+      this.present(f, sx2, sy2);
       this.dirty = false;
       return;
     }
@@ -49166,10 +49452,8 @@ var Player = class {
     const m = this.fx.meta, tt = m.loop ? this.inst.t % m.duration : Math.min(this.inst.t, m.duration);
     if (m.actor && this.actor) drawActor(painterFor(f).place(this.x, this.y, this.flip), this.inst.options.actor ?? stockActor(), actorAlphaOf(this.fx.mod, tt, this.inst.options));
     this.inst.draw(f, "front");
-    composite(f, this.img.data, this.bgBuf);
     const [sx, sy] = sceneCameraOffset(this.inst.shake, reduced, this.bg === "none");
-    if (sx || sy) this.ctx.clearRect(0, 0, this.W, this.H);
-    this.ctx.putImageData(this.img, sx, sy);
+    this.present(f, sx, sy);
     this.dirty = false;
   }
 };
@@ -49257,12 +49541,20 @@ function clearDownloadURLs() {
   for (const url of downloadURLs) URL.revokeObjectURL(url);
   downloadURLs.length = 0;
 }
+function gpuStatus(player) {
+  const status = player.presenter?.status;
+  $("#d-gpu").setAttribute("aria-pressed", String(player.gpuRequested));
+  $("#d-gpu").textContent = player.gpuRequested ? "GPU \uC694\uCCAD \uB044\uAE30" : "GPU \uD569\uC131 \uC2DC\uB3C4";
+  $("#d-renderer").textContent = status?.backend === "webgl2" ? "WebGL2 \uD569\uC131 \xB7 \uD53D\uC140 \uC791\uC131/\uC2DC\uBBAC\uB808\uC774\uC158\uC740 CPU" : status?.reason ? `CPU \uB300\uCCB4 \xB7 ${status.reason}` : "CPU \uD569\uC131";
+}
 function openDetail(fx) {
+  detail?.dispose();
   clearDownloadURLs();
   const d = $("#detail");
   const big = $("#big"), screen = isScreen(fx);
   big.parentElement.classList.toggle("screen", screen);
   detail = screen ? new Player(big, fx, 16 / 9, 1) : new Player(big, fx, 16 / 10, 1.6);
+  gpuStatus(detail);
   const m = fx.meta;
   $("#d-name").textContent = m.name;
   $("#d-id").textContent = fx.id;
@@ -49368,7 +49660,8 @@ function code(fx) {
     acted: p.acted,
     actor: p.actor,
     background: p.bg,
-    speed: p.speed
+    speed: p.speed,
+    renderer: p.gpuRequested ? "auto" : "cpu"
   });
 }
 async function sheet4() {
@@ -49561,8 +49854,16 @@ function wireDetail() {
   const d = $("#detail");
   $("#d-close").addEventListener("click", () => d.close());
   d.addEventListener("close", () => {
+    detail?.dispose();
     detail = null;
     clearDownloadURLs();
+  });
+  $("#d-gpu").addEventListener("click", () => {
+    if (!detail) return;
+    detail.setGpu(!detail.gpuRequested);
+    detail.render();
+    gpuStatus(detail);
+    code(detail.fx);
   });
   d.addEventListener("click", (e) => e.target === d && d.close());
   $("#d-play").addEventListener("click", (e) => {

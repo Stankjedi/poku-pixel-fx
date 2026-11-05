@@ -158,9 +158,13 @@ export class Painter {
       const x = k & 1 ? x1 : x0, y = k & 2 ? y1 : y0, sx = this.toX(x, y), sy = this.toY(x, y);
       if (sx < ax) ax = sx; if (sx > bx) bx = sx; if (sy < ay) ay = sy; if (sy > by) by = sy;
     }
-    const sx0 = Math.max(Math.ceil(ax - 0.5), this.ox), sx1 = Math.min(Math.floor(bx - 0.5), this.ox + this.w - 1);
-    const sy0 = Math.max(Math.ceil(ay - 0.5), this.oy), sy1 = Math.min(Math.floor(by - 0.5), this.oy + this.h - 1);
     const rotated = this.sn !== 0 || this.cs !== 1;
+    // Forward bounds and inverse centers can round to opposite sides of the same edge.
+    // Keep rotated candidates conservative; the inverse test below decides coverage.
+    // Unrotated bounds retain their existing inclusion rules and fast path.
+    const lower = rotated ? Math.floor : Math.ceil, upper = rotated ? Math.ceil : Math.floor;
+    const sx0 = Math.max(lower(ax - 0.5), this.ox), sx1 = Math.min(upper(bx - 0.5), this.ox + this.w - 1);
+    const sy0 = Math.max(lower(ay - 0.5), this.oy), sy1 = Math.min(upper(by - 0.5), this.oy + this.h - 1);
     for (let sy = sy0; sy <= sy1; sy++)
       for (let sx = sx0; sx <= sx1; sx++) {
         const cx = sx + 0.5, cy = sy + 0.5, lx = this.fromX(cx, cy), ly = this.fromY(cx, cy);
