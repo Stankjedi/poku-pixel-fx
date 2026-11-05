@@ -113,6 +113,12 @@ try {
     await change('backend', 'webgpu'); await ready("p.renderProfile.backend==='webgpu'"); await waitFor("document.getElementById('performance').textContent.startsWith('CPU')");
     assert((await project()).renderProfile.backend === 'webgpu', 'Unavailable WebGPU API falls back to a rendered CPU frame while retaining the requested backend');
     await evaluate(() => { if (window.__savedGPUProperty) Object.defineProperty(navigator, 'gpu', window.__savedGPUProperty); else delete navigator.gpu; delete window.__savedGPUProperty; }); await change('backend', 'cpu'); await ready("p.renderProfile.backend==='cpu'");
+    // Selecting WebGPU explicitly selects cinematic finishing; returning to CPU keeps it.
+    // Reapply the latest edited project with only its mode omitted before testing the default.
+    const defaultFinishing = await project(); delete defaultFinishing.renderProfile.mode;
+    await change('project-json', JSON.stringify(defaultFinishing)); await click('apply-json');
+    await ready("p.renderProfile.backend==='cpu'&&!Object.hasOwn(p.renderProfile,'mode')");
+    assert(!Object.hasOwn((await project()).renderProfile, 'mode'), 'Default-finishing export starts from an applied and autosaved project with its mode omitted');
     await click('export'); await waitFor("!!document.querySelector('#downloads a[download$=\".zip\"]')", 55000);
     const bundle = await evaluate(async () => {
       const links = [...document.querySelectorAll('#downloads a')], assetLink = links.find(a => a.download === 'asset.json'), zipLink = links.find(a => a.download.endsWith('.zip'));
@@ -130,11 +136,11 @@ try {
       }
       const bitmap = await createImageBitmap(new Blob([files.get(manifest.pages[0].image)], { type: 'image/png' })); const size = [bitmap.width, bitmap.height]; bitmap.close();
       const stored = JSON.parse(new TextDecoder().decode(files.get('project.json')));
-      return { schema: manifest.schema, frames: manifest.frames.length, files: [...files.keys()], pageSize: size, expectedSize: [manifest.pages[0].width, manifest.pages[0].height], zipBytes: zip.length, palette: manifest.settings.project.pixelStyle.palette, projectPalette: stored.pixelStyle.palette, celEdits: stored.character.celEdits.length, renderMode: manifest.settings.renderMode, profileMode: manifest.settings.renderProfile.mode, expectedMode: stored.renderProfile?.mode ?? 'legacy' };
+      return { schema: manifest.schema, frames: manifest.frames.length, files: [...files.keys()], pageSize: size, expectedSize: [manifest.pages[0].width, manifest.pages[0].height], zipBytes: zip.length, palette: manifest.settings.project.pixelStyle.palette, projectPalette: stored.pixelStyle.palette, celEdits: stored.character.celEdits.length, renderMode: manifest.settings.renderMode, profileMode: manifest.settings.renderProfile.mode, expectedMode: stored.renderProfile?.mode ?? 'legacy', sourceModeOmitted: !Object.hasOwn(stored.renderProfile ?? {}, 'mode') && !Object.hasOwn(manifest.settings.project.renderProfile ?? {}, 'mode') };
     }, 55000);
     assert(bundle.schema === 'poku-asset/v1' && bundle.frames > 0 && bundle.files.includes('project.json') && bundle.files.includes('asset.json') && bundle.pageSize.join() === bundle.expectedSize.join(), 'Worker export produces a decodable atlas and integrity-checked project/manifest ZIP');
     assert(JSON.stringify(bundle.palette) === JSON.stringify(palette) && JSON.stringify(bundle.projectPalette) === JSON.stringify(palette) && bundle.celEdits === beforeBrush + 2, 'Worker ZIP retains the imported palette and both reopened cel edits');
-    assert(bundle.expectedMode === 'legacy' && bundle.renderMode === bundle.expectedMode && bundle.profileMode === bundle.expectedMode, 'Worker manifest explicitly declares legacy finishing for an omitted project mode');
+    assert(bundle.sourceModeOmitted && bundle.expectedMode === 'legacy' && bundle.renderMode === bundle.expectedMode && bundle.profileMode === bundle.expectedMode, `Worker manifest explicitly declares legacy finishing for an omitted project mode (sourceOmitted=${bundle.sourceModeOmitted}, project=${bundle.expectedMode}, manifest=${bundle.renderMode}, profile=${bundle.profileMode})`);
     const errors = await evaluate('window.__pokuUnhandled'); assert(!errors.length && !browser.exceptions.length, 'Studio completed without uncaught JavaScript errors or rejected promises');
     if (process.env.STUDIO_SCREENSHOT_PATH) { const screenshot = await send('Page.captureScreenshot', { format: 'png' }); await writeFile(process.env.STUDIO_SCREENSHOT_PATH, Buffer.from(screenshot.data, 'base64')); }
     // Exercise the shipped custom HTML and committed assets, not only the development gallery.
