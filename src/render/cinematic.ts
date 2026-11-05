@@ -30,6 +30,8 @@ export interface CinematicOptions {
   lightStrength?: number;
   /** Optional extra HDR RGB radiance in linear units, three floats per pixel. */
   radiance?: Float32Array;
+  /** Explicit additional packed light from a legacy writer. Never pass frame.light's HDR mirror. */
+  legacyLight?: Uint32Array;
   /** Optional independent ambient-occlusion factor (0..1), one float per pixel. */
   occlusion?: Float32Array;
   bloom?: false | BloomOptions;
@@ -178,6 +180,7 @@ export class CinematicCompositor {
     if (out.length < n * 4) throw new RangeError("Output RGBA buffer is too small");
     if (color.length < n || light.length < n) throw new RangeError("Invalid frame buffers");
     if (options.radiance && options.radiance.length < n * 3) throw new RangeError("HDR radiance buffer is too small");
+    if (options.legacyLight && options.legacyLight.length < n) throw new RangeError("Additional packed light buffer is too small");
     if (frame.hdrLight && frame.hdrLight.length < n * 3) throw new RangeError("HDR emission buffer is too small");
     if (options.occlusion && options.occlusion.length < n) throw new RangeError("Occlusion buffer is too small");
     const bloom = options.bloom === false ? null : options.bloom ?? {};
@@ -186,7 +189,7 @@ export class CinematicCompositor {
     const bg = options.background ?? null;
     const opaque = bg !== null, flat = typeof bg === "number";
     const lightStrength = Math.max(0, options.lightStrength ?? 1);
-    const extra = options.radiance, nativeHDR = frame.hdrLight, ao = options.occlusion;
+    const extra = options.radiance, nativeHDR = frame.hdrLight, legacy = options.legacyLight, ao = options.occlusion;
 
     for (let i = 0; i < n; i++) {
       const j = i * 3, c = color[i], l = light[i], a = (c >>> 24) / 255;
@@ -196,9 +199,9 @@ export class CinematicCompositor {
       for (let ch = 0; ch < 3; ch++) {
         const shift = ch * 8, v = channel(c, shift);
         this.base[j + ch] = (opaque ? v * a + channel(k, shift) * (1 - a) : v * a) * shade;
-        // Native HDR already contains Painter emissions: max avoids double-counting
-        // the 8-bit mirror, while still including direct legacy-buffer writes.
-        this.emission[j + ch] = Math.max(channel(l, shift), nativeHDR?.[j + ch] ?? 0) * lightStrength + (extra?.[j + ch] ?? 0);
+        // HDR is authoritative. A saturated 8-bit mirror must never replace a
+        // smaller, correctly summed linear value. Legacy additions are explicit.
+        this.emission[j + ch] = ((nativeHDR ? nativeHDR[j + ch] : channel(l, shift)) + (legacy ? channel(legacy[i], shift) : 0)) * lightStrength + (extra?.[j + ch] ?? 0);
       }
     }
     if (bloom && n) this.buildBloom(Math.max(0, bloom.threshold ?? 0.16), Math.max(0, bloom.knee ?? 0.18));

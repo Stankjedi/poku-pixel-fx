@@ -2,7 +2,6 @@
 import { type Vec3, clamp3 } from "./math.js";
 import { type Color3D, color3D } from "./frame.js";
 import { type Painter3D } from "./painter.js";
-import { blendOver } from "../render/coverage.js";
 import { channelToLinear } from "../render/linear.js";
 
 export interface VolumeBounds3D { min: Vec3; max: Vec3 }
@@ -66,7 +65,7 @@ export function drawVolume3D(p: Painter3D, bounds: VolumeBounds3D, field: Volume
       }
     }
     const pixel = y * f.w + x;
-    far = Math.max(far, f.depth[pixel]);
+    far = Math.max(far, p.opaqueDepthAt(x, y));
     // Painter3D clamps perspective at 0.3. Volumes stop before that near plane,
     // rather than sampling behind the camera with a different projection.
     if (perspective > 0) near = Math.min(near, 0.7 / perspective);
@@ -98,23 +97,12 @@ export function drawVolume3D(p: Painter3D, bounds: VolumeBounds3D, field: Volume
         if (d < best) { best = d; color = (c | 0xff000000) >>> 0; }
       }
     }
-    if (p.alphaMode === "dither") {
-      if (alpha <= BAYER4[((y & 3) << 2) | (x & 3)]) continue;
-      f.color[pixel] = color;
-    } else f.color[pixel] = blendOver(f.color[pixel], color, alpha);
-    // Foreground smoke extinguishes already-rendered background emission as well
-    // as color. The medium's own integrated radiance is then added once.
-    const old = f.light[pixel];
-    const red = Math.min(255, Math.round((old & 255) * transmittance + lr));
-    const green = Math.min(255, Math.round(((old >>> 8) & 255) * transmittance + lg));
-    const blue = Math.min(255, Math.round(((old >>> 16) & 255) * transmittance + lb));
-    f.light[pixel] = (0xff000000 | (blue << 16) | (green << 8) | red) >>> 0;
-    if (f.hdrLight) {
-      const i = pixel * 3;
-      f.hdrLight[i] = f.hdrLight[i] * transmittance + hr;
-      f.hdrLight[i + 1] = f.hdrLight[i + 1] * transmittance + hg;
-      f.hdrLight[i + 2] = f.hdrLight[i + 2] * transmittance + hb;
-    }
+    const dither = p.alphaMode === "dither";
+    if (dither && alpha <= BAYER4[((y & 3) << 2) | (x & 3)]) continue;
+    // A preintegrated ray is an ordered material layer, not an opaque depth write.
+    // Its own radiance and extinction pass through the same surface resolver.
+    // Intersecting volumes still belong in one field, as described above.
+    p.volumePixel(x, y, near, color, dither ? 1 : alpha, lr, lg, lb, hr, hg, hb);
   }
 }
 

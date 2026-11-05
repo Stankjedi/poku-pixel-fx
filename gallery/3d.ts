@@ -28,7 +28,7 @@ const offCtx = offscreen.getContext("2d", { alpha: false })!;
 const effects = { frost, slash, blackhole, wind, windOriginal, shatter, flame, lightning, water, voidrift, meteor, laser, shield };
 let selected: keyof typeof effects = "blackhole";
 let instance: FxInstance3D<shield.EnergyShield3DOptions> | FxInstance3D<laser.CoherentLaser3DOptions> | FxInstance3D<meteor.MeteorImpact3DOptions> | FxInstance3D<voidrift.VoidRift3DOptions> | FxInstance3D<frost.FrostNova3DOptions> | FxInstance3D<slash.ArcSlash3DOptions> | FxInstance3D<blackhole.BlackHole3DOptions> | FxInstance3D<wind.WindRasenshurikenOptions> | FxInstance3D<windOriginal.WindShurikenLegacyOptions> | FxInstance3D<flame.ThermalPlume3DOptions> | FxInstance3D<shatter.IceShatter3DOptions> | FxInstance3D<lightning.ForkedLightning3DOptions> | FxInstance3D<water.CrownSplash3DOptions> = createFx3D(blackhole, {});
-let width = 0, height = 0, last = performance.now(), paused = false;
+let width = 0, height = 0, last = performance.now(), paused = false, dirty = true;
 let frame = createFrame3D(16, 16), painter = new Painter3D(frame), image = offCtx.createImageData(16, 16);
 let pixel = 3, yaw = 0.68, elevation = 28 * Math.PI / 180, zoom = 1, glow = true;
 let dragging = false, prevX = 0, prevY = 0;
@@ -75,6 +75,7 @@ function syncLabels() {
   seedText.textContent = `SEED ${seed}`;
 }
 function chooseEffect(name: keyof typeof effects) {
+  dirty = true;
   selected = name;
   if (name === "frost") instance = createFx3D(frost, { seed });
   else if (name === "voidrift") instance = createFx3D(voidrift, { seed });
@@ -98,6 +99,7 @@ function resize() {
   const dpr = Math.min(3, window.devicePixelRatio || 1);
   const cw = Math.max(1, Math.round(box.width * dpr)), ch = Math.max(1, Math.round(box.height * dpr));
   if (width === w && height === h && canvas.width === cw && canvas.height === ch) return;
+  dirty = true;
   width = w; height = h;
   frame = createFrame3D(w, h);
   painter = new Painter3D(frame);
@@ -109,10 +111,7 @@ function resize() {
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 function render() {
   resize();
-  // The cinematic black hole writes/reprojects light directly; retain its legacy
-  // emission fallback while all Painter3D-only effects capture unclamped HDR.
-  if (selected === "blackhole") frame.hdrLight = undefined;
-  else enableHDRLight(frame);
+  enableHDRLight(frame);
   const isBlackHole = selected === "blackhole";
   const isWind = selected === "wind" || selected === "windOriginal";
   const baseCamera: Camera3D = {
@@ -137,6 +136,7 @@ function render() {
   offCtx.putImageData(image, 0, 0);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(offscreen, 0, 0, canvas.width, canvas.height);
+  dirty = false;
 }
 function animation(now: number) {
   const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
@@ -145,15 +145,17 @@ function animation(now: number) {
     instance.update(dt);
     if (instance.done()) instance.restart();
   }
-  render();
+  if (!paused || dirty) render();
   readout.textContent = `${instance.t.toFixed(2)} / ${instance.meta.duration.toFixed(2)} s`;
   stage.textContent = instance.stage();
   requestAnimationFrame(animation);
 }
 function button(id: string, handler: () => void) { document.querySelector<HTMLButtonElement>(id)!.addEventListener("click", handler); }
-button("#replay", () => { instance.restart(); paused = false; document.querySelector<HTMLButtonElement>("#pause")!.textContent = "Ⅱ PAUSE"; });
+button("#replay", () => { instance.restart(); paused = false; dirty = true; last = performance.now(); document.querySelector<HTMLButtonElement>("#pause")!.textContent = "Ⅱ PAUSE"; });
 button("#pause", () => {
   paused = !paused;
+  last = performance.now();
+  dirty = true;
   document.querySelector<HTMLButtonElement>("#pause")!.textContent = paused ? "▶ PLAY" : "Ⅱ PAUSE";
 });
 button("#seed", () => {
@@ -174,21 +176,24 @@ document.querySelector<HTMLSelectElement>("#effect")!.addEventListener("change",
     chooseEffect(key); syncLabels();
   }
 });
-pixelSlider.addEventListener("input", () => { pixel = +pixelSlider.value; syncLabels(); });
-elevationSlider.addEventListener("input", () => { elevation = +elevationSlider.value * Math.PI / 180; syncLabels(); });
-document.querySelector<HTMLInputElement>("#glow")!.addEventListener("change", e => { glow = (e.target as HTMLInputElement).checked; });
+pixelSlider.addEventListener("input", () => { pixel = +pixelSlider.value; dirty = true; syncLabels(); });
+elevationSlider.addEventListener("input", () => { elevation = +elevationSlider.value * Math.PI / 180; dirty = true; syncLabels(); });
+document.querySelector<HTMLInputElement>("#glow")!.addEventListener("change", e => { glow = (e.target as HTMLInputElement).checked; dirty = true; });
 canvas.addEventListener("pointerdown", e => { dragging = true; prevX = e.clientX; prevY = e.clientY; canvas.setPointerCapture(e.pointerId); });
 canvas.addEventListener("pointermove", e => {
   if (!dragging) return;
   yaw += (e.clientX - prevX) * 0.008;
   elevation = Math.max(0.15, Math.min(1.35, elevation + (e.clientY - prevY) * 0.005));
   elevationSlider.value = String(Math.round(elevation * 180 / Math.PI));
-  prevX = e.clientX; prevY = e.clientY; syncLabels();
+  prevX = e.clientX; prevY = e.clientY; dirty = true; syncLabels();
 });
 canvas.addEventListener("pointerup", () => { dragging = false; });
 canvas.addEventListener("pointercancel", () => { dragging = false; });
-canvas.addEventListener("wheel", e => { e.preventDefault(); zoom = Math.max(0.6, Math.min(2, zoom * Math.exp(-e.deltaY * 0.001))); }, { passive: false });
-window.addEventListener("keydown", e => { if (e.code === "Space" && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); instance.restart(); paused = false; } });
-document.addEventListener("visibilitychange", () => { last = performance.now(); });
+canvas.addEventListener("wheel", e => { e.preventDefault(); zoom = Math.max(0.6, Math.min(2, zoom * Math.exp(-e.deltaY * 0.001))); dirty = true; }, { passive: false });
+window.addEventListener("keydown", e => { if (e.code === "Space" && !(e.target instanceof HTMLInputElement)) { e.preventDefault(); instance.restart(); paused = false; dirty = true; last = performance.now(); document.querySelector<HTMLButtonElement>("#pause")!.textContent = "Ⅱ PAUSE"; } });
+document.addEventListener("visibilitychange", () => { last = performance.now(); dirty = true; });
+new ResizeObserver(() => { dirty = true; }).observe(screen);
+window.addEventListener("resize", () => { dirty = true; });
+reducedMotion.addEventListener("change", () => { dirty = true; });
 chooseEffect(selected); syncLabels();
 requestAnimationFrame(animation);

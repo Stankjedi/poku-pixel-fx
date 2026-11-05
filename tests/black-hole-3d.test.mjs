@@ -48,18 +48,21 @@ test('deterministic fixed-step simulation survives 30Hz and 120Hz stepping', () 
   assert.deepEqual(draw(a), draw(b));
 });
 
-test('opaque horizon occludes luminous material behind it', () => {
+test('opaque horizon occludes surface emission; optical glow can be explicitly masked', () => {
   const frame = createFrame3D(100, 100);
   const p = new Painter3D(frame, {yaw:0.65,elevation:0.45,zoom:1,target:[0,2.1,0]});
   p.begin('#05030d');
   p.glow([0,2.1,0], 2, '#ffffff', 1);
-  p.point([0,2.1,0], 0.75, '#ff00ff', 1, 1);
   const mid = p.project([0,2.1,0]);
   const i = Math.floor(mid.y) * frame.w + Math.floor(mid.x);
+  const optical = frame.light[i];
+  p.point([0,2.1,0], 0.75, '#ff00ff', 1, 1);
   assert.ok(frame.light[i] !== 0);
   p.sphere([0,2.1,0], 1.1, '#080513', '#291146');
-  assert.equal(frame.light[i], 0);
+  assert.equal(frame.light[i], optical, 'surface emission is hidden while explicit screen glow remains');
   assert.equal(frame.color[i], color3D('#080513'));
+  p.clearEmission(Math.floor(mid.x), Math.floor(mid.y), true);
+  assert.equal(frame.light[i], 0);
 });
 
 test('lens warp is local and preserves packed pixel colors', () => {

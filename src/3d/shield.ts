@@ -1,6 +1,6 @@
 /** Curved energy membranes and surface-distance impulses. World units, seconds, radians. */
 import type { Color3D } from "./frame.js";
-import type { Painter3D } from "./painter.js";
+import type { Painter3D, Projected3D } from "./painter.js";
 import { type Vec3, add3, sub3, mul3, dot3, cross3, norm3, len3, clamp3, smooth3, TAU3 } from "./math.js";
 
 export interface ShieldSurface3D {
@@ -68,54 +68,156 @@ export interface DrawShieldSurfaceOptions3D {
   palette?: readonly Color3D[];
   emission?: number;
   cellSize?: number;
+  /** Active deployment aperture, bounded by surface.aperture; topology is reused as it changes. */
+  aperture?: number;
 }
-/** Draw a continuous dark membrane, attached hex cells and its finite curved boundary. */
-export function drawShieldSurface3D(p: Painter3D, surface: ShieldSurface3D, options: DrawShieldSurfaceOptions3D) {
-  const visibility = clamp3(options.visibility), impacts = options.impacts ?? [], palette = options.palette?.length ? options.palette : SHIELD_PALETTE_3D;
-  if (!visibility) return;
-  const tone = (q: number) => palette[Math.round(clamp3(q) * (palette.length - 1))], emission = clamp3(Number.isFinite(options.emission ?? 0.2) ? options.emission ?? 0.2 : 0.2, 0, 4);
-  const responses = new Map<Vec3, { crest: number; contact: number; displacement: number }>();
-  const response = (n: Vec3) => {
-    const known = responses.get(n); if (known) return known;
-    const value = impacts.reduce((r, hit) => { const q = shieldResponse3D(surface, n, hit, options.time); r.crest += q.crest; r.contact += q.contact; r.displacement += q.displacement; return r; }, { crest: 0, contact: 0, displacement: 0 });
-    responses.set(n, value); return value;
-  };
-  const point = (n: Vec3, offset = 0) => shieldPoint3D(surface, n, response(n).displacement + offset);
-  // Sort translucent triangles back-to-front for both sides of an orbit. Surface is not a billboard.
-  const mesh: { a: Vec3; b: Vec3; c: Vec3; normal: Vec3; depth: number }[] = [];
-  const rings = 16, sides = 96;
-  const normals = Array.from({ length: rings + 1 }, (_, ring) => Array.from({ length: sides }, (_, i) => shieldNormal3D(surface, Math.cos(i / sides * TAU3) * surface.aperture * ring / rings, Math.sin(i / sides * TAU3) * surface.aperture * ring / rings)!));
-  const addTriangle = (a: Vec3, b: Vec3, c: Vec3) => { const A = point(a), B = point(b), C = point(c), normal = norm3(add3(add3(a, b), c)); mesh.push({ a: A, b: B, c: C, normal, depth: (p.project(A).depth + p.project(B).depth + p.project(C).depth) / 3 }); };
-  for (let j = 0; j < rings; j++) for (let i = 0; i < sides; i++) { const k = (i + 1) % sides; addTriangle(normals[j][i], normals[j + 1][i], normals[j + 1][k]); if (j) addTriangle(normals[j][i], normals[j + 1][k], normals[j][k]); }
-  mesh.sort((a, b) => a.depth - b.depth);
-  for (const face of mesh) {
-    const local = response(face.normal), facing = dot3(face.normal, surface.normal), edge = smooth3(0.82, surface.capCos, facing);
-    const lit = clamp3(dot3(face.normal, norm3([-0.5, 0.8, 0.5])));
-    const q = 0.12 + lit * 0.12 + edge * 0.04 + Math.min(0.34, local.crest * 0.12 + local.contact * 0.30);
-    p.triangle(face.a, face.b, face.c, tone(q), (0.48 + edge * 0.14 + local.crest * 0.18) * visibility, local.contact * emission * 0.06);
+
+const RINGS = 16, SIDES = 96, VERTICES = 1 + RINGS * SIDES;
+const FACE_LIGHT = norm3([-0.5, 0.8, 0.5]), LIP_LIGHT = norm3([-0.4, 0.6, 0.7]);
+const meshCoordinates: readonly (readonly [number, number])[] = [[0, 0], ...Array.from({ length: RINGS * SIDES }, (_, i) => {
+  const angle = (i % SIDES) / SIDES * TAU3, r = (Math.floor(i / SIDES) + 1) / RINGS;
+  return [Math.cos(angle) * r, Math.sin(angle) * r] as const;
+})];
+const meshIndices = (() => {
+  const indices: number[] = [];
+  for (let ring = 0; ring < RINGS; ring++) for (let i = 0; i < SIDES; i++) {
+    const k = (i + 1) % SIDES, a = ring ? 1 + (ring - 1) * SIDES + i : 0;
+    const b = 1 + ring * SIDES + i, c = 1 + ring * SIDES + k;
+    indices.push(a, b, c);
+    if (ring) indices.push(a, c, 1 + (ring - 1) * SIDES + k);
   }
-  // Hex topology is attached to the cap, never randomly regenerated during a hit.
-  const size = clamp3(options.cellSize ?? 0.39, 0.22, 0.8), extent = Math.ceil(surface.aperture / size) + 1;
-  const edges = new Map<string, { a: Vec3; b: Vec3; active: number }>();
+  return new Uint16Array(indices);
+})();
+const FACES = meshIndices.length / 3;
+interface ShieldEdge { a: number; b: number; cells: number[] }
+type MutableVec3 = [number, number, number];
+interface ShieldArena {
+  cellSize: number; aperture: number;
+  normals: MutableVec3[]; radiusSquared: number[]; edges: ShieldEdge[]; edgeVertices: number[];
+  points: MutableVec3[]; projected: Projected3D[]; lipPoints: MutableVec3[]; lipProjected: Projected3D[];
+  responses: Float64Array; distances: Float64Array; impactSnapshot: number[];
+  faceDepth: Float64Array; order: number[];
+}
+const arenas = new WeakMap<ShieldSurface3D, ShieldArena>();
+const emptyProjection = (): Projected3D => ({ x: 0, y: 0, depth: 0, scale: 0 });
+
+function createArena(surface: ShieldSurface3D, cellSize: number): ShieldArena {
+  const normals = Array.from({ length: VERTICES + FACES }, (): MutableVec3 => [0, 0, 0]);
+  const radiusSquared = Array(normals.length).fill(0) as number[], nodes = new Map<string, number>(), edgeMap = new Map<string, ShieldEdge>(), edgeVertices = new Set<number>();
+  const fixedNode = (x: number, y: number) => {
+    const n = shieldNormal3D(surface, x, y); if (!n) return -1;
+    const key = n.map(v => Math.round(v * 1e7)).join(",");
+    const known = nodes.get(key); if (known !== undefined) return known;
+    const index = normals.length; normals.push([n[0], n[1], n[2]]); radiusSquared.push(x * x + y * y); nodes.set(key, index); return index;
+  };
+  const extent = Math.ceil(surface.aperture / cellSize) + 1;
   for (let row = -extent; row <= extent; row++) for (let col = -extent; col <= extent; col++) {
-    const x = Math.sqrt(3) * size * (col + (row & 1) * 0.5), y = 1.5 * size * row;
-    const center = shieldNormal3D(surface, x, y); if (!center) continue;
-    const local = response(center), active = Math.min(1, local.crest * 2.0 + local.contact * 1.4);
+    const x = Math.sqrt(3) * cellSize * (col + (row & 1) * 0.5), y = 1.5 * cellSize * row, center = fixedNode(x, y);
+    if (center < 0) continue;
     for (let k = 0; k < 6; k++) {
-      const a = (k / 6 + 1 / 12) * TAU3, b = ((k + 1) / 6 + 1 / 12) * TAU3;
-      const na = shieldNormal3D(surface, x + Math.cos(a) * size, y + Math.sin(a) * size), nb = shieldNormal3D(surface, x + Math.cos(b) * size, y + Math.sin(b) * size);
-      if (!na || !nb) continue;
-      const key = [na, nb].map(n => n.map(v => Math.round(v * 1e7)).join(",")).sort().join("/");
-      const previous = edges.get(key);
-      if (previous) previous.active = Math.max(previous.active, active);
-      else edges.set(key, { a: na, b: nb, active });
+      const aa = (k / 6 + 1 / 12) * TAU3, bb = ((k + 1) / 6 + 1 / 12) * TAU3;
+      const a = fixedNode(x + Math.cos(aa) * cellSize, y + Math.sin(aa) * cellSize), b = fixedNode(x + Math.cos(bb) * cellSize, y + Math.sin(bb) * cellSize);
+      if (a < 0 || b < 0) continue;
+      const key = a < b ? `${a}/${b}` : `${b}/${a}`, prior = edgeMap.get(key);
+      if (prior) prior.cells.push(center); else edgeMap.set(key, { a, b, cells: [center] });
+      edgeVertices.add(a); edgeVertices.add(b);
     }
   }
-  // Shared cell edges are drawn once so neighboring hexagons cannot double a stroke’s light.
-  for (const { a, b, active } of edges.values()) p.line(point(a, 0.018), point(b, 0.018), 0.014, tone(0.28 + active * 0.45), (0.13 + active * 0.58) * visibility, active * emission * 0.28);
-  // A clean cyan lip establishes the energy membrane even with no hit or glow.
-  for (let i = 0; i < sides; i++) {
-    const a = normals[rings][i], b = normals[rings][(i + 1) % sides], local = response(a);
-    p.line(point(a, 0.02), point(b, 0.02), 0.028, tone(0.52 + Math.max(0, dot3(a, norm3([-0.4, 0.6, 0.7]))) * 0.1 + Math.min(0.3, local.crest)), visibility * 0.86, emission * visibility * 0.3);
+  return { cellSize, aperture: -1, normals, radiusSquared, edges: [...edgeMap.values()], edgeVertices: [...edgeVertices],
+    points: normals.map((): MutableVec3 => [0, 0, 0]), projected: normals.map(emptyProjection),
+    lipPoints: Array.from({ length: SIDES }, (): MutableVec3 => [0, 0, 0]), lipProjected: Array.from({ length: SIDES }, emptyProjection),
+    responses: new Float64Array(normals.length * 3), distances: new Float64Array(0), impactSnapshot: [],
+    faceDepth: new Float64Array(FACES), order: Array.from({ length: FACES }, (_, i) => i) };
+}
+
+function prepareArena(arena: ShieldArena, surface: ShieldSurface3D, aperture: number, impacts: readonly ShieldImpact3D[], time: number) {
+  let changed = arena.aperture !== aperture;
+  if (changed) {
+    arena.aperture = aperture;
+    for (let i = 0; i < VERTICES; i++) {
+      const [u, v] = meshCoordinates[i], x = u * aperture, y = v * aperture;
+      const z = Math.sqrt(Math.max(0, surface.radius ** 2 - x * x - y * y)), n = arena.normals[i];
+      for (let ch = 0; ch < 3; ch++) n[ch] = surface.u[ch] * x + surface.v[ch] * y + surface.normal[ch] * z;
+      const length = Math.hypot(n[0], n[1], n[2]); for (let ch = 0; ch < 3; ch++) n[ch] /= length;
+    }
+    for (let face = 0; face < FACES; face++) {
+      const a = arena.normals[meshIndices[face * 3]], b = arena.normals[meshIndices[face * 3 + 1]], c = arena.normals[meshIndices[face * 3 + 2]], n = arena.normals[VERTICES + face];
+      for (let ch = 0; ch < 3; ch++) n[ch] = a[ch] + b[ch] + c[ch];
+      const length = Math.hypot(n[0], n[1], n[2]); for (let ch = 0; ch < 3; ch++) n[ch] /= length;
+    }
+  }
+  const count = impacts.length;
+  if (arena.impactSnapshot.length !== count * 5) { arena.impactSnapshot.length = count * 5; changed = true; }
+  for (let i = 0; i < count; i++) {
+    const hit = impacts[i], values = [hit.at, hit.strength ?? 1, ...hit.normal];
+    for (let k = 0; k < 5; k++) if (!Object.is(arena.impactSnapshot[i * 5 + k], values[k])) { arena.impactSnapshot[i * 5 + k] = values[k]; changed = true; }
+  }
+  const length = arena.normals.length * count;
+  if (arena.distances.length !== length) arena.distances = new Float64Array(length);
+  if (changed && count) {
+    const hitNormals = impacts.map(hit => norm3(hit.normal));
+    for (let n = 0; n < arena.normals.length; n++) for (let i = 0; i < count; i++)
+      arena.distances[n * count + i] = Math.acos(clamp3(dot3(arena.normals[n], hitNormals[i]), -1, 1)) * surface.radius;
+  }
+  arena.responses.fill(0);
+  for (let i = 0; i < count; i++) {
+    const hit = impacts[i], age = time - hit.at; if (age < 0 || !Number.isFinite(age)) continue;
+    const strength = clamp3(Number.isFinite(hit.strength ?? 1) ? hit.strength ?? 1 : 1, 0, 3), front = age * 4.8, width = 0.13 + age * 0.05;
+    const crestDecay = Math.exp(-age * 1.75) * smooth3(0, 0.035, age) * strength;
+    const contactDecay = Math.exp(-age * 13) * strength, tailDecay = Math.exp(-age * 2.2) * strength;
+    for (let n = 0; n < arena.normals.length; n++) {
+      const d = arena.distances[n * count + i], delta = d - front;
+      const crest = (Math.abs(delta) <= width * 3 ? Math.exp(-((delta / width) ** 2)) : 0) * crestDecay;
+      const contact = Math.exp(-((d / 0.55) ** 2)) * contactDecay, o = n * 3;
+      arena.responses[o] += crest; arena.responses[o + 1] += contact;
+      arena.responses[o + 2] += -0.20 * contact + 0.10 * crest - 0.035 * Math.exp(-(((delta + 0.22) / 0.22) ** 2)) * tailDecay;
+    }
+  }
+}
+
+/** Draw a continuous membrane using cached topology, response arrays and shared projections. */
+export function drawShieldSurface3D(p: Painter3D, surface: ShieldSurface3D, options: DrawShieldSurfaceOptions3D) {
+  const visibility = clamp3(options.visibility), aperture = clamp3(options.aperture ?? surface.aperture, 0, surface.aperture);
+  if (!visibility || !aperture) return;
+  const size = clamp3(options.cellSize ?? 0.39, 0.22, 0.8);
+  let arena = arenas.get(surface);
+  if (!arena || arena.cellSize !== size) { arena = createArena(surface, size); arenas.set(surface, arena); }
+  prepareArena(arena, surface, aperture, options.impacts ?? [], options.time);
+  const palette = options.palette?.length ? options.palette : SHIELD_PALETTE_3D, tone = (q: number) => palette[Math.round(clamp3(q) * (palette.length - 1))];
+  const emission = clamp3(Number.isFinite(options.emission ?? 0.2) ? options.emission ?? 0.2 : 0.2, 0, 4);
+  const { normals, responses, points, projected, faceDepth, order } = arena;
+  const position = (node: number, offset: number, out: MutableVec3) => {
+    const n = normals[node], radius = surface.radius + responses[node * 3 + 2] + offset;
+    out[0] = surface.center[0] + n[0] * radius; out[1] = surface.center[1] + n[1] * radius; out[2] = surface.center[2] + n[2] * radius;
+  };
+  for (let i = 0; i < VERTICES; i++) { position(i, 0, points[i]); projected[i] = p.project(points[i], projected[i]); }
+  for (let i = 0; i < FACES; i++) faceDepth[i] = (projected[meshIndices[i * 3]].depth + projected[meshIndices[i * 3 + 1]].depth + projected[meshIndices[i * 3 + 2]].depth) / 3;
+  order.sort((a, b) => faceDepth[a] - faceDepth[b] || a - b);
+  const capCos = Math.sqrt(1 - (aperture / surface.radius) ** 2);
+  for (const face of order) {
+    const node = VERTICES + face, n = normals[node], crest = responses[node * 3], contact = responses[node * 3 + 1];
+    const edge = smooth3(0.82, capCos, dot3(n, surface.normal)), lit = clamp3(dot3(n, FACE_LIGHT));
+    const color = tone(0.12 + lit * 0.12 + edge * 0.04 + Math.min(0.34, crest * 0.12 + contact * 0.30));
+    const a = meshIndices[face * 3], b = meshIndices[face * 3 + 1], c = meshIndices[face * 3 + 2], alpha = (0.48 + edge * 0.14 + crest * 0.18) * visibility;
+    if (p.triangleProjected) p.triangleProjected(projected[a], projected[b], projected[c], color, alpha, contact * emission * 0.06);
+    else p.triangle(points[a], points[b], points[c], color, alpha, contact * emission * 0.06);
+  }
+  const r2 = aperture * aperture + 1e-8;
+  for (const i of arena.edgeVertices) if (arena.radiusSquared[i] <= r2) { position(i, 0.018, points[i]); projected[i] = p.project(points[i], projected[i]); }
+  for (const edge of arena.edges) {
+    if (arena.radiusSquared[edge.a] > r2 || arena.radiusSquared[edge.b] > r2) continue;
+    let active = -1;
+    for (const cell of edge.cells) if (arena.radiusSquared[cell] <= r2) active = Math.max(active, Math.min(1, responses[cell * 3] * 2 + responses[cell * 3 + 1] * 1.4));
+    if (active < 0) continue;
+    const color = tone(0.28 + active * 0.45), alpha = (0.13 + active * 0.58) * visibility, light = active * emission * 0.28;
+    if (p.lineProjected) p.lineProjected(projected[edge.a], projected[edge.b], 0.014, color, alpha, light);
+    else p.line(points[edge.a], points[edge.b], 0.014, color, alpha, light);
+  }
+  const rim = 1 + (RINGS - 1) * SIDES;
+  for (let i = 0; i < SIDES; i++) { position(rim + i, 0.02, arena.lipPoints[i]); arena.lipProjected[i] = p.project(arena.lipPoints[i], arena.lipProjected[i]); }
+  for (let i = 0; i < SIDES; i++) {
+    const j = (i + 1) % SIDES, n = normals[rim + i], color = tone(0.52 + Math.max(0, dot3(n, LIP_LIGHT)) * 0.1 + Math.min(0.3, responses[(rim + i) * 3]));
+    if (p.lineProjected) p.lineProjected(arena.lipProjected[i], arena.lipProjected[j], 0.028, color, visibility * 0.86, emission * visibility * 0.3);
+    else p.line(arena.lipPoints[i], arena.lipPoints[j], 0.028, color, visibility * 0.86, emission * visibility * 0.3);
   }
 }

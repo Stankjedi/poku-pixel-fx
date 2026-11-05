@@ -9,7 +9,7 @@
  * Artistic photon bending is a screen-space approximation, NOT general relativity.
  */
 import type { EffectMeta3D } from "../fx.js";
-import type { Color3D, Frame3D } from "../frame.js";
+import type { Color3D } from "../frame.js";
 import { color3D } from "../frame.js";
 import { type Vec3, Rng3D, clamp3, smooth3, TAU3 } from "../math.js";
 import { Painter3D } from "../painter.js";
@@ -119,43 +119,45 @@ function rock(p:Painter3D, center:Vec3, size:number, rotation:number, pal:readon
 /** A cheap two-pass bloom with a reusable scratch arena.
  * Optical bloom changes light, not the sharp color-buffer silhouette. */
 function makeBloom() {
-  let w=0,h=0,hr=new Float32Array(0),hg=new Float32Array(0),hb=new Float32Array(0);
-  const mix = (n:number) => Math.min(255,Math.max(0,n))|0;
-  return (frame:Frame3D,cx:number,cy:number,voidRadius:number,level:number) => {
+  let w=0,h=0,hr=new Float32Array(0),hg=new Float32Array(0),hb=new Float32Array(0),linearH=new Float32Array(0);
+  return (p:Painter3D,cx:number,cy:number,voidRadius:number,level:number) => {
     if(level<=0)return;
+    const frame=p.frame;
     const W=frame.w,H=frame.h,N=W*H,L=frame.light;
     if(W!==w||H!==h){w=W;h=H;hr=new Float32Array(N);hg=new Float32Array(N);hb=new Float32Array(N);}
-    const radius=5;
+    const native=frame.hdrLight;
+    if(native&&linearH.length!==N*3)linearH=new Float32Array(N*3);
+    const radius=5,normal=1/(radius*2+1);
     // Sliding horizontal box filter.
     for(let y=0;y<H;y++) {
       const o=y*W;
-      let sr=0,sg=0,sb=0;
+      let sr=0,sg=0,sb=0,lr=0,lg=0,lb=0;
       for(let dx=-radius;dx<=radius;dx++) {
-        const c=L[o+Math.min(W-1,Math.max(0,dx))];
+        const i=o+Math.min(W-1,Math.max(0,dx)),c=L[i];
         sr+=c&255;sg+=(c>>>8)&255;sb+=(c>>>16)&255;
+        if(native){lr+=native[i*3];lg+=native[i*3+1];lb+=native[i*3+2];}
       }
       for(let x=0;x<W;x++) {
         const i=o+x;
-        hr[i]=sr/(radius*2+1); hg[i]=sg/(radius*2+1); hb[i]=sb/(radius*2+1);
-        const a=L[o+Math.min(W-1,x+radius+1)], b=L[o+Math.max(0,x-radius)];
+        hr[i]=sr*normal; hg[i]=sg*normal; hb[i]=sb*normal;
+        if(native){linearH[i*3]=lr*normal;linearH[i*3+1]=lg*normal;linearH[i*3+2]=lb*normal;}
+        const ia=o+Math.min(W-1,x+radius+1),ib=o+Math.max(0,x-radius),a=L[ia], b=L[ib];
         sr+=(a&255)-(b&255);
         sg+=((a>>>8)&255)-((b>>>8)&255);
         sb+=((a>>>16)&255)-((b>>>16)&255);
+        if(native){lr+=native[ia*3]-native[ib*3];lg+=native[ia*3+1]-native[ib*3+1];lb+=native[ia*3+2]-native[ib*3+2];}
       }
     }
     for(let y=0;y<H;y++)for(let x=0;x<W;x++) {
-      const i=y*W+x;
-      let sr=0,sg=0,sb=0;
+      // The optical mask removes bloom only. Actual foreground fragments retain their own emission.
+      if((x+.5-cx)**2+(y+.5-cy)**2 < voidRadius*voidRadius*.87)continue;
+      let sr=0,sg=0,sb=0,lr=0,lg=0,lb=0;
       for(let dy=-radius;dy<=radius;dy++) {
         const j=Math.min(H-1,Math.max(0,y+dy))*W+x;
         sr+=hr[j];sg+=hg[j];sb+=hb[j];
+        if(native){lr+=linearH[j*3];lg+=linearH[j*3+1];lb+=linearH[j*3+2];}
       }
-      const normal=1/(radius*2+1);
-      const l=L[i];
-      const r0=mix((l&255)+sr*normal*level),g0=mix(((l>>>8)&255)+sg*normal*level),b0=mix(((l>>>16)&255)+sb*normal*level);
-      if((x+.5-cx)**2+(y+.5-cy)**2 < voidRadius*voidRadius*.87) {L[i]=0;continue;}
-      // The tiny, quantized glow floor preserves luminous material without blurring the pixel art itself.
-      L[i]=(0xff000000|(b0<<16)|(g0<<8)|r0)>>>0;
+      if(sr+sg+sb+lr+lg+lb>0)p.screenLightRGB(x,y,sr*normal*level,sg*normal*level,sb*normal*level,lr*normal*level,lg*normal*level,lb*normal*level);
     }
   };
 }
@@ -197,6 +199,7 @@ export function create(options:BlackHole3DOptions) {
     mag:rng.range(.012,.075),tw:rng.range(0,TAU),color:rng.int(0,4),
   });
   const bloom=makeBloom();
+  let horizonMask=new Uint8Array(0),horizonDepth=new Float32Array(0);
   let time=0;
   return {
     update(dt:number){time+=dt;},
@@ -210,7 +213,9 @@ export function create(options:BlackHole3DOptions) {
       const radius=R*(.18+.82*smooth(.07,1,t))*shrink;
       const center=p.project([0,CY,0]);
       const sx=center.x,sy=center.y,scale=center.scale,cr=radius*scale;
-      const frame=p.frame,w=frame.w,h=frame.h,colors=frame.color,lights=frame.light,depth=frame.depth;
+      const frame=p.frame,w=frame.w,h=frame.h,depth=frame.depth;
+      if(horizonMask.length!==w*h){horizonMask=new Uint8Array(w*h);horizonDepth=new Float32Array(w*h);}
+      else horizonMask.fill(0);
       const camera=planeCamera(p),a=camera.right,b=camera.up,c=camera.front;
       const nR=camera.ndotRight,nU=camera.ndotUp,nF=camera.ndotFront;
       const base=color3D('#05030e');
@@ -232,8 +237,8 @@ export function create(options:BlackHole3DOptions) {
           const u=(x+.5-sx)/scale,rr=Math.hypot(u,v);
           if(rr>maxDist)continue;
           const i=y*w+x,ang=Math.atan2(v,u),bayer=(BAYER[((y&3)<<2)|(x&3)]+.5)*ditherScale;
-          let surface=colors[i]||base;
-          let emit=0,dep=-Infinity;
+          let surface=p.opaqueColorAt(x,y)||base;
+          let emit=0,dep=-Infinity,isHorizon=false;
           // Semi-transparent multi-octave spiral nebulae behind the accretion plane.
           if(rr>radius*1.15 && rr<reach*1.62) {
             const logR=Math.log(rr+.31);
@@ -347,19 +352,20 @@ export function create(options:BlackHole3DOptions) {
             if(dep<=surfDepth) {
               const edge=sat((rr/radius-.73)/.27);
               surface=mixColor(black,PAL[1],.10*edge*edge);
-              emit=0;dep=surfDepth;
+              emit=0;dep=Math.fround(surfDepth);isHorizon=true;
             }
           }
           // Keep unrelated nearer geometry intact when composed into a game scene.
-          if (depth[i] > dep) continue;
-          colors[i]=surface;
-          if (dep !== -Infinity) depth[i]=dep;
+          if (p.opaqueDepthAt(x,y) > Math.fround(dep)) continue;
+          let emissionColor=0;
           if(emit>.01){
             const red=Math.min(255,emit*(.86+.32*(ch(surface,0)/255)));
             const green=Math.min(255,emit*(.45+.52*(ch(surface,8)/255)));
             const blue=Math.min(255,emit*(.72+.48*(ch(surface,16)/255)));
-            lights[i]=rgb(red,green,blue);
+            emissionColor=rgb(red,green,blue);
           }
+          p.pixel(x,y,dep,surface,1,emit>.01?1:0,emissionColor);
+          if(isHorizon&&depth[i]===dep){horizonMask[i]=1;horizonDepth[i]=dep;}
         }
       }
       // Gravitationally captured solid 3D fragments. Interior orbital speeds rise
@@ -408,14 +414,14 @@ export function create(options:BlackHole3DOptions) {
       }
       // Ensure no stray light leaks across the physical event horizon, even
       // after foreground facets and the final low-frequency emissive bloom.
-      bloom(frame,sx,sy,cr,power*.9);
+      bloom(p,sx,sy,cr,power*.9);
       const x0=Math.max(0,Math.floor(sx-cr*.96)),x1=Math.min(w-1,Math.ceil(sx+cr*.96));
       const y0=Math.max(0,Math.floor(sy-cr*.96)),y1=Math.min(h-1,Math.ceil(sy+cr*.96));
       for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++) {
         const rr2=(x+.5-sx)**2+(y+.5-sy)**2;
         if(rr2>cr*cr*.94)continue;
         const i=y*w+x;
-        if(depth[i]===center.depth+Math.sqrt(Math.max(0,radius*radius-rr2/(scale*scale)))) lights[i]=0;
+        if(horizonMask[i]&&depth[i]===horizonDepth[i])p.clearEmission(x,y,true);
       }
     },
   };

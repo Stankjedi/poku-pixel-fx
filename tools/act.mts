@@ -1,58 +1,113 @@
 #!/usr/bin/env node
-// See an effect acted out: the character, the target, the freeze on contact. Motion is what you are judging, so the
-// strip shows consecutive 12 fps steps, not a sample.
-//
-//   node build-tools/tools/act.mjs melee/sword-slash                strip: records/act/melee-sword-slash.png
-//   node build-tools/tools/act.mjs melee/sword-slash --mp4          video: records/act/melee-sword-slash.mp4
-//   node build-tools/tools/act.mjs melee/sword-slash --sheet        the whole act, character and all, as a transparent sprite sheet
-//
-// Options: --from S --to S (strip range) --step S (default 1/12) --cols N --zoom N --bg KIND --out FILE --no-target --seconds S
+// Acted scenes: native actor, effect, contacts and hit-stop share one deterministic export timeline.
+// --sheet [--layers] exports transparent assets. --gif / --mp4 exports the preview.
+// --actor human|cat|fox|owl|dragon --height N --motion act|idle|walk|guard|crouch|wave|trot|fly --weapon auto|none|sword|bow
+import { basename, join } from "node:path";
+import { ROOT, resolveIds, loadEffect, renderActSequence, createSpriteSheet, canvas, upscale, save, writeVideos, type FrameData } from "./lib/fxlib.mjs";
+import { createLayerSheet } from "./lib/layers.mjs";
 
-import { join } from "node:path";
-import { ROOT, resolveIds, loadEffect, renderAct, spriteSheet, canvas, upscale, save, writeVideo } from "./lib/fxlib.mjs";
-
-const args = process.argv.slice(2), flags: Record<string, string> = {}, pos: string[] = [];
-for (let i = 0; i < args.length; i++) {
-  if (["--mp4", "--no-target", "--sheet"].includes(args[i])) flags[args[i].slice(2)] = "true";
-  else if (args[i].startsWith("--")) flags[args[i].slice(2)] = args[++i];
-  else pos.push(args[i]);
-}
-const ids: string[] = resolveIds(pos);
-for (const id of ids) {
-  const fx = await loadEffect(id);
-  if (flags.sheet) {
-    const r = renderAct(fx, { fps: fx.meta.fps, bg: "none", target: !flags["no-target"], hold: 0 }), name = id.split("/")[1], base = join(ROOT, "records", "act", id.replace("/", "-"));
-    const s = spriteSheet(fx, r, name);
-    s.json.meta.pokuFx.pivot = r.pivot;
-    save(`${base}.sheet.png`, s.png);
-    save(`${base}.sheet.json`, JSON.stringify(s.json, null, 1));
-    console.log(`${id}  ${r.w} x ${r.h} 크기 ${r.n}프레임  ->  ${base}.sheet.png`);
-    continue;
+function actorOptions(flags: Record<string, string>, options: Record<string, any>) {
+  if (!["actor", "height", "motion", "weapon", "attachment"].some(key => flags[key] !== undefined)) return options;
+  const prior = options.actorSelection ?? {}, value = flags.actor ?? (prior.kind === "creature" ? prior.species : "human");
+  if (!["human", "cat", "fox", "owl", "dragon"].includes(value)) throw new Error("actor는 human, cat, fox, owl, dragon 중 하나여야 합니다");
+  const selection = { ...prior, kind: value === "human" ? "human" : "creature", ...(value === "human" ? {} : { species: value }) };
+  if (flags.height !== undefined) {
+    const height = +flags.height;
+    if (!Number.isSafeInteger(height) || height < 1) throw new RangeError("height must be a positive integer");
+    selection.height = height;
   }
-  const r = renderAct(fx, { fps: 60, bg: flags.bg, target: !flags["no-target"], seconds: flags.seconds ? +flags.seconds : undefined });
-  const base = join(ROOT, "records", "act", id.replace("/", "-"));
-  if (flags.mp4) {
-    const k = +(flags.zoom ?? Math.max(2, Math.min(8, Math.floor(960 / Math.max(r.w, r.h)))));
-    const file = flags.out ?? base + ".mp4";
-    writeVideo(file, r, k);
-    console.log(`${id}  ${r.frames.length}프레임  ${(r.frames.length / r.fps).toFixed(2)}초  ->  ${file}`);
-  } else {
-    const from = +(flags.from ?? r.frames[0].t), to = +(flags.to ?? r.frames[r.frames.length - 1].t), step = +(flags.step ?? 1 / 12), list: Array<{t: number; frozen?: boolean; color: Uint8ClampedArray}> = [];
-    let held = 0;
-    for (const f of r.frames) {
-      if (f.t < from - 1e-6 || f.t > to + 1e-6) continue;
-      if (f.t + 1e-6 >= from + list.length * step) list.push(f);
-      else if (f.frozen) held++;
+  for (const [key, allowed] of [
+    ["motion", ["act", "idle", "walk", "guard", "crouch", "wave", "trot", "fly"]], ["weapon", ["auto", "none", "sword", "bow"]],
+    ["attachment", ["auto", "root", "hand", "head", "chest"]],
+  ] as const) {
+    if (flags[key] !== undefined) {
+      if (!(allowed as readonly string[]).includes(flags[key])) throw new RangeError(`${key}: ${allowed.join(", ")}`);
+      selection[key] = flags[key];
     }
-    const k = +(flags.zoom ?? 3), cols = +(flags.cols ?? 8), rows = Math.ceil(list.length / cols);
-    const img = canvas(cols * (r.w * k + 4), rows * (r.h * k + 18));
-    list.forEach((f, j) => {
-      const x = (j % cols) * (r.w * k + 4), y = Math.floor(j / cols) * (r.h * k + 18);
-      img.text(f.t.toFixed(2), x + 2, y + 3, 2);
-      img.paste(upscale(f.color, r.w, r.h, k), r.w * k, r.h * k, x, y + 16);
-    });
-    const file = flags.out ?? base + ".png";
-    save(file, img.png());
-    console.log(`${id}  ${list.length}단계  ->  ${file}`);
   }
+  return { ...options, actorSelection: selection };
 }
+
+async function main() {
+  const args = process.argv.slice(2), flags: Record<string, string> = {}, patterns: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (["--mp4", "--gif", "--no-target", "--no-actor", "--sheet", "--layers"].includes(args[i])) flags[args[i].slice(2)] = "true";
+    else if (args[i].startsWith("--")) {
+      if (args[i + 1] === undefined || args[i + 1].startsWith("--")) throw new Error(`${args[i]} 값이 필요합니다`);
+      flags[args[i].slice(2)] = args[++i];
+    } else patterns.push(args[i]);
+  }
+  if (!patterns.length) throw new Error("사용법: act <id|pattern> [--sheet] [--layers] [--mp4] [--actor human]");
+  const ids = resolveIds(patterns, undefined, { strict: true });
+  if (!ids.length) throw new Error("내보낼 이펙트가 없습니다");
+  const options = actorOptions(flags, flags.opts ? JSON.parse(flags.opts) : {});
+  let failed = 0;
+  for (const id of ids) {
+    let layers: ReturnType<typeof createLayerSheet> | undefined;
+    try {
+      const fx = await loadEffect(id), r = renderActSequence(fx, {
+        fps: flags.fps ? +flags.fps : flags.sheet ? fx.meta.fps : 60,
+        bg: flags.bg ?? (flags.sheet && !flags.mp4 && !flags.gif ? "none" : undefined),
+        actor: !flags["no-actor"], target: !flags["no-target"],
+        seconds: flags.seconds ? +flags.seconds : undefined,
+        hold: flags.hold !== undefined ? +flags.hold : flags.sheet ? 0 : undefined,
+        seed: flags.seed !== undefined ? +flags.seed : undefined,
+        layers: !!flags.layers, options,
+      });
+      const name = id.split("/")[1], base = flags.out
+        ? flags.out.replace(/\.(?:png|gif|mp4|json)$/i, "").replace(/\.sheet$/i, "")
+        : join(ROOT, "records", "act", id.replace("/", "-"));
+      const sheetFile = base + ".sheet.png";
+      const assetInfo = { ...r, settings: { ...r.settings, background: "transparent", cameraMotion: false } };
+      const sheet = flags.sheet ? createSpriteSheet(fx, assetInfo, name, basename(sheetFile)) : undefined;
+      if (flags.layers) layers = createLayerSheet(base, fx, assetInfo);
+      const k = +(flags.zoom ?? Math.max(2, Math.min(8, Math.floor(960 / Math.max(r.w, r.h)))));
+      const videos = [
+        ...(flags.gif ? [{ file: base + ".gif", scale: k }] : []),
+        ...(flags.mp4 ? [{ file: base + ".mp4", scale: k }] : []),
+      ];
+      const list: FrameData[] = [], wantStrip = !flags.sheet && !videos.length;
+      const step = +(flags.step ?? 1 / 12), from = flags.from !== undefined ? +flags.from : undefined,
+        to = flags.to !== undefined ? +flags.to : Infinity;
+      if (!Number.isFinite(step) || step <= 0 || (from !== undefined && !Number.isFinite(from)) || Number.isNaN(to))
+        throw new RangeError("Strip range and step are invalid");
+      let start = from;
+      function* frames() {
+        let i = 0;
+        for (const f of r.frames) {
+          sheet?.push(f, i); layers?.push(f, i); i++;
+          if (wantStrip) {
+            start ??= f.t;
+            if (f.t >= start - 1e-6 && f.t <= to + 1e-6 && f.t + 1e-6 >= start + list.length * step) list.push(f);
+          }
+          yield f;
+        }
+      }
+      if (videos.length) {
+        if (!writeVideos(videos, { ...r, frames: frames() })) throw new Error("요청한 영상을 생성할 수 없습니다: ffmpeg가 PATH에 없습니다");
+      } else for (const _ of frames()) { /* output sinks consume one frame at a time */ }
+      const made = videos.map(v => v.file);
+      if (sheet) {
+        const s = sheet.result();
+        made.push(save(sheetFile, s.png), save(base + ".sheet.json", JSON.stringify(s.json, null, 1)));
+      }
+      if (layers) made.push(...layers.finish());
+      if (wantStrip) {
+        if (!list.length) throw new Error("지정한 시간 범위에 프레임이 없습니다");
+        const zoom = +(flags.zoom ?? 3), cols = +(flags.cols ?? 8);
+        if (!Number.isSafeInteger(zoom) || zoom < 1 || !Number.isSafeInteger(cols) || cols < 1) throw new RangeError("zoom and cols must be positive integers");
+        const rows = Math.ceil(list.length / cols), img = canvas(cols * (r.w * zoom + 4), rows * (r.h * zoom + 18));
+        list.forEach((f, j) => {
+          const x = (j % cols) * (r.w * zoom + 4), y = Math.floor(j / cols) * (r.h * zoom + 18);
+          img.text(f.t.toFixed(2), x + 2, y + 3, 2);
+          img.paste(upscale(f.color, r.w, r.h, zoom), r.w * zoom, r.h * zoom, x, y + 16);
+        });
+        made.push(save(base + ".png", img.png()));
+      }
+      console.log(`${id}  ${r.w} x ${r.h} 크기 ${r.n}프레임  ->  ${made.join("  ")}`);
+    } catch (error) { failed++; console.error(`${id}  실패: ${error instanceof Error ? error.message : error}`); }
+    finally { layers?.abort(); }
+  }
+  process.exitCode = failed ? 1 : 0;
+}
+main().catch(error => { console.error(error instanceof Error ? error.message : error); process.exitCode = 1; });

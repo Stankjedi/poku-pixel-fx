@@ -6,7 +6,7 @@ export const meta = {
   name: "Crit number",
   desc: "CRIT 128! slams in huge and white over a jagged starburst with a hard shake and speed lines, cools to fire, holds with a shine, then pops into sparks.",
   tags: ["ui", "critical", "damage", "number", "combat", "text", "one-shot"],
-  size: [152, 120],
+  size: [152, 129],
   origin: [76, 60],
   duration: 1.5,
   loop: false,

@@ -22,7 +22,7 @@ export { Painter } from "./painter.js";
 export type { PathOptions } from "./painter.js";
 export type { AlphaMode } from "../render/coverage.js";
 export { FONTS, textWidth } from "./font.js";
-export { createFrame, clearFrame, createFx, composite, painterFor, resolveOptions, sceneCameraOffset } from "./fx.js";
+export { createFrame, clearFrame, createFx, composite, painterFor, resolveOptions, sceneCameraOffset, FX_TICK_RATE, FX_TICK_SECONDS } from "./fx.js";
 export { stockActor, drawActor, actorAlphaOf, withActorPixels, HERO, HERO2, HERO_PAL, DUMMY_PAL } from "./actor.js";
 export { backdrop, BACKDROPS } from "./scene.js";
 export { createAct, actBounds, actSpan, actTiming, poseAt, lerpPose, Target, STAND, SKINS, posed } from "./act.js";
@@ -34,7 +34,7 @@ export type { ChainCue, ChainPainter, CuePosition } from "./chain.js";
 export type { EffectDrawContext } from "./fx.js";
 export { CinematicCompositor } from "../render/cinematic.js";
 export type { CinematicFrame, CinematicOptions, BloomOptions } from "../render/cinematic.js";
-export { enableHDRLight } from "../render/hdr.js";
+export { enableHDRLight, importPackedLight } from "../render/hdr.js";
 export type { HDRLightFrame } from "../render/hdr.js";
 
 export * from "./restoration.js";
@@ -68,3 +68,9 @@ export * from "./material-ramp.js";
 export type { PixelActor2D } from "./actor.js";
 
 export * from "./sprite-clip.js";
+
+export * from './actor-adapter.js';
+export { resolveEffectExport, exportLayout2D, frameDurationMs, edgeFade, separateFrameLayers, atlasMetadata } from '../render/export.js';
+export type { ActorSelection2D, ActorAdapter2D, ActorSample2D } from './actor-adapter.js';
+
+export { effectExampleCode2D } from './example-code.js';

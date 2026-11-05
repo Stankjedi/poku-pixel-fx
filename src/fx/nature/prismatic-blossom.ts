@@ -1,6 +1,6 @@
 import type { Painter } from '../../core/painter.js';
 import { fit, clamp, rand, sparkle, TAU, WHITE } from '../../core/index.js';
-export const meta={addedAt:'2026-11-02T13:49:39Z',name:'Prismatic blossom',desc:'A radiant crystalline flower erupts, unfurls uneven petals, then shatters into drifting leaves and luminous pollen.',tags:['nature','flower','blossom','bloom','crystal','magic','healing','burst','one-shot'],size:[268,200],origin:[134,166],duration:3.4,loop:false,fps:24,bg:'ground',options:{palette:['#092825','#13523d','#20845c','#47bd78','#95efaa','#d8ffba','#ffffff'],seed:38}};
+export const meta={addedAt:'2026-11-02T13:49:39Z',name:'Prismatic blossom',desc:'A radiant crystalline flower erupts, unfurls uneven petals, then shatters into drifting leaves and luminous pollen.',tags:['nature','flower','blossom','bloom','crystal','magic','healing','burst','one-shot'],size:[270,200],origin:[134,166],duration:3.4,loop:false,fps:24,bg:'ground',options:{palette:['#092825','#13523d','#20845c','#47bd78','#95efaa','#d8ffba','#ffffff'],seed:38}};
 export function draw(p:Painter,t:number,o:typeof meta.options){
  if(t<0||t>=meta.duration)return;
  const C=fit(o.palette,7),fade=clamp((meta.duration-t)/.65),grow=clamp(t/.56), bloom=clamp((t-.28)/.65), burst=clamp(1-Math.abs(t-.86)/.22),cy=-71;

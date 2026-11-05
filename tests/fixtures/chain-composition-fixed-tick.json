@@ -1,0 +1,474 @@
+{
+  "schema": "poku-fixed-tick-artwork-v1",
+  "clock": {
+    "hz": 120,
+    "update": "complete ticks; fractional remainder retained",
+    "presentation": "continuous",
+    "samples": "seconds"
+  },
+  "provenance": {
+    "originalFixture": "chain-composition-before.json",
+    "originalFixtureSha256": "9188407014dcdc9759c08eeb2443521421183afa8065c6b535f9cc76b374f504",
+    "baselineCommit": "4249ebdcf59d974b36fe17868959cb55b3073cfe",
+    "legacySubdivision": "ceil(dt * 120) equal dt/n updates for each host call",
+    "reason": "I02 replaces host-dependent simulation step lengths with a fixed 120 Hz clock; original hashes are preserved separately."
+  },
+  "effects": {
+    "moves/arrow-shot": {
+      "canvas": {
+        "size": [
+          300,
+          74
+        ],
+        "origin": [
+          38,
+          66
+        ]
+      },
+      "frames": {
+        "0.137": {
+          "hash": "49dd9e92b1e9a75cc2d008fcb9b99f8d86af71d853f2e7bdb5f884884860fdeb",
+          "originalHash": "49dd9e92b1e9a75cc2d008fcb9b99f8d86af71d853f2e7bdb5f884884860fdeb",
+          "changed": false
+        },
+        "0.641": {
+          "hash": "337dd8f1154d5fe664f1844a267cdd64b63de42b3a6a976e062cbd0aaf57c8b6",
+          "originalHash": "337dd8f1154d5fe664f1844a267cdd64b63de42b3a6a976e062cbd0aaf57c8b6",
+          "changed": false
+        },
+        "1.237": {
+          "hash": "1f627823c33f17cfc70d4f70d0a0ab16432ee273335162d5c6d28a91b0cac794",
+          "originalHash": "95f4aec056b34008ed55b50ca2aee8199b0151937de53c69182ed38d837b0eea",
+          "changed": true
+        },
+        "2.173": {
+          "hash": "49dd9e92b1e9a75cc2d008fcb9b99f8d86af71d853f2e7bdb5f884884860fdeb",
+          "originalHash": "49dd9e92b1e9a75cc2d008fcb9b99f8d86af71d853f2e7bdb5f884884860fdeb",
+          "changed": false
+        },
+        "3.817": {
+          "hash": "49dd9e92b1e9a75cc2d008fcb9b99f8d86af71d853f2e7bdb5f884884860fdeb",
+          "originalHash": "49dd9e92b1e9a75cc2d008fcb9b99f8d86af71d853f2e7bdb5f884884860fdeb",
+          "changed": false
+        }
+      }
+    },
+    "moves/dash-strike": {
+      "canvas": {
+        "size": [
+          372,
+          156
+        ],
+        "origin": [
+          66,
+          136
+        ]
+      },
+      "frames": {
+        "0.137": {
+          "hash": "eb7f6bac3bd6b2463405b6a4aebdf13fe8022e90ddd45489996752bc0002c0ac",
+          "originalHash": "eb7f6bac3bd6b2463405b6a4aebdf13fe8022e90ddd45489996752bc0002c0ac",
+          "changed": false
+        },
+        "0.641": {
+          "hash": "e07b22ce6b9d8a454e024c6bc3ec5acec3fb1f11a9b12b71b4073c6361390ce8",
+          "originalHash": "6b66ae70f5b21db7267f80b0c3f630eb54a65df4f487b194fd9d4e5d1fb8105d",
+          "changed": true
+        },
+        "1.237": {
+          "hash": "eb7f6bac3bd6b2463405b6a4aebdf13fe8022e90ddd45489996752bc0002c0ac",
+          "originalHash": "eb7f6bac3bd6b2463405b6a4aebdf13fe8022e90ddd45489996752bc0002c0ac",
+          "changed": false
+        },
+        "2.173": {
+          "hash": "eb7f6bac3bd6b2463405b6a4aebdf13fe8022e90ddd45489996752bc0002c0ac",
+          "originalHash": "eb7f6bac3bd6b2463405b6a4aebdf13fe8022e90ddd45489996752bc0002c0ac",
+          "changed": false
+        },
+        "3.817": {
+          "hash": "eb7f6bac3bd6b2463405b6a4aebdf13fe8022e90ddd45489996752bc0002c0ac",
+          "originalHash": "eb7f6bac3bd6b2463405b6a4aebdf13fe8022e90ddd45489996752bc0002c0ac",
+          "changed": false
+        }
+      }
+    },
+    "moves/earth-stomp": {
+      "canvas": {
+        "size": [
+          290,
+          142
+        ],
+        "origin": [
+          50,
+          128
+        ]
+      },
+      "frames": {
+        "0.137": {
+          "hash": "b3dd22b69c9f34084a2f05d235211399a926192882c271414d56e3c76788485b",
+          "originalHash": "74dfc7c05f08fe96343195d4d92b6f3c8acb6fccb4896dc695eaebdfd606d2a9",
+          "changed": true
+        },
+        "0.641": {
+          "hash": "c5a5211ba4c769ba2ab285c717a6baebce881d3e803d662a308d670b6ec97fa8",
+          "originalHash": "36cc6c5cb1e4472eb6d9a4c868ca74816a6044cdc0600add6eecba1d32bc88ab",
+          "changed": true
+        },
+        "1.237": {
+          "hash": "59b16046a9bdbca1ab0111099a8cd3bd107e1b2e867c5f4cb3b04fc8f19aa67d",
+          "originalHash": "a3a059a5bf971110de6797a1ea9792dabe3ae818e090d71eb6608ad4ece67597",
+          "changed": true
+        },
+        "2.173": {
+          "hash": "5026cfeb90c9f83e2cc21f3e949ece8b3f7b0749e158017bf9a1526cd7b54f6b",
+          "originalHash": "3142621ef3fdcc45669a44798dcc4b18dfbb686a174e1f9210d25529729acf03",
+          "changed": true
+        },
+        "3.817": {
+          "hash": "4d49300a2f32f73638576fdfbe80f92d18e46414b75173a0dd4bd4584ae62c2e",
+          "originalHash": "4d49300a2f32f73638576fdfbe80f92d18e46414b75173a0dd4bd4584ae62c2e",
+          "changed": false
+        }
+      }
+    },
+    "moves/ground-pound": {
+      "canvas": {
+        "size": [
+          304,
+          204
+        ],
+        "origin": [
+          152,
+          168
+        ]
+      },
+      "frames": {
+        "0.137": {
+          "hash": "766c10c0b5d76d6b5845fba839e3707a947c6ad091bb42324ea93702d5995f98",
+          "originalHash": "766c10c0b5d76d6b5845fba839e3707a947c6ad091bb42324ea93702d5995f98",
+          "changed": false
+        },
+        "0.641": {
+          "hash": "76fc40709acd2cc63d7e5ca8efffe1f48071ef782a89046edbdb60b6b3234f55",
+          "originalHash": "6ca78380b44755ce796e3b97c2baac61fde71afe1f38fc064277569cf475f090",
+          "changed": true
+        },
+        "1.237": {
+          "hash": "1e9bd8cc7d8b370ac489263353f25b8693dfd12b87f8f757d29d53aef8cab2c4",
+          "originalHash": "561b9bf6f45cb1ee7e740582a48b2a6676e0b046880cd4463d9385194df9a226",
+          "changed": true
+        },
+        "2.173": {
+          "hash": "1043e56ba20e1a688d8e503b89bc72baf5289899a77f44203a0be8fa92664646",
+          "originalHash": "09de309eef1ea4fb3a1a992be07436632116f7c700dd2c779a8e7661fc2c296d",
+          "changed": true
+        },
+        "3.817": {
+          "hash": "766c10c0b5d76d6b5845fba839e3707a947c6ad091bb42324ea93702d5995f98",
+          "originalHash": "766c10c0b5d76d6b5845fba839e3707a947c6ad091bb42324ea93702d5995f98",
+          "changed": false
+        }
+      }
+    },
+    "moves/holy-smite": {
+      "canvas": {
+        "size": [
+          252,
+          182
+        ],
+        "origin": [
+          42,
+          151
+        ]
+      },
+      "frames": {
+        "0.137": {
+          "hash": "389f73fa37cb89f85b49967b1931bbc16a7b6f3ecfcf9d3764aeb616fad48c2c",
+          "originalHash": "a303d4aa389bb10d50dca6e2d968972436eabbedc62eba5d50759ead5e0c6132",
+          "changed": true
+        },
+        "0.641": {
+          "hash": "2d8fe14d514150fade241d94642ef821ec702f89340bcdcb1e8749f42236d1d9",
+          "originalHash": "77f141a90978410bfc98bf49f23da57ae87639688bf010fb0bc4d2e23a5d9ac9",
+          "changed": true
+        },
+        "1.237": {
+          "hash": "dc5fcc7c7592861e12481253425a7f319732d9f0336fe5770b13c63bf66b5fb9",
+          "originalHash": "5b82e1dd2cbd2e0e8bfda0746b793de812e5dfb0fdd1faba4ca3858bdd7c1131",
+          "changed": true
+        },
+        "2.173": {
+          "hash": "0d0b9a3267e0688660818ae46ccbcb850f103e743d051eefc2b5cdc417a4da3d",
+          "originalHash": "6830b6cfd27992e21afcd69d87ab10379e5b25f37566ac142a91141bfcd04612",
+          "changed": true
+        },
+        "3.817": {
+          "hash": "f7714a57bf706bb848f95fbb77ee510695a99427beb3cc9958b1e531010f10c2",
+          "originalHash": "f7714a57bf706bb848f95fbb77ee510695a99427beb3cc9958b1e531010f10c2",
+          "changed": false
+        }
+      }
+    },
+    "moves/ice-lance-throw": {
+      "canvas": {
+        "size": [
+          310,
+          136
+        ],
+        "origin": [
+          86,
+          134
+        ]
+      },
+      "frames": {
+        "0.137": {
+          "hash": "517dba66e58211421b8d6875b3674fd99eb020319901d7a83783d757d358ca4f",
+          "originalHash": "517dba66e58211421b8d6875b3674fd99eb020319901d7a83783d757d358ca4f",
+          "changed": false
+        },
+        "0.641": {
+          "hash": "7cae2c1bca41661167399fbbe894cb08d3efc465527c56f26fa6db391b60b8bb",
+          "originalHash": "7cae2c1bca41661167399fbbe894cb08d3efc465527c56f26fa6db391b60b8bb",
+          "changed": false
+        },
+        "1.237": {
+          "hash": "6f70aadcee04ebcd837d4221fae910d07417c350c4235ef8c30db06557875cbe",
+          "originalHash": "579f223036c527e4d38dddb9b260772f5692ab9975761944905d786779a938c3",
+          "changed": true
+        },
+        "2.173": {
+          "hash": "f8ae2a2954428acfc63e992256325579211ff1fd50f9ee375b20f291f9cf62a2",
+          "originalHash": "667a45361f71250b3c4f05d8920d3120f29d88d8b0e8516e43bdf22e3e2b011a",
+          "changed": true
+        },
+        "3.817": {
+          "hash": "d0de62662c858d3ecce3a02dc23f6acbec6e38042d0fc3f4b6c4dcada96added",
+          "originalHash": "14ba2b098bf4cf9c90932cb5df9173cf5a585ccc54c1f31efedf721aeb146802",
+          "changed": true
+        }
+      }
+    },
+    "moves/lightning-call": {
+      "canvas": {
+        "size": [
+          290,
+          266
+        ],
+        "origin": [
+          42,
+          231
+        ]
+      },
+      "frames": {
+        "0.137": {
+          "hash": "bf7a4cfb8be0bc616982ed385fdb31e27788bba268ab0b58ca39f54fc63a6a14",
+          "originalHash": "426b488c6ebaa5bfe9d6d574508007b4d424be8639e30b45a3bf4bfbedb67d43",
+          "changed": true
+        },
+        "0.641": {
+          "hash": "ea63576f809454de377e5d1f14a3bcf3f2a3ba3d1ccf738b310e2e60c0ebec07",
+          "originalHash": "39781006effa60caf027cca0755d516a059c976458f53d93a296486410cffab1",
+          "changed": true
+        },
+        "1.237": {
+          "hash": "7481f579fc0a89f158a64b2fd1543bf12cfc0d0d058c2ad1f6d6ab441b65c7b8",
+          "originalHash": "c21ca7e8433d6aa9562826a044fd62460b43ec272b224d58e8a4890b36d68053",
+          "changed": true
+        },
+        "2.173": {
+          "hash": "dd1b5b4d8781593ac2f9c4adcd3935ace00eda4621fba0acce579de6a3bad81b",
+          "originalHash": "95507e9acea64f92827e6e039f86e47a67c0f1eda5a4875a3e613c98c47f9c03",
+          "changed": true
+        },
+        "3.817": {
+          "hash": "d9d87b1af7596381dc4775652c1855df50f2b76e98e6613dd00e072607cc10bb",
+          "originalHash": "d9d87b1af7596381dc4775652c1855df50f2b76e98e6613dd00e072607cc10bb",
+          "changed": false
+        }
+      }
+    },
+    "moves/meteor-call": {
+      "canvas": {
+        "size": [
+          380,
+          240
+        ],
+        "origin": [
+          92,
+          212
+        ]
+      },
+      "frames": {
+        "0.137": {
+          "hash": "f83c40d03ab506a51b0e9112802c5a282f160330022cf27c6181662fb7e5bae7",
+          "originalHash": "042e3b56fb9223bef987fab2d110a8a3f115f9ab91a0727feda9d7bf1f90a35f",
+          "changed": true
+        },
+        "0.641": {
+          "hash": "9ebbc318b1c7c9f127efd73c4fb88318c4685cad77a2025a68ded7a12cd8ba40",
+          "originalHash": "7a4d65f6040b0bf7c3edc139b61d7c30b29d344067c087a2439813038c5596fb",
+          "changed": true
+        },
+        "1.237": {
+          "hash": "342f1bc607335050b6fee4df3748aa0c70566300b4458d40d3eb49991daca81a",
+          "originalHash": "f164999afdb923b6f6da05daa5e2df6a64003e77efc8e2439fcac37cf8fc2e29",
+          "changed": true
+        },
+        "2.173": {
+          "hash": "0e61551a5796d7414abe8f28c20c746f908a6992c98be60270d46bce34b1e615",
+          "originalHash": "030bb378b91c6bde58178db05cf57526a36eec203fa174949d063d90df0547ae",
+          "changed": true
+        },
+        "3.817": {
+          "hash": "39e3f0a38e16c58351a642183bdeb519f14f89db16ab39bbb32e0718724b7a77",
+          "originalHash": "ef498f651a14a05dbc914e97b825ecac41a1d6b2379ecac5a8e175c38b242add",
+          "changed": true
+        }
+      }
+    },
+    "moves/pistol-shots": {
+      "canvas": {
+        "size": [
+          378,
+          76
+        ],
+        "origin": [
+          111,
+          72
+        ]
+      },
+      "frames": {
+        "0.137": {
+          "hash": "2119a0b29f15c2770c8d3a0c13b7195427c67b13be04309970861242b651787a",
+          "originalHash": "2119a0b29f15c2770c8d3a0c13b7195427c67b13be04309970861242b651787a",
+          "changed": false
+        },
+        "0.641": {
+          "hash": "1c10a525d0d05eb56c75867d4df9dc3af2a1e2231a6c3032abadfd2ad41273c2",
+          "originalHash": "ba109cecabbc029f0ba58202ebb67b15c04486a7e4a67043530a6a3f393a6291",
+          "changed": true
+        },
+        "1.237": {
+          "hash": "443821d399dfbdd2fdc728b7fe177bd8d739c59d8391ef63ab616ff812d7a95c",
+          "originalHash": "846e8a863e43e16c34f1a5b81e5ba751ebd0c9ab617070e5c778ea8b8e6759f7",
+          "changed": true
+        },
+        "2.173": {
+          "hash": "ea5f9de02a5ad8baa7bf2192126500bc430a1407d2509945b8724212452582de",
+          "originalHash": "6c587d504268269f405e57b5eed019c2769ce5f97e0ae31c5b8323bff8937aca",
+          "changed": true
+        },
+        "3.817": {
+          "hash": "2119a0b29f15c2770c8d3a0c13b7195427c67b13be04309970861242b651787a",
+          "originalHash": "2119a0b29f15c2770c8d3a0c13b7195427c67b13be04309970861242b651787a",
+          "changed": false
+        }
+      }
+    },
+    "moves/rocket-launcher": {
+      "canvas": {
+        "size": [
+          480,
+          244
+        ],
+        "origin": [
+          178,
+          198
+        ]
+      },
+      "frames": {
+        "0.137": {
+          "hash": "6643191b6d68374a37817d2e8a72ecde269d78c52a1db15e5c9991705d785012",
+          "originalHash": "6643191b6d68374a37817d2e8a72ecde269d78c52a1db15e5c9991705d785012",
+          "changed": false
+        },
+        "0.641": {
+          "hash": "1dadf41b2cc79b04a445c83a2114053e6fce5b8d0ed642e31cdd016dd0fe6ab6",
+          "originalHash": "121976267f5e3520529650b24202bccac0461c1d386e55f8b14d874b4fe476d1",
+          "changed": true
+        },
+        "1.237": {
+          "hash": "927404a4366a0370876dca2a3320a1cbae162b0e757171f1a4eaf8c0b0fda5c8",
+          "originalHash": "4af1cb73393ed28dc7303789eb578928cbf9bdc05eba7bdc874c2c79b06e9565",
+          "changed": true
+        },
+        "2.173": {
+          "hash": "73878f35dae2fe3acfe83ae8a910f03d88d2941593febd7be9dcaf565ec19123",
+          "originalHash": "292476c5bc72757ccad595d4f1076b306b59f5bbb499c36f4f43c26a838f6140",
+          "changed": true
+        },
+        "3.817": {
+          "hash": "a6c7389f90d56f6fb81bae7f4485b65d1f751557f668bbb534671ca4094ec374",
+          "originalHash": "d16f3e315652a52e4c571665f0dbbbd2da27ee016535240088bb1d70872350cc",
+          "changed": true
+        }
+      }
+    },
+    "moves/sword-combo": {
+      "canvas": {
+        "size": [
+          264,
+          150
+        ],
+        "origin": [
+          72,
+          130
+        ]
+      },
+      "frames": {
+        "0.137": {
+          "hash": "86f15205cc042060d73176ff9a20b10e5d4a3995ec8b7a466ae288fe358dafe2",
+          "originalHash": "806a5378ddefbced8a5acdb3a77326b72073b8f00bf72d39139b8dc786e06f2d",
+          "changed": true
+        },
+        "0.641": {
+          "hash": "1540cebb3f6d8af0f8821289780dd61f62b744fc67f4b043ed86d5e6ccf3f8a9",
+          "originalHash": "643b6e831673b1dd95bcd7eb3544099a4bdeb9347cc36146d1ae97e226c0be5f",
+          "changed": true
+        },
+        "1.237": {
+          "hash": "47ec82a8acfb15b50060f36d2903a9c52339ad7bd5efa5b514970c8f253652c7",
+          "originalHash": "40976991ba0ce1e1c313439daeaf94541e48919dbda47ae8502dd6684c1817b7",
+          "changed": true
+        },
+        "2.173": {
+          "hash": "1fa283ab7fc8719be124a5ff2aadfdab28f332b10f0fb7f969246bae0f017dc6",
+          "originalHash": "391db08f78146f8790df08b6129e0f79c1eeedb6c9ce535e022f8dd033d5e39c",
+          "changed": true
+        },
+        "3.817": {
+          "hash": "9f61f5db87599033ea2d027f7cad72513a49710563793b9a4345681169609224",
+          "originalHash": "9f61f5db87599033ea2d027f7cad72513a49710563793b9a4345681169609224",
+          "changed": false
+        }
+      }
+    }
+  },
+  "fireballClassic": {
+    "fps": 30,
+    "frames": 205,
+    "hash": "359bc8e97df7a5dd9149cdb84c175ae8bac8a6ddb14c01d044d54e2485ce6113",
+    "originalHash": "e584dc9b9f8048d1816bab1b9bc727f0e6ba3a01ddea685abb0485672adcbe28",
+    "baselineHash": "e584dc9b9f8048d1816bab1b9bc727f0e6ba3a01ddea685abb0485672adcbe28",
+    "reason": "Child simulation now starts from complete fixed ticks at the exact fractional cue release; classic choreography and palettes are unchanged.",
+    "unchangedPrefix": {
+      "frames": 43,
+      "hash": "3f24b9b5bfc6568227c2345c1f6f6d813498abd82fb9eaccf9e334db14d0c132",
+      "reason": "All charge and flight frames through 1.4 seconds remain byte-identical to the original; the first changed frame is the post-impact sample at 1.4333333333333333 seconds."
+    }
+  },
+  "review": {
+    "date": "2026-11-05",
+    "legacySamples": 55,
+    "byteIdenticalLegacySamples": 19,
+    "changedClockSamples": 36,
+    "verifiedHostRates": [
+      30,
+      60,
+      144,
+      165
+    ],
+    "visualComparison": "All 11 moves reviewed against 4249ebd on original crops; palettes, core shapes, release trajectories and composition retained. Sparks, debris and smoke reflect fixed simulation ages; quantized pure phases use the canonical presentation clock.",
+    "documentation": "docs/EXPORT_CONTRACTS.md#clock-changes-and-artwork-regression-evidence"
+  }
+}

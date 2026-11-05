@@ -6,8 +6,8 @@
       "seed": 4967,
       "color": "f9366c4a2af35da0d90b7c38c3304b943a602f45af59ce3db956d941cfb594fc",
       "depth": "8550a8ca04b90787a386bbc447477a4c78c383743bb5c2a3603dadcdad49cc84",
-      "light": "6f2acc41304557f28d9dcc60ef071224389a44716326e146ea4de34a067f8e49",
-      "hdrLight": "ccd3d7a95a2cfe4e8b232c4cd57deb82e462fed2a47bc676162a420d7a2b8b6e"
+      "light": "9835442d67e461edcf23e81197eb4559327820148dbd6feee1f2c8f129206236",
+      "hdrLight": "35b597b38771a42419a33f099a8cdd097c3b084546d60e8198ae0e53dfe13e82"
     },
     {
       "time": 0.92,
@@ -15,8 +15,8 @@
       "seed": 4967,
       "color": "ca2d09f09f87eb7c8a6861f735e001bc3fcf62af494fdd635628504cfc51e99e",
       "depth": "3304ee2f7d15e923f478ab6a8f4f823c4d89820d1f5721222f702b4266ecfa95",
-      "light": "d04f340365a71ff0fac5e4330a7efb1a0c1154fd7441262f0124dbd68563f6c8",
-      "hdrLight": "ed9bc53e0ed72ab52e201744c0d647e38421ef9529d1472b2a436ca95fc62cd6"
+      "light": "ac8a6acf5ec519b5a1f12de747ca1e510da2e2f47c29fc71e5c188fcd1986d3c",
+      "hdrLight": "e6ab716d1412ae4b5079aed8581189988461fabdc79fda8ee44df9ef287c3a6a"
     },
     {
       "time": 2.3,
@@ -24,8 +24,8 @@
       "seed": 4967,
       "color": "ddfef39ca04ad42833703e14a842186fe4461933b1e7002a0cf5b23669588990",
       "depth": "13d0bdc165070b198c3659364e7003409571bf1810cfad739b508bad3fb92815",
-      "light": "e40826b7f57ff4097e303ccd56ccf37ce0b2ee9b1bc142876f7799cf48350c1b",
-      "hdrLight": "01a19eeb2c1fe17d7d1b6a34b5bee15f3f90cd40cdc9aa48fc8d224b664109da"
+      "light": "854f8f6498867b223fca55244ac9732c176d0d3c1457113ecbb24235cab89a2f",
+      "hdrLight": "a8091d1761d624dcd36882d26802265270b0c55a55abf80b5536a3c23f3646b9"
     },
     {
       "time": 3.9,
@@ -33,17 +33,17 @@
       "seed": 4967,
       "color": "9bdbb9f315827bd9f5b717d98e39f9db4be3eea99287819de5ee2dcddd48116a",
       "depth": "22b75ffc4f2f47c44a85f3ea6b3d07c3142a4c015137ac83056665f3df32ce74",
-      "light": "1b7fae1980758d8a381d08458fcd499bd3ea283cabb600b3b5d5e5ebfb280703",
-      "hdrLight": "c67d010dd8272db8baddd57071d136f34cdf8e40a9c12a6bb5f1ce1737890511"
+      "light": "ee6e9102940efd25f186527dfb60c4bdb8c61c37ea7a14ebaf059b2ef6deb1e8",
+      "hdrLight": "4ebabb717313416b4dd2b7900fe5d44aeedc3ec80cf0b5287e2f637d481317e9"
     },
     {
       "time": 4.9,
       "yaw": 0.68,
       "seed": 4967,
-      "color": "57050cbd264dfba565fbe022251a311cefb63420902388a9880c0e4d377cbc09",
+      "color": "1acf58616fdc946ae8cc31c3fce78b748f5212a3106b777997392c47fed19a84",
       "depth": "836d4264b215222b1f22502379dc06dfe30047a2937867bcef3dee515f1d6a83",
-      "light": "89ede3da33a8d34fa78da64f720f500d35f8dea26c6d1a95ca5272bbe0882925",
-      "hdrLight": "2d924e70a8956454a57894d24666e7c6727f5a7820011d929caa7752e49fba3f"
+      "light": "5be9025462965885823f0ab3857e9897e8772c5bad47d001ef167c88f5b705b9",
+      "hdrLight": "09f65495c73a2063914f407b1a86f356190e2c0bd4374bf51a42c5f0823dabaf"
     },
     {
       "time": 2.3,
@@ -51,8 +51,8 @@
       "seed": 4967,
       "color": "f5b383b4e4c69ef7de65c8f6911456eccdc1e58ef817d4a90733aba7c370fedb",
       "depth": "3891b7226e67f98c0b4ee3022dd3a05f4adcca8323351087b8cbd3261bb9c956",
-      "light": "4593160da3c54b13df94a746fe1613c2877382efca0011c1acb79e98f6d7572f",
-      "hdrLight": "ccbf09cdadde081e1baad92b35fdb5e6c64433c2b8d6bb161285ff2003261371"
+      "light": "a3702bf65fc3b38b2b578a7d7a1733b480529530a5088cd93b01986aabb056a9",
+      "hdrLight": "c775201041c7b8005827b3d9c89622be454d3ed2b261af742aca015d9cf87a00"
     },
     {
       "time": 2.3,
@@ -60,8 +60,15 @@
       "seed": 0,
       "color": "1feccbebdd830fe1cb608da12bbfbea4ba83dc0a91898694e9cc432a59956988",
       "depth": "a9d47eb55be7532e73578385fd4cfd3802179aabc6660673204d11074c91be95",
-      "light": "9aea94e8d718366951d61147d476f76e0723b4b1d49669080084c06fcc7cfe6a",
-      "hdrLight": "5b02a516948afb052230633cc17c6a76d1da71b5926beb1c52019f8f117756f6"
+      "light": "10d4d0f613f0f15230966d19d13cadbb495c7fefbc3ab8078c4d04aca32a3a89",
+      "hdrLight": "58893be07a91b881e6ce7e366cc9febd18cf170572f751bf461634c529ba942e"
     }
-  ]
+  ],
+  "rendererReview": {
+    "date": "2026-11-05",
+    "baseline": "4249ebdcf59d974b36fe17868959cb55b3073cfe",
+    "contract": "sorted surface coverage, occluded emission, Float32 depth, authoritative HDR",
+    "visualReview": "Paired packed/cinematic captures at four timeline/orbit samples; silhouette, timing, coverage and foreground ownership reviewed before regeneration.",
+    "baselineVerified": true
+  }
 }

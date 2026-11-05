@@ -2,9 +2,10 @@
 // opens one effect with its options, a sprite sheet and the code to use it.
 
 import { effects, categories as catalogCategories } from "../src/fx/index.js";
-import { createFrame, clearFrame, createFx, createAct, actBounds, composite, backdrop, drawActor, painterFor, stockActor, actorAlphaOf, sceneCameraOffset, PAL, BACKDROPS } from "../src/core/index.js";
+import { createFrame, clearFrame, createFx, createAct, actBounds, composite, backdrop, drawActor, painterFor, stockActor, actorAlphaOf, sceneCameraOffset, PAL, BACKDROPS, resolveEffectExport, edgeFade, frameDurationMs, effectExampleCode2D, type ActorSelection2D, atlasMetadata, actTiming, transformImpactContact2D, defineRestorationTiming2D } from "../src/core/index.js";
 import { effectsKo, tagsKo } from "../src/i18n/ko/index.js";
 import { encodeAnimatedWebP } from "./animated-webp.js";
+import { encodeRGBAPNG, copyAtlasFrame } from "./png.js";
 
 const categoryKo: Record<string, [string, string]> = {
   moves: ["공격 동작", "준비부터 회복까지 이어지는 공격"], fire: ["불", "횃불, 화염 숨결과 불기둥"], explosions: ["폭발", "폭발, 연기와 불꽃놀이"],
@@ -82,13 +83,13 @@ class Player {
   layout(aspect: number, pad: number) {
     Object.assign(this, { aspect, pad });
     // an act needs room for the whole performance, not just the effect's canvas
-    const acted = this.acted, b = acted ? { ...actBounds(this.fx.mod) } : null;
+    const acted = this.acted, b = acted ? { ...actBounds(this.fx.mod, {...this.opts,flip:this.flip}) } : null;
     // an act happens above the floor: don't spend the tile on bricks
-    if (b) b.y1 = Math.min(b.y1, 22);
+    if (b && !this.opts.actorSelection) b.y1 = Math.min(b.y1, 22);
     const [w, h] = b ? [b.x1 - b.x0, b.y1 - b.y0] : this.fx.meta.size, [ox, oy] = b ? [-b.x0, -b.y0] : this.fx.meta.origin;
     this.W = Math.ceil(Math.max(w * (acted ? Math.min(pad, 1.1) : pad), h * (acted ? Math.min(pad, 1.1) : pad) * aspect));
     this.H = Math.ceil(this.W / aspect);
-    this.x = Math.floor((this.W - w) / 2) + ox;
+    this.x = Math.floor((this.W - w) / 2) + (this.flip ? w - ox : ox);
     // an act stands near the bottom of its tile, with the room above it
     this.y = b ? Math.max(oy + 2, this.H - b.y1 - 2) : Math.floor((this.H - h) / 2) + oy;
     this.canvas.width = this.W;
@@ -108,7 +109,7 @@ class Player {
   }
   // an effect with an act plays it, unless the character is switched off
   get acted() {
-    return !!this.fx.mod.act && this.actor;
+    return (!!this.fx.mod.act || !!this.opts.actorSelection) && this.actor;
   }
   restart() {
     this.inst = (this.acted ? createAct : createFx)(this.fx.mod, { x: this.x, y: this.y, flip: this.flip, ...this.opts });
@@ -242,7 +243,10 @@ function filter() {
 
 // ---- detail
 let detail: Player | null = null;
+const downloadURLs:string[]=[];
+function clearDownloadURLs(){for(const url of downloadURLs)URL.revokeObjectURL(url);downloadURLs.length=0;}
 function openDetail(fx: GalleryEffect) {
+  clearDownloadURLs();
   const d = $("#detail");
   const big = $("#big"), screen = isScreen(fx);
   big.parentElement!.classList.toggle("screen", screen);
@@ -256,12 +260,13 @@ function openDetail(fx: GalleryEffect) {
     ...[["종류", m.loop ? "반복" : "한 번 재생"], ["길이", `${+m.duration.toFixed(2)}초, ${m.fps}fps에서 ${frames}프레임`], ...(fx.mod.act ? [["동작", actFacts(fx.mod)]] : []), ["캔버스", `${m.size[0]} × ${m.size[1]}px`], ["태그", m.tags.map(tagLabel).join(", ")]].flatMap(([k, v]) => [el("dt", { textContent: k }), el("dd", { textContent: v })]),
   );
   // controls
-  $("#d-bg").replaceChildren(...BACKDROPS.concat("none").map((b) => btn(backgrounds[b] ?? b, () => detail!.setBg(b), b === m.bg, "bg")));
-  $("#d-speed").replaceChildren(...[0.25, 0.5, 1].map((s) => btn(`${s}×`, () => (detail!.speed = s), s === 1, "speed")));
+  $("#d-bg").replaceChildren(...BACKDROPS.concat("none").map((b) => btn(backgrounds[b] ?? b, () => { detail!.setBg(b); code(detail!.fx); }, b === m.bg, "bg")));
+  $("#d-speed").replaceChildren(...[0.25, 0.5, 1].map((s) => btn(`${s}×`, () => { detail!.speed = s; code(detail!.fx); }, s === 1, "speed")));
   const pal = $("#d-pal");
   pal.replaceChildren(el("option", { value: "", textContent: "기본 색상" }), ...Object.keys(PAL).map((k) => el("option", { value: k, textContent: palettesKo[k] ?? tagLabel(k) })));
   pal.value = "";
-  $("#d-actor").hidden = !m.actor;
+  $("#d-actor").hidden = !m.actor && !fx.mod.act;
+  actorControls();
   $("#d-actor").setAttribute("aria-pressed", "true");
   $("#d-flip").setAttribute("aria-pressed", "false");
   $("#d-play").setAttribute("aria-pressed", "true");
@@ -289,40 +294,74 @@ function btn(label: string, fn: () => void, on: boolean, group: string) {
   });
   return b;
 }
-function code(fx: GalleryEffect) {
-  const v = fx.id.split("/")[1].replace(/-(\w)/g, (_, c) => c.toUpperCase());
-  const opts = { x: 160, y: 120, ...(detail!.opts.palette ? { palette: "[…]" } : {}), ...(detail!.flip ? { flip: true } : {}) };
-  const acted = !!fx.mod.act, make = acted ? "createAct" : "createFx";
-  $("#d-code").textContent = [
-    `import { createFrame, ${make}, composite } from "poku-pixel-fx";`,
-    `import * as ${v} from "poku-pixel-fx/fx/${fx.id}";`,
-    ``,
-    `const frame = createFrame(320, 180);`,
-    `const fx = ${make}(${v}, ${JSON.stringify(opts).replace(/"\[…\]"/, "[…]").replace(/"(\w+)":/g, "$1: ").replace(/,/g, ", ")});`,
-    ``,
-    `// 매 프레임`,
-    `fx.update(dt);`,
-    `fx.draw(frame);          // 색상과 빛 버퍼`,
-    `composite(frame, imageData.data, null);`,
-    ...(acted ? [``, `// 캐릭터 타이밍: ${v}.act (자세, 타격, 정지)`] : []),
-  ].join("\n");
+function actorControls() {
+  let host=document.querySelector<HTMLElement>('#d-authoring');
+  if(!host){host=el('div',{id:'d-authoring',className:'row'});$('#d-actor').parentElement!.after(host);}
+  const select=(label:string,entries:[string,string][])=>{
+    const s=el('select',{className:'btn',ariaLabel:label},entries.map(([value,textContent])=>el('option',{value,textContent})));
+    host!.append(el('label',{},[label+' ',s]));return s;
+  };
+  host.replaceChildren();
+  const character=select('배우',[['stock','기본'],['human','Human'],['cat','고양이'],['fox','여우'],['owl','부엉이'],['dragon','드래곤']]);
+  const size=select('원화 높이',[[32,'32px'],[48,'48px'],[64,'64px'],[96,'96px'],[128,'128px'],[192,'192px']].map(([a,b])=>[String(a),String(b)]));size.value='96';
+  const view=select('시점',[['three-quarter','3/4'],['side','측면'],['front','정면'],['back','후면']]);
+  const motion=select('동작',[['act','ACT 타임라인'],['idle','대기'],['walk','걷기'],['guard','방어']]);
+  const weapon=select('무기',[['auto','ACT 무기'],['none','없음'],['sword','검'],['bow','활']]);
+  if(detail!.fx.mod.create&&detail!.fx.mod.act?.onBody)host.append(el('small',{textContent:'몸이 변형되는 효과는 시작 자세를 기준으로 재생합니다.'}));
+  const sync=(resetMotion=false)=>{
+    const kind=character.value,human=kind==='human',stock=kind==='stock';
+    size.disabled=stock;view.disabled=!human;weapon.disabled=!human;motion.disabled=stock;
+    if(resetMotion){
+      const choices:[string,string][]=human?[['act','ACT 타임라인'],['idle','대기'],['walk','걷기'],['guard','방어']]:kind==='owl'||kind==='dragon'?[['idle','대기'],['fly','비행']]:[['idle','대기'],['walk','걷기'],['trot','달리기']];
+      motion.replaceChildren(...choices.map(([value,textContent])=>el('option',{value,textContent})));
+    }
+    if(stock)delete detail!.opts.actorSelection;
+    else{
+      const selection:ActorSelection2D=human?{kind:'human',height:+size.value,style:{view:view.value as any,hair:'ponytail',outfit:'jacket'},motion:motion.value as any,weapon:weapon.value as any}:
+        {kind:'creature',species:kind as any,height:+size.value,motion:motion.value as any};
+      detail!.opts.actorSelection=selection;
+      detail!.actor=true;$('#d-actor').hidden=false;$('#d-actor').setAttribute('aria-pressed','true');
+    }
+    detail!.layout(detail!.aspect,detail!.pad);code(detail!.fx);$('#d-sheet').replaceChildren();
+  };
+  size.disabled=view.disabled=motion.disabled=weapon.disabled=true;
+  character.addEventListener('change',()=>sync(true));
+  for(const input of[size,view,motion,weapon])input.addEventListener('change',()=>sync());
 }
-function sheet() {
-  const fx = detail!.fx, m = fx.meta, [w, h] = m.size, n = Math.max(1, Math.round(m.duration * m.fps) + (m.loop ? 0 : 1));
+function code(fx: GalleryEffect) {
+  const p = detail!;
+  $("#d-code").textContent = effectExampleCode2D({ id: fx.id, width: p.W, height: p.H,
+    x: p.x, y: p.y, options: { seed: p.inst.options?.seed ?? p.inst.fx?.options.seed ?? fx.meta.options.seed ?? 1, ...p.opts },
+    flip: p.flip, acted: p.acted, actor: p.actor, background: p.bg, speed: p.speed });
+}
+
+async function sheet() {
+  const fx = detail!.fx, m = fx.meta;
+  const plan = resolveEffectExport(m,{options:{...detail!.opts,flip:detail!.flip}}), {w,h}=plan.layout, n=plan.n;
   const cols = Math.min(n, Math.max(1, Math.ceil(Math.sqrt((n * h) / w)))), rows = Math.ceil(n / cols);
   const cv = el("canvas", { width: cols * w, height: rows * h }), ctx = cv.getContext("2d")!;
-  const frame = createFrame(w, h), img = ctx.createImageData(w, h);
-  const inst = createFx(fx.mod, { x: m.origin[0], y: m.origin[1], ...detail!.opts, flip: detail!.flip });
+  const frame = createFrame(w, h,plan.layout.ox,plan.layout.oy), img = ctx.createImageData(w, h);
+  const atlas=new Uint8Array(cols*w*rows*h*4);
+  const inst = createFx(fx.mod, plan.options);
   for (let i = 0; i < n; i++) {
     if (i) inst.update(1 / m.fps);
     inst.draw(clearFrame(frame));
+    edgeFade(frame,plan.settings.edgeFade);
     composite(frame, img.data, null);
     ctx.putImageData(img, (i % cols) * w, Math.floor(i / cols) * h);
+    copyAtlasFrame(atlas,cols*w,img.data,w,h,(i%cols)*w,Math.floor(i/cols)*h);
   }
   const k = Math.max(1, Math.min(4, Math.floor(1100 / (cols * w))));
   const pic = el("img", { src: cv.toDataURL("image/png"), alt: `${m.name} 스프라이트 시트`, width: cols * w * k, height: rows * h * k });
   const name = fx.id.split("/").pop()!.replace(/[^a-zA-Z0-9_-]/g, "-") || "effect";
-  const png = el("a", { className: "btn", href: pic.src, download: `${name}.png`, textContent: "PNG 다운로드" });
+  const pngURL=URL.createObjectURL(await encodeRGBAPNG(cols*w,rows*h,atlas));
+  const png = el("a", { className: "btn", href: pngURL, download: `${name}.png`, textContent: "이펙트 PNG" });
+  const metadata=atlasMetadata({id:fx.id,name:m.name,animationName:name,image:`${name}.png`,w,h,n,fps:plan.fps,loop:m.loop,columns:cols,pivot:plan.layout.pivot,
+    contacts:inst.contacts.map(c=>transformImpactContact2D(c,{flip:inst.options.flip,angle:inst.options.angle})),settings:plan.settings,
+    restoration:fx.mod.restoration?defineRestorationTiming2D(fx.mod.restoration):undefined,act:fx.mod.act?actTiming(fx.mod):undefined});
+  const jsonURL=URL.createObjectURL(new Blob([JSON.stringify(metadata,null,2)],{type:'application/json'}));
+  const json=el('a',{className:'btn',href:jsonURL,download:`${name}.json`,textContent:'재생 정보 JSON'});
+  downloadURLs.push(pngURL,jsonURL);
   // Prevent the hosted gallery's legacy PNG helper from adding a duplicate link.
   png.dataset.sheetDownload = "true";
   const status = el("p");
@@ -368,13 +407,49 @@ function sheet() {
       status.textContent = error instanceof Error ? error.message : "WebP 파일을 만들지 못했습니다. PNG를 이용해 주세요.";
     } finally { webp.disabled = false; }
   });
-  const downloads = el("div", { className: "row" }, [png, webp]);
+  const scene=el('button',{className:'btn',type:'button',textContent:'현재 장면 PNG + JSON'});
+  scene.addEventListener('click',async()=>{scene.disabled=true;try{await sceneSheet(status);}catch(error){status.textContent=error instanceof Error?error.message:'장면을 저장하지 못했습니다.';}finally{scene.disabled=false;}});
+  const downloads = el("div", { className: "row" }, [png, json, scene, webp]);
   $("#d-sheet").replaceChildren(pic, downloads, status, el("p", { textContent: `${w} × ${h}px 프레임 ${n}개, 가로 ${cols}개, ${m.fps}fps, ${m.loop ? "반복 재생" : "한 번 재생"}. WebP는 현재 미리보기의 배경과 캐릭터, 재생 속도를 반영한 애니메이션입니다. 압축으로 색상이 조금 달라질 수 있습니다.` }));
+}
+async function sceneSheet(status:HTMLElement){
+  const current=detail;if(!current)return;
+  const fx=current.fx,m=fx.meta,canvas=el('canvas'),player=new Player(canvas,fx,current.aspect,current.pad);
+  player.opts=JSON.parse(JSON.stringify(current.opts));player.flip=current.flip;player.actor=current.actor;player.bg=current.bg;player.speed=current.speed;
+  player.layout(current.aspect,current.pad);
+  const step=1/m.fps;
+  let n=Math.max(2,Math.round(m.duration*m.fps)+(m.loop?0:1));
+  if(player.acted){
+    const probe=createAct(fx.mod,{x:player.x,y:player.y,flip:player.flip,...player.opts});n=1;
+    while((m.loop?probe.t<m.duration:!probe.done())&&n<m.fps*120){probe.update(step);n++;}
+    if(n>=m.fps*120)throw new Error('효과의 재생 시간이 너무 깁니다.');
+  }
+  const w=player.W,h=player.H,cols=Math.min(n,Math.max(1,Math.ceil(Math.sqrt(n*h/w)))),rows=Math.ceil(n/cols);
+  const atlas=new Uint8Array(cols*w*rows*h*4),name=fx.id.replace('/','-')+'-scene';
+  const settings={output:'scene-sheet',background:player.bg,actor:player.actor,actorSelection:player.opts.actorSelection,
+    options:player.opts,flip:player.flip,speed:player.speed,cameraMotion:!reduced&&player.bg!=='none',fps:m.fps*player.speed};
+  const effect=player.acted?player.inst.fx:player.inst;
+  const metadata=atlasMetadata({id:fx.id,name:m.name,animationName:name,image:`${name}.png`,w,h,n,fps:m.fps*player.speed,
+    loop:m.loop,columns:cols,pivot:[player.x,player.y],settings,act:fx.mod.act?actTiming(fx.mod):undefined,
+    contacts:effect.contacts.map((c:any)=>transformImpactContact2D(c,{flip:player.flip,angle:player.opts.angle})),
+    restoration:fx.mod.restoration?defineRestorationTiming2D(fx.mod.restoration):undefined});
+  for(let i=0;i<n;i++){
+    if(i)player.inst.update(step);player.render();
+    const [sx,sy]=sceneCameraOffset(player.inst.shake,reduced,player.bg==='none');
+    copyAtlasFrame(atlas,cols*w,player.img.data,w,h,(i%cols)*w,Math.floor(i/cols)*h,sx,sy);
+    metadata.meta.pokuFx.timeSamples[i]=player.inst.t;
+    if(player.inst.frozen)(metadata.meta.pokuFx.frozenFrames??=[]).push(i);
+    if(i%8===0){status.textContent=`장면 시트 생성 중… ${i+1}/${n}`;await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));}
+  }
+  const png=URL.createObjectURL(await encodeRGBAPNG(cols*w,rows*h,atlas)),json=URL.createObjectURL(new Blob([JSON.stringify(metadata,null,2)],{type:'application/json'}));
+  downloadURLs.push(png,json);
+  status.replaceChildren(el('a',{className:'btn',href:png,download:`${name}.png`,textContent:'장면 PNG 다운로드'}),' ',
+    el('a',{className:'btn',href:json,download:`${name}.json`,textContent:'장면 JSON 다운로드'}));
 }
 function wireDetail() {
   const d = $("#detail");
   $("#d-close").addEventListener("click", () => d.close());
-  d.addEventListener("close", () => (detail = null));
+  d.addEventListener("close", () => { detail = null; clearDownloadURLs(); });
   d.addEventListener("click", (e) => e.target === d && d.close());
   $("#d-play").addEventListener("click", (e) => {
     detail!.playing = !detail!.playing;
@@ -385,19 +460,21 @@ function wireDetail() {
   $("#d-flip").addEventListener("click", (e) => {
     detail!.flip = !detail!.flip;
     (e.target as HTMLElement).setAttribute("aria-pressed", String(detail!.flip));
-    detail!.restart();
+    detail!.layout(detail!.aspect, detail!.pad);
     code(detail!.fx);
   });
   $("#d-actor").addEventListener("click", (e) => {
     detail!.actor = !detail!.actor;
     (e.target as HTMLElement).setAttribute("aria-pressed", String(detail!.actor));
     // with an act, the character is the performance: off shows the effect alone, as a sprite sheet has it
-    if (detail!.fx.mod.act) detail!.layout(detail!.aspect, detail!.pad);
+    detail!.layout(detail!.aspect, detail!.pad);
     detail!.dirty = true;
+    code(detail!.fx);
   });
   $("#d-seed").addEventListener("click", () => {
     detail!.opts.seed = 1 + Math.floor(Math.random() * 9999);
     detail!.restart();
+    code(detail!.fx);
   });
   $("#d-pal").addEventListener("change", (e) => {
     if ((e.target as HTMLInputElement).value) detail!.opts.palette = PAL[(e.target as HTMLInputElement).value as keyof typeof PAL];
@@ -405,7 +482,10 @@ function wireDetail() {
     detail!.restart();
     code(detail!.fx);
   });
-  $("#d-make").addEventListener("click", sheet);
+  $("#d-make").addEventListener("click", async()=>{
+    const button=$('#d-make') as HTMLButtonElement;button.disabled=true;
+    try{clearDownloadURLs();await sheet();}catch(error){$('#d-sheet').textContent=error instanceof Error?error.message:'시트를 만들지 못했습니다.';}finally{button.disabled=false;}
+  });
   $("#d-copy").addEventListener("click", async (e) => {
     const text = $("#d-code").textContent;
     try {

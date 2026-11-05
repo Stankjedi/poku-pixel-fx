@@ -18,64 +18,71 @@
       "time": 0.35,
       "seed": 2419,
       "yaw": 0.68,
-      "color": "3c99e76f9828bc14a4dc6160a2bed86494360215a98431d3ef959763ee424ce4",
-      "light": "e5b4e1a310f36c993c99682326f50aa9e2dfb46619d0cb6d3b151a8c050b96ba",
+      "color": "2cd33953abb7dad44978d017b418aa6e13e6632dab9478fbf66eb5a1e35064f2",
+      "light": "1da393804c89a94ae28b9482ab76c6637f6079d76611aa9c87c4c8fb8850f19f",
       "depth": "814da72fc8ff238e3e6eb24baccee98f00b9ee5f3e95c411d04d2f7a3ea5cc30",
-      "hdrLight": "eafa0bc849989bb80dddb087f0443a7c98ae8419ae38e352d72664c1e51c216e"
+      "hdrLight": "e7ec3196e6d51fb4f50e01c7fb669047d9525b93bdac933dae69b0536d47101a"
     },
     {
       "time": 0.6,
       "seed": 2419,
       "yaw": 0.68,
-      "color": "3cd0fc8113facf64f2930476127a9db1dd3b804f7696f307b29d0b19945a2f2c",
-      "light": "7f1b11861d132f623a3da7068eb805e01fe919665b93931ecce2d9338d8aa74b",
+      "color": "d671524278cfd81fc66c160cb6e0c891ac6ba6cad363a1a5f6588ae63819b52c",
+      "light": "60699278c0c3a0f595da6b2780ab33bfab432b9e90fdbc61e3ff25ed1297ac45",
       "depth": "ce723031266bee0c430cc4b682166171d813610ae83848a2c8f1167ee4dbf73d",
-      "hdrLight": "7b799dd5547a51eace5f146a5bf6c888d19c1e4d7f1fd8cf54dd2eba18d65bf8"
+      "hdrLight": "b3af46425e87a84330bfc25243135a8c2cc82cb312f4f54e8ae0c2f0f418ac53"
     },
     {
       "time": 0.65,
       "seed": 2419,
       "yaw": 0.68,
-      "color": "440cc7aa455f20a5f730bf2150406f4046b63efb4c489477d6fb5ed94c358bde",
-      "light": "761ac9156e9ed38731ea1b74f0e14f34d99a8e0f1ffb9158fc70941598a60c40",
+      "color": "2e454cba422647c5b56f81afa61f1802ed6e729b40267ff1f8400a0ae9a0a5f5",
+      "light": "6024d495a05d7b7bb44adbbc93c5d9a14b73481e8b668d02dc2eb25730fd8900",
       "depth": "c5dfe62fc35b13d7acc06d6b88a482e479256723c2a5e1f70e8460124a45a6b8",
-      "hdrLight": "209670c8d71673e8243227941748da2e26b1de86b3557037d5feeabecd4dbda1"
+      "hdrLight": "f48971ece5a2b82cf94c26437bf71e4e3bd9773d4b6faf2c07d2b0204d39311a"
     },
     {
       "time": 1.1,
       "seed": 0,
       "yaw": 0.68,
-      "color": "11ee1aa7a430fe7bc10e0b2297f3eab153d5d9acc3bf8c5c75898ae2e57fa182",
-      "light": "b5a01e7723b17f7fc4573c3b1a940f6061ad06dababb43a1fdc8cd187d88043a",
+      "color": "8e05edda9ff8e698a9623c6e9f732612d1f153ed816a903d16b9caed05d80070",
+      "light": "3f804ed4c9bb2985d3d9d588feaa0c689de1db2bc968300fcb57e45a6046a009",
       "depth": "4746751915f0582cef0f9aacd27ddfa375d036c7553cca34bc9af2fbc7e4c65f",
-      "hdrLight": "c793d083a76f5bdaeb7fa4e3d3ef250050c9bafcb38671b3cde2cf93318a6353"
+      "hdrLight": "285f2b716478ffeb986474ed3a9ddc37d75b411535e06baa85834a68882f05e2"
     },
     {
       "time": 1.95,
       "seed": 2419,
       "yaw": 0.68,
-      "color": "d51b0642b4431dc9abdcee34fa5d4cf4b3b068b1c6e2473563bc90a2efa59d7e",
-      "light": "80ec8503db14fa8063589b4631bb0132a1cc99b1a1dfb68a9169150225874836",
+      "color": "3876b3b16a4a06e551b61ac4d4f84b28fc1b6d143e266f2fe1a513ce3d0b251c",
+      "light": "7dfe44d9ad85ee043eb95e847faa3d41227539a0be492a8d312339eff5b518b8",
       "depth": "2cf98cc2c6f1dd1922463b25f3331af858282b04b5d081f63517a2a8dab67290",
-      "hdrLight": "aa9591401a3d99d198d3afe7fed9c2bf6a045d4be95434983ced789f6e2969fb"
+      "hdrLight": "b7fcbc6f6ecd92d8b3a2078779734e816d82a348ca97ae1b831e30239c722dda"
     },
     {
       "time": 2.25,
       "seed": 2419,
       "yaw": 0.68,
-      "color": "fda47f5b51b0b6a42b70ad4b33818eab13d6cb188f0b14791c2c7faf5e76cc9f",
-      "light": "8f24f8790d59dfeb1f58e725283ea5dcfb810fc9a500405f9f1acb637199168a",
+      "color": "175340547d3272cf622df6a2f478193cdb2ca76b8e058fcb7dd14ea61d54bf02",
+      "light": "3e91e9f5eb83b58e19d5e1ca5ae53f13423c3539865e85d74d63e310c19ada34",
       "depth": "3d2e7089cec905a2d217eb7d5724c3d5044e2692110983d7dc3f1a465cffc2cc",
-      "hdrLight": "24e57335dc10c050672d5511dfb050fb58716efc7a1ce9f948ecfbc21551da79"
+      "hdrLight": "fa9c1969cdfefa91a6760c581dd4ed78b2f39288bc7b85141d4907b95a873c8f"
     },
     {
       "time": 1.1,
       "seed": 42,
       "yaw": 1.3,
-      "color": "f9034ffca7e82fd9ded6fe9b233addf803dbdf128b0f23e040ebd68002314b31",
-      "light": "ea1116a8b934a9f110ff83fe6fc2c4a45af4a9079993be8f0fd8444b416a70f6",
+      "color": "55baf7bfd821e44fafefa0464d3ad8f8c75bb72e5c2fd14cbe02ba574b28f2c1",
+      "light": "c6e5b49e9a3f27f6723f096e40063a1f1292bbe5fa1b4dc694de9143bf090cbc",
       "depth": "e014edccf94556e64e6e73f75db2c0c30179fe592bf4fc6540efff0e1cf97f08",
-      "hdrLight": "19e6e090df2a853bd87bd251ce6e1df2e49fd3c6aeb2391b4a563c231c8745e1"
+      "hdrLight": "3e744e2e701d15f39e62186905f31d490efcecec69183614f269652a7068a213"
     }
-  ]
+  ],
+  "rendererReview": {
+    "date": "2026-11-05",
+    "baseline": "4249ebdcf59d974b36fe17868959cb55b3073cfe",
+    "contract": "sorted surface coverage, occluded emission, Float32 depth, authoritative HDR",
+    "visualReview": "Paired packed/cinematic captures at four timeline/orbit samples; silhouette, timing, coverage and foreground ownership reviewed before regeneration.",
+    "baselineVerified": true
+  }
 }

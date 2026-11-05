@@ -104,5 +104,5 @@ for (let f = 0; f < n; f++) {
 const scale = +(flags.scale ?? Math.max(1, Math.floor(1280 / W)));
 if (outFile.endsWith(".png")) {
   save(outFile, encodePNG(W, H, frames[Math.floor(n * 0.45)].color));
-} else writeVideo(outFile, { w: W, h: H, fps, frames }, scale);
+} else if (!writeVideo(outFile, { w: W, h: H, fps, frames }, scale)) throw new Error("요청한 영상을 생성할 수 없습니다: ffmpeg가 PATH에 없습니다");
 console.log(`이펙트 ${cells.length}개, ${W}x${H} 원본 픽셀 x${scale}, ${seconds}초 -> ${outFile}`);

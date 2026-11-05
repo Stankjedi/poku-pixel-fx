@@ -3,6 +3,7 @@
  */
 import { Painter } from './painter.js';
 import { hex } from './color.js';
+import { characterScratch, characterPalette } from './character-cache.js';
 import { humanHeadOffset, paintHumanHair2D, paintHumanFacialHair2D, paintHumanGarment2D, paintHumanAppearanceEyes2D } from './human-appearance.js';
 import { paintHumanView2D } from './human-view.js';
 import type { PaintFrame } from './painter.js';
@@ -208,10 +209,9 @@ export function renderHuman2D(style: HumanStyle = {}, pose: HumanPose = {}): Hum
   const pad=Math.ceil((style.hair==='ponytail'?23:style.faceShape&&style.faceShape!=='oval'?17:14)*s)+3,x=Math.floor(Math.min(...joints.map(p=>p[0])))-pad,y=Math.floor(Math.min(...joints.map(p=>p[1])))-pad;
   const w=Math.ceil(Math.max(...joints.map(p=>p[0])))-x+pad+1,h=Math.ceil(Math.max(...joints.map(p=>p[1])))-y+pad+1;
   if(w*h>1_000_000)throw new RangeError('Human pose exceeds the 1 million pixel sprite budget');
-  const frame:PaintFrame={w,h,ox:x,oy:y,color:new Uint32Array(w*h),light:new Uint32Array(w*h)};
-  const p=new Painter(frame),skin=SKIN[style.skin??'warm'].map(hex),hair=HAIR[style.hairColor??'dark'].map(hex);
-  const cloth=(style.cloth??['#34556d','#507e91','#7aa6aa']).map(hex),pants=(style.trousers??['#3c414f','#545966','#727981']).map(hex);
-  const shoe=[hex('#3b3034'),hex('#57413a'),hex('#78604a')],outfit=style.outfit??'shirt',hairStyle=style.hair??'swept';
+  const {frame,painter:p}=characterScratch(w,h,x,y),skin=characterPalette(SKIN[style.skin??'warm']),hair=characterPalette(HAIR[style.hairColor??'dark']);
+  const cloth=characterPalette(style.cloth??['#34556d','#507e91','#7aa6aa']),pants=characterPalette(style.trousers??['#3c414f','#545966','#727981']);
+  const shoe=characterPalette(['#3b3034','#57413a','#78604a']),outfit=style.outfit??'shirt',hairStyle=style.hair??'swept';
   if(r.view!=='front'){paintHumanView2D(p,style,r,{skin,hair,cloth,pants,shoe});} else {
   const P=(v:HumanPoint[],color:number)=>p.poly(v.map(q=>[Math.round(q[0]),Math.round(q[1])]),color);
   const line=(v:HumanPoint[],color:number)=>p.polyline(v.map(q=>[Math.round(q[0]),Math.round(q[1])]),color);

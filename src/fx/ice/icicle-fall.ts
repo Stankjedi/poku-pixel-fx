@@ -9,7 +9,7 @@ export const meta = {
   name: "Icicle fall",
   desc: "An icicle drips and trembles, snaps off its frosted root, drops, stabs the floor and bursts into skidding shards, splinters and rolling frost.",
   tags: ["ice", "icicle", "fall", "trap", "shatter", "one-shot"],
-  size: [152, 120],
+  size: [155, 120],
   origin: [76, 100],
   duration: 2.6,
   loop: false,

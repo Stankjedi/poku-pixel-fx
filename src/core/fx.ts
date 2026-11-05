@@ -18,6 +18,9 @@ export interface EffectMeta {
 }
 export interface EffectImplementation<O extends EffectOptions = EffectOptions> {
   update?: (dt: number, options: O) => void;
+  /** Absolute presentation clock for composition schedulers. Takes precedence over update;
+   * children must use createFx so their simulation still consumes only complete fixed ticks. */
+  advanceTime?: (time: number, options: O) => void;
   draw: (painter: Painter, time: number, options: O) => void;
   drawBack?: (painter: Painter, time: number, options: O) => void;
 }
@@ -31,9 +34,12 @@ export interface EffectModule<O extends EffectOptions = any> {
   draw?: EffectImplementation<O>["draw"];
   drawBack?: EffectImplementation<O>["drawBack"];
   update?: EffectImplementation<O>["update"];
+  advanceTime?: EffectImplementation<O>["advanceTime"];
 }
 export interface EffectInstance {
-  readonly t: number; readonly shake: readonly [number, number]; readonly contacts: readonly ImpactContact2D[]; meta: EffectMeta; options: EffectOptions;
+  /** Continuous presentation time. Simulation only advances on complete 120 Hz ticks. */
+  readonly t: number; readonly tick: number; readonly simulatedTime: number;
+  readonly shake: readonly [number, number]; readonly contacts: readonly ImpactContact2D[]; meta: EffectMeta; options: EffectOptions;
   update(dt: number): void; draw(frame: PaintFrame, layer?: DrawLayer, parent?: EffectDrawContext): void; stop(): void; done(): boolean;
 }
 /** Parent-local placement and style for a nested effect. A Painter satisfies this interface. */
@@ -70,6 +76,9 @@ export function painterFor(frame: PaintFrame) {
 }
 
 const FADE = 0.3;
+/** One shared simulation clock for live hosts, chains, and offline exports. No catch-up time is dropped. */
+export const FX_TICK_RATE = 120;
+export const FX_TICK_SECONDS = 1 / FX_TICK_RATE;
 
 const isRamp = (v: unknown): v is (number | string)[] => Array.isArray(v) && v.length > 0 && v.every((c) => typeof c === "number" || /^#[0-9a-f]{3,8}$/i.test(c as string));
 
@@ -101,7 +110,7 @@ export function createFx<O extends EffectOptions>(mod: EffectModule<O>, o: Effec
   const impl = (mod.create ? mod.create(opts) : mod) as EffectImplementation<O>;
   const contacts = Object.freeze((mod.contacts?.(opts) ?? []).map(defineImpactContact2D));
   const D = meta.duration ?? 1;
-  let t = 0, stopAt = Infinity;
+  let t = 0, timeError = 0, tick = 0, stopAt = Infinity;
   return {
     meta,
     contacts,
@@ -109,6 +118,8 @@ export function createFx<O extends EffectOptions>(mod: EffectModule<O>, o: Effec
     get t() {
       return t;
     },
+    get tick() { return tick; },
+    get simulatedTime() { return tick / FX_TICK_RATE; },
     get shake(): readonly [number, number] {
       const strength = opts.cameraMotion ?? 1;
       if (!Number.isFinite(strength) || strength < 0) throw new RangeError("cameraMotion must be finite and non-negative");
@@ -121,11 +132,25 @@ export function createFx<O extends EffectOptions>(mod: EffectModule<O>, o: Effec
     update(dt: number) {
       if (!Number.isFinite(dt) || dt < 0) throw new RangeError("dt must be finite and non-negative");
       if (dt === 0) return;
-      t += dt;
-      if (!impl.update) return;
-      // simulations step at 120 Hz or finer whatever the caller's frame rate, so they look the same everywhere
-      const n = Math.max(1, Math.ceil(dt * 120 - 1e-9));
-      for (let i = 0; i < n; i++) impl.update(dt / n, opts);
+      // Compensated addition keeps the presentation clock independent of host frame partitions.
+      // Fractional ticks stay pending: RNG, spawning and collisions never see a host-sized step.
+      const part = dt - timeError, next = t + part;
+      timeError = (next - t) - part;
+      const boundary = Math.round(next * FX_TICK_RATE) / FX_TICK_RATE;
+      t = Math.abs(next - boundary) <= 1e-12 ? boundary : next;
+      // Snap only numerical noise around an exact tick; retain it in the
+      // compensation so repeated presentation snaps cannot discard elapsed time.
+      timeError += t - next;
+      const target = Math.floor(t * FX_TICK_RATE + 1e-9);
+      // A timeline has no physics of its own. It must see fractional presentation
+      // time too, so an authored cue can begin between two simulation ticks.
+      // Its child instances keep their own fixed-step accumulators.
+      if (impl.advanceTime) { impl.advanceTime(t, opts); tick = target; return; }
+      if (!impl.update) { tick = target; return; }
+      while (tick < target) {
+        impl.update(FX_TICK_SECONDS, opts);
+        tick++;
+      }
     },
     draw(frame: PaintFrame, layer?: DrawLayer, parent?: EffectDrawContext) {
       // The parent can be the same cached Painter. Capture it before painterFor resets it.

@@ -1,12 +1,26 @@
 #!/usr/bin/env node
 // Refresh the sharing site's built-in gallery from this checkout.
-import { copyFileSync } from 'node:fs';
+import { copyFileSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { ROOT } from './lib/fxlib.mjs';
 
 const publicDir = join(ROOT, 'site', 'public', 'effects');
+mkdirSync(publicDir, { recursive: true });
 const result = spawnSync(process.execPath, [join(ROOT, 'build-tools', 'tools', 'export-catalog.mjs'), '--output', join(publicDir, 'catalog.json'), '--exclude-shared'], { stdio: 'inherit' });
 if (result.error || result.status !== 0) throw result.error ?? new Error(`Catalog generation failed (${result.status})`);
 copyFileSync(join(ROOT, 'build-gallery', 'app.js'), join(publicDir, 'app.js'));
+copyFileSync(join(ROOT, 'build-gallery', '3d.js'), join(publicDir, '3d.js'));
+copyFileSync(join(ROOT, 'gallery', '3d.html'), join(publicDir, '3d.html'));
+copyFileSync(join(ROOT, 'gallery', 'style.css'), join(publicDir, 'style.css'));
+const { sourceFingerprint } = await import(new URL('../../tools/site-source.mjs', import.meta.url).href);
+// The hosted entry point has community controls; preserve it and verify its
+// integrity alongside the generated engine assets instead of replacing it.
+const names = ['index.html', 'app.js', '3d.js', '3d.html', 'style.css', 'community.css', 'catalog.json'];
+const files = Object.fromEntries(names.map(name => [name, createHash('sha256').update(readFileSync(join(publicDir, name))).digest('hex')]));
+writeFileSync(join(publicDir, 'build-manifest.json'), JSON.stringify({
+  schemaVersion: 1, source: 'poku-pixel-fx', sourceHash: sourceFingerprint(ROOT), files,
+  catalogCount: JSON.parse(readFileSync(join(publicDir, 'catalog.json'), 'utf8')).count,
+}, null, 2) + '\n');
 console.log('공유 사이트의 기본 이펙트 갤러리를 갱신했습니다. 공유 게시물은 별도 저장소에 남습니다.');

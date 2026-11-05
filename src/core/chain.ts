@@ -1,6 +1,6 @@
 // Moves: effects composed in parent-local space, each with its own activation window.
 import { createFx, type EffectModule, type EffectOptions, type EffectDrawContext } from "./fx.js";
-import { smooth } from "./math.js";
+import { clamp } from "./math.js";
 import type { Frame, DrawLayer } from "../index.js";
 export type CuePosition = number | ((time: number) => number);
 export interface ChainCue extends Omit<EffectOptions, "x" | "y"> {
@@ -16,9 +16,13 @@ interface CueInstance {
 export interface ChainPainter extends EffectDrawContext { frame: Frame }
 export type PoseKey = [number, Record<string, any>, string?];
 type Hit = { t: number; [key: string]: unknown };
-// Fixed-step subdivision accumulates tiny roundoff. Treat a nanosecond as the boundary,
-// without consuming an animation frame or forwarding time outside the active window.
-const reached = (time: number, boundary: number) => time >= boundary - 1e-9;
+// Cancel subtraction noise in decimal cue intervals before evaluating smoothstep.
+// 1e-12 progress is far below packed coverage or Float32 HDR precision; exact
+// half fades must retain their mathematical 128/255 coverage rounding.
+const fade = (elapsed: number, duration: number) => {
+  const u = Math.round(clamp(elapsed / duration) * 1e12) / 1e12;
+  return u * u * (3 - 2 * u);
+};
 
 /**
  * Compose cues in the move's local space. Position callbacks use move time, in seconds.
@@ -37,31 +41,41 @@ export function chain(cues: ChainCue[]) {
       return { fx, t, until: end, x, y, fadeIn, fadeOut, opts: options,
         inst: t === 0 && end > 0 ? createFx(fx, options) : null, over: end <= t };
     });
-    let t = 0;
+    let t = 0, timeError = 0;
     const at = (v: CuePosition) => typeof v === "function" ? v(t) : v;
     const each = (p: ChainPainter, layer: DrawLayer) => {
       for (const c of list) {
         if (!c.inst || c.over) continue;
         c.inst.options.x = at(c.x);
         c.inst.options.y = at(c.y);
-        const enter = c.fadeIn > 0 ? smooth(0, c.fadeIn, t - c.t) : 1;
-        const leave = c.fadeOut > 0 ? smooth(0, c.fadeOut, c.until - t) : 1;
+        const enter = c.fadeIn > 0 ? fade(t - c.t, c.fadeIn) : 1;
+        const leave = c.fadeOut > 0 ? fade(c.until - t, c.fadeOut) : 1;
         c.inst.draw(p.frame, layer, { tx: p.tx, ty: p.ty, fx: p.fx, cs: p.cs, sn: p.sn,
           fade: p.fade * enter * leave, lightK: p.lightK, particleStyle: p.particleStyle });
       }
     };
+    const advanceTime = (time: number) => {
+      const previous = t;
+      t = time;
+      // Scheduling follows the continuous parent clock; each child retains the
+      // fractional simulation remainder. Drawing never creates or advances it.
+      for (const c of list) {
+        if (c.over || t < c.t) continue;
+        if (!c.inst) c.inst = createFx(c.fx, c.opts);
+        const start = Math.max(previous, c.t), end = Math.min(t, c.until);
+        if (end > start) c.inst.update(end - start);
+        if (t >= c.until || (c.inst.done() && !c.fx.meta?.loop)) c.over = true;
+      }
+    };
     return {
+      advanceTime,
+      // Retain the standalone chain API. createFx uses advanceTime instead of
+      // quantizing this scheduler through EffectImplementation.update.
       update(dt: number) {
         if (!Number.isFinite(dt) || dt < 0) throw new RangeError("dt must be finite and non-negative");
-        const previous = t;
-        t += dt;
-        for (const c of list) {
-          if (c.over || !reached(t, c.t)) continue;
-          if (!c.inst) c.inst = createFx(c.fx, c.opts);
-          const start = Math.max(previous, c.t), end = Math.min(t, c.until);
-          if (end > start) c.inst.update(end - start);
-          if (reached(t, c.until) || (c.inst.done() && !c.fx.meta?.loop)) c.over = true;
-        }
+        const part = dt - timeError, next = t + part;
+        timeError = (next - t) - part;
+        advanceTime(next);
       },
       drawBack: (p: ChainPainter) => each(p, "back"),
       draw: (p: ChainPainter) => each(p, "front"),

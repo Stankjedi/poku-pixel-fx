@@ -6,10 +6,11 @@ import { helicalAirflow, airflowTrail, drawAirflow } from '../build/core/air.js'
 import * as tornado from '../build/fx/nature/tornado.js';
 import * as leaves from '../build/fx/nature/leaf-storm.js';
 import * as gust from '../build/fx/weather/crosswind-gust.js';
+import { legacyPresentationModule } from './helpers/legacy-presentation.mjs';
 function shot(mod,t,opts={},padding=0){const [w,h]=mod.meta.size,f=createFrame(w+padding*2,h+padding*2,-padding,-padding),p=painterFor(f);
   p.place(...mod.meta.origin,opts.flip??false,opts.angle??0);const o=resolveOptions(mod.meta,opts);mod.drawBack?.(p,t,o);mod.draw(p,t,o);return f;}
-function digest(mod,opts={}){const f=createFrame(...mod.meta.size),fx=createFx(mod,{x:mod.meta.origin[0],y:mod.meta.origin[1],...opts}),h=createHash('sha256');
-  for(let i=0;i<=mod.meta.duration*30;i++){if(i)fx.update(1/30);clearFrame(f);fx.draw(f);h.update(new Uint8Array(f.color.buffer));h.update(new Uint8Array(f.light.buffer));}return h.digest('hex');}
+function digest(mod,opts={}){let time=0;const f=createFrame(...mod.meta.size),fx=createFx(legacyPresentationModule(mod,()=>time),{x:mod.meta.origin[0],y:mod.meta.origin[1],...opts}),h=createHash('sha256');
+  for(let i=0;i<=mod.meta.duration*30;i++){if(i){time+=1/30;fx.update(1/30);}clearFrame(f);fx.draw(f);h.update(new Uint8Array(f.color.buffer));h.update(new Uint8Array(f.light.buffer));}return h.digest('hex');}
 
 test('helical airflow rises and expands, keeping physical depth separate from its projection',()=>{
   const spec={height:100,radius:u=>5+25*u,axis:u=>u*4,turns:2,phase:.3,shear:.4,perspective:0};

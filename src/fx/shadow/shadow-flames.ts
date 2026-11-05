@@ -98,6 +98,10 @@ export function draw(p: Painter, t: number, o: typeof meta.options) {
   for (let j = 0; j < GY; j++)
     for (let i = 0; i < GX * 2; i++) if (grid[j * GX * 2 + i] === 3) {
       const sx = p.cellX(i - GX + 0.5, j - GY + 0.5) - p.ox, sy = p.cellY(i - GX + 0.5, j - GY + 0.5) - p.oy;
-      if (sx >= 0 && sy >= 0 && sx < p.w && sy < p.h) p.L[sy * p.w + sx] = 0;
+      if (sx >= 0 && sy >= 0 && sx < p.w && sy < p.h) {
+        const index = sy * p.w + sx;
+        p.L[index] = 0;
+        p.frame.hdrLight?.fill(0, index * 3, index * 3 + 3);
+      }
     }
 }

@@ -1,3 +1,5 @@
+import { frameDurationMs } from "../src/render/export.js";
+
 // Browser-only animated WebP muxer. Each independently encoded frame replaces the full canvas.
 type DrawFrame = (index: number, canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) => void | Promise<void>;
 export interface AnimatedWebPOptions {
@@ -55,7 +57,7 @@ export async function encodeAnimatedWebP(options: AnimatedWebPOptions): Promise<
     await drawFrame(i, canvas, ctx);
     const blob = await encodeFrame(canvas), image = imageChunks(new Uint8Array(await blob.arrayBuffer()));
     anyAlpha ||= image.alpha;
-    const duration = Math.round((i + 1) * 1000 / fps) - Math.round(i * 1000 / fps);
+    const duration = frameDurationMs(i, fps);
     if (duration < 1 || duration > 0xffffff) throw new Error('프레임 재생 시간이 유효하지 않습니다.');
     const header = new Uint8Array(16); put24(header, 6, width - 1); put24(header, 9, height - 1); put24(header, 12, duration); header[15] = 2;
     const data = new Uint8Array(header.length + image.payload.length); data.set(header); data.set(image.payload, 16);

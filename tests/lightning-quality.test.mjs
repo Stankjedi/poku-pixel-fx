@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { createFrame, Painter, fit, enableHDRLight } from '../build/core/index.js';
 import { VOLT, stroke, crackle } from '../build/fx/lightning/_lib.js';
 import { loadEffect, renderFrames } from '../build-tools/tools/lib/fxlib.mjs';
+import { renderLegacyPresentationFrames } from './helpers/legacy-presentation.mjs';
 
 const palette = fit(VOLT, 8);
 const path = [[-24, 0], [24, 0]];
@@ -71,8 +72,18 @@ test('light clipping intersects the source centerline independently of control-p
 // Raw RGBA ink only: this intentional lighting refinement must not repaint the pixel silhouettes.
 const fixtures = JSON.parse(readFileSync(new URL('./fixtures/lightning-color.json', import.meta.url), 'utf8'));
 for (const [id, expected] of Object.entries(fixtures)) test(`${id}: every raw-color frame retains the baseline pixel artwork`, async () => {
-  const effect = await loadEffect(id), rendered = renderFrames(effect), hash = createHash('sha256');
-  for (const frame of rendered.frames) hash.update(frame.raw);
+  const effect = await loadEffect(id);
+  // Pure shaders keep the exact presentation timestamps of the original
+  // artwork capture. Simulated effects still exercise the normal current clock.
+  const rendered = (effect.mod.create ? renderFrames : renderLegacyPresentationFrames)(effect, { diagnostics: true });
+  const hash = createHash('sha256');
+  // I18 adds two previously clipped right-edge columns to ion-stormburst. Keep
+  // the original artwork hash as evidence, using its original 232 x 184 crop.
+  for (const frame of rendered.frames) {
+    if (id === 'lightning/ion-stormburst')
+      for (let y = 0; y < 184; y++) hash.update(frame.raw.subarray(y * rendered.w, y * rendered.w + 232));
+    else hash.update(frame.raw);
+  }
   assert.equal(rendered.n, expected.frames); assert.equal(hash.digest('hex'), expected.colorHash);
 });
 

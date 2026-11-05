@@ -57,7 +57,10 @@ test('existing preview actor forwarding displays the opt-in pixels and invalid b
   const original = renderFrames(fx, { options: { actor: source } });
   const legacy = renderFrames(fx, { options: { actor: edited } });
   const optedIn = renderFrames(fx, { options: { actor: withActorPixels(edited) } });
-  assert.deepEqual(original, legacy);
+  assert.deepEqual(original.frames, legacy.frames, 'legacy rendering still ignores edited buffers');
+  assert.deepEqual(original.pivot, legacy.pivot);
+  assert.equal(original.settings.options.actor, source, 'export settings retain the supplied actor');
+  assert.equal(legacy.settings.options.actor, edited);
   for (let i = 0; i < original.frames.length; i++) {
     assert.notDeepEqual(original.frames[i].color, optedIn.frames[i].color);
     assert.deepEqual(original.frames[i].clear, optedIn.frames[i].clear, 'stand-in actor does not leak into effect-only sheet');

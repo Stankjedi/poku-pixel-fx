@@ -6,13 +6,13 @@
 
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { ROOT, allIds, resolveIds, loadEffect, renderFrames, spriteSheet, save } from "./lib/fxlib.mjs";
+import { ROOT, allIds, resolveIds, loadEffect, renderSequence, spriteSheet, save } from "./lib/fxlib.mjs";
 const { actTiming } = await import(new URL("../../build/core/index.js", import.meta.url).href);
 
 const ids = process.argv.length > 2 ? resolveIds(process.argv.slice(2)) : allIds();
 const out = join(ROOT, "sheets"), index: Record<string, unknown>[] = [];
 for (const id of ids) {
-  const fx = await loadEffect(id), r = renderFrames(fx, { bg: "none" }), name = id.split("/")[1];
+  const fx = await loadEffect(id), r = renderSequence(fx, { bg: "none" }), name = id.split("/")[1];
   const s = spriteSheet(fx, r, name);
   save(join(out, id + ".png"), s.png);
   save(join(out, id + ".json"), JSON.stringify(s.json, null, 1));
