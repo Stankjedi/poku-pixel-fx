@@ -141,7 +141,27 @@ and equipment cels without a human-specific renderer.
 
 A socket contains `position`, `basisX`, `basisY`, `visible`, `layer` and
 `mirrorPolicy`. Transform composition happens in continuous native coordinates;
-the destination cell is sampled once at rasterization. Human and authored item
+the destination cell is sampled once at rasterization. Equipment keeps its source
+raster until the socket basis, item offset/angle, socket correction and sample
+placement/root displacement have been composed. Fractional placement therefore
+does not resample an already rotated equipment bitmap. Color, semantic masks,
+negative-space selections and HDR radiance use the same inverse mapping, including
+emission in transparent cells. A released arrow similarly combines the frozen
+release correction with the final placement before its one raster bake.
+
+Character `pixelStyle.dither.anchor:'object'` uses each layer's original native
+basis, so the pattern turns with a sword or accessory instead of remaining stuck
+to the actor canvas. `world` uses the final world coordinates and `screen` adds
+`pixelContext.worldToScreen`; optional explicit raster mappings remain available.
+When supplied, `pixelContext.objectToWorld` maps **actor-local** coordinates to
+world space. The player composes the item's local transform with that map.
+Selective contours and surface finishing operate on the destination native cells
+after placement, so they are not resampled by another internal placement pass.
+This contract concerns `CharacterPlayer.sample` and its placement. If a consumer
+later rotates or scales the returned raster as another bitmap, that is a separate,
+explicit raster operation.
+
+Human and authored item
 sockets include `root`, `head`, `chest`, `mouth`, `hand.grip`, hand/foot variants,
 `weapon.base`, `weapon.tip`, `weapon.edge`, `bow.upperTip`, `bow.lowerTip`,
 `bow.nock`, and `muzzle` as applicable. Available socket names depend on the source
@@ -206,7 +226,9 @@ procedural pose settles. An invisible/finished sprite body also hides its gear.
 Color, emission and item sockets always use the same chosen cel. A sample's
 `layerFrames` map reports each raster layer's original source index, or `-1` when
 it is hidden; articulated generators do not have a raster entry. Existing cel
-edits remain keyed by the character's `frameIndex`, as before.
+edits remain keyed by the character's `frameIndex`, as before. An opt-in
+`frameSource:'layer'` edit instead selects the target imported layer's original
+source cel; it follows independent-time, phase and source-frame bindings alike.
 
 `createSynchronizedLanternling2D` in `src/examples/character-studio.ts` is an
 executable example. Its removable crest stays on the corresponding source cel
@@ -331,6 +353,42 @@ transparent selections through transforms and composition, so intentional holes
 can actually be annotated.
 Edits are clipped to the target's native canvas; add source padding to author
 outside that canvas.
+
+### Editing an equipment source cel
+
+Use `space:'layer'` to paint in an item's original pivot-relative coordinates
+before its socket, rotation, mirroring and placement are applied. This keeps a
+highlight on the same blade cell as the item moves. `frameSource:'layer'` makes
+`frame` refer to that item's original imported cel, instead of the body's cel.
+Both fields are opt-in; old saved documents retain their coordinate and timing
+meaning. Source-cel selection requires an imported raster layer and is rejected
+for the body or an articulated generator, which continue using character cels.
+
+```ts
+const sample = player.sample(0.25, 'run');
+const polished = editCharacterCel2D(asset, {
+  id: 'blade-source-highlight', clip: 'run', target: 'blade',
+  space: 'layer', frameSource: 'layer', frame: sample.layerFrames.blade,
+  semantic: 'bladeHighlight',
+  // If the clip pivot is [3, 2], [5, 0] selects original buffer cell [8, 2].
+  patch: { x: 5, y: 0, rows: ['hh'], palette: { h: 0xffe2e8da } },
+});
+```
+
+Only create a cel-specific edit when `layerFrames.blade >= 0`; `-1` denotes a
+hidden layer rather than an editable source cel. Mask edits accept the same
+`space` and `frameSource`. A source erasure clears the source's emission and
+occupied semantic membership before all channels are transformed together;
+explicit negative-space/`allowEmpty` regions survive. Native layer edits run
+first, then actor-local/socket edits on final destination cells. The latter use
+the inverse sample placement so a fractional root position does not change the
+coordinate system of an existing mark.
+
+`tests/character-raster-placement.test.mjs` checks a mirrored rotated item against
+an independent inverse-coordinate oracle, final draw parity, three dither spaces,
+source-cel edits under different clocks, legacy edits and released projectiles.
+It verifies raster and metadata contracts, not the artistic suitability of a
+particular outline, palette or animation.
 
 Human material ownership is produced by a second ID-color construction pass, so
 identical display colors do not merge skin and clothing. The visible masks include

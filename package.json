@@ -82,14 +82,14 @@
     "test:aseprite": "node --test tests/sprite-clip.test.mjs tests/aseprite-data.test.mjs tests/aseprite-bridge.test.mjs tests/sprite-sheet-alpha.test.mjs",
     "test:contracts": "node --test tests/report-*.test.mjs tests/character-socket-postprocess.test.mjs",
     "test:studio": "node --test tests/studio-*.test.mjs tests/authoring-*.test.mjs",
-    "test:character": "node --test tests/report-character-pixel.test.mjs tests/character-socket-postprocess.test.mjs",
+    "test:character": "node --test tests/report-character-pixel.test.mjs tests/character-socket-postprocess.test.mjs tests/character-raster-placement.test.mjs",
     "studio": "node build-tools/tools/serve.mjs",
     "test:export-studio": "node --test tests/export-studio.test.mjs tests/aseprite-layered.test.mjs tests/shared-manifest.test.mjs tests/project-workflow.test.mjs",
     "test:install": "node --test tests/cli-package.test.mjs",
     "test:browser": "node tools/studio-browser-harness.mjs",
     "test:browser:gpu": "node tools/gpu-browser-harness.mjs",
     "test:native": "cargo test --locked --manifest-path native/Cargo.toml",
-    "test:production": "node --test tests/character-animation-tracks.test.mjs tests/palette-atlas-production.test.mjs tests/authoring-sequence.test.mjs tests/authoring-retiming.test.mjs tests/gpu-tiles.test.mjs tests/atlas-memory.test.mjs",
+    "test:production": "node --test tests/character-animation-tracks.test.mjs tests/palette-atlas-production.test.mjs tests/authoring-sequence.test.mjs tests/authoring-retiming.test.mjs tests/gpu-tiles.test.mjs tests/atlas-memory.test.mjs tests/character-raster-placement.test.mjs",
     "test:browser:production": "node tools/production-browser-harness.mjs"
   },
   "devDependencies": {

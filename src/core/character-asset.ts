@@ -65,13 +65,16 @@ export interface CharacterSlot2D { id:string;socket:string;order:number }
 export interface CharacterEquipment2D { id:string;slots:readonly string[];layers:readonly CharacterLayer2D[] }
 export interface CharacterCelEdit2D {
   id:string;clip?:string;frame?:number;
-  /** 'body' or a layer ID. Native local coordinates survive changing raster padding. */
-  target?:string;space?:'local'|'socket';socket?:string;
+  /** Defaults to the character cel; layer selects an imported target layer's original source cel. */
+  frameSource?:'character'|'layer';
+  /** Local is actor-local; layer is the target's original pivot-relative raster before attachment. */
+  target?:string;space?:'local'|'socket'|'layer';socket?:string;
   patch:SpriteClusterPatch2D;semantic?:string;
 }
 export interface CharacterMaskEdit2D {
   id:string;name:string;clip?:string;frame?:number;target?:string;
-  space?:'local'|'socket';socket?:string;x:number;y:number;rows:readonly string[];
+  frameSource?:'character'|'layer';
+  space?:'local'|'socket'|'layer';socket?:string;x:number;y:number;rows:readonly string[];
   /** Regions such as intentional negative space may contain transparent cells. */
   allowEmpty?:boolean;
   /** '+' adds an occupied cell, '-' clears membership, every other symbol is untouched. */
@@ -101,13 +104,18 @@ export interface CharacterSample2D extends ActorSample2D {
   projectiles:readonly RasterSprite2D[];
 }
 export interface CharacterSampleOptions2D {
-  x?:number;y?:number;applyRootMotion?:boolean;pixelContext?:PixelPatternContext2D;
+  x?:number;y?:number;applyRootMotion?:boolean;
+  /** objectToWorld maps actor-local coordinates; each attached layer supplies its own inverse native basis. */
+  pixelContext?:PixelPatternContext2D;
   /** Return the source sockets/attachments so an editor can derive an inverse delta. */
   ignoreSocketTracks?:boolean;
 }
 interface NativeLayer {
   id:string;sprite:RasterSprite2D;masks:Record<string,Uint8Array>;emission:Float32Array|null;
   emissionKind:'surface'|'optical';order:number;semantic:string;
+  /** Preserve source cells until attachment, correction and placement are composed. */
+  localToActor?:PixelTransform2D;sourceFrame?:number;occludedBy?:readonly string[];
+  editSockets?:Record<string,CharacterSocket2D>;
 }
 const finitePoint=(p:readonly number[])=>p.length===2&&p.every(Number.isFinite);
 const own=(o:object,key:string)=>Object.prototype.hasOwnProperty.call(o,key);
@@ -149,11 +157,11 @@ export function createCharacterAsset2D(input:CharacterAsset2D):CharacterAsset2D 
   const slots=new Map<string,CharacterSlot2D>();
   for(const slot of asset.slots??[]){if(!validName(slot.id)||slots.has(slot.id)||!validName(slot.socket)||!Number.isFinite(slot.order))throw new RangeError('Equipment slots need unique IDs, sockets and finite layer order');slots.set(slot.id,slot);}
   if(slots.size>64||Object.keys(asset.equipment??{}).length>128||(asset.layers?.length??0)>256)throw new RangeError('Character layer budget exceeded');
-  const layerIds=new Set<string>();
+  const layerIds=new Set<string>(),rasterLayerIds=new Set<string>();
   const layer=(l:CharacterLayer2D)=>{
     if(!validName(l.id)||layerIds.has(l.id)||!validName(l.semantic)||l.order!==undefined&&!Number.isFinite(l.order)||l.angle!==undefined&&!Number.isFinite(l.angle)||l.offset!==undefined&&!finitePoint(l.offset))throw new RangeError('Character layers need unique IDs, semantics and finite transforms');
     if(l.generator&&(source.kind!=='human'||!['human-sword','human-bow'].includes(l.generator)||l.offset!==undefined||l.angle!==undefined||l.secondary!==undefined||l.socket!==undefined&&l.socket!=='hand.grip'))throw new RangeError('Articulated human equipment uses the human grip, without a second local transform');
-    layerIds.add(l.id);const nativeClip=createSpriteClip2D(l.clip,l.options);
+    layerIds.add(l.id);if(!l.generator)rasterLayerIds.add(l.id);const nativeClip=createSpriteClip2D(l.clip,l.options);
     if(l.animations){
       if(l.generator||typeof l.animations!=='object'||Array.isArray(l.animations)||Object.keys(l.animations).length>128)throw new RangeError('Raster layer animations need a named clip map; articulated equipment already follows its pose');
       for(const[name,binding]of Object.entries(l.animations)){
@@ -187,7 +195,8 @@ export function createCharacterAsset2D(input:CharacterAsset2D):CharacterAsset2D 
   }
   const editIds=new Set<string>();
   for(const edit of [...asset.celEdits??[],...asset.maskEdits??[]]){
-    if(!validName(edit.id)||editIds.has(edit.id)||edit.clip!==undefined&&!own(asset.clips,edit.clip)||edit.frame!==undefined&&(!Number.isInteger(edit.frame)||edit.frame<0)||edit.target!==undefined&&edit.target!=='body'&&!layerIds.has(edit.target)||edit.space!==undefined&&!['local','socket'].includes(edit.space)||edit.space==='socket'&&!validName(edit.socket))throw new RangeError('Invalid persisted edit reference');editIds.add(edit.id);
+    if(!validName(edit.id)||editIds.has(edit.id)||edit.clip!==undefined&&!own(asset.clips,edit.clip)||edit.frame!==undefined&&(!Number.isInteger(edit.frame)||edit.frame<0)||edit.target!==undefined&&edit.target!=='body'&&!layerIds.has(edit.target)||edit.space!==undefined&&!['local','socket','layer'].includes(edit.space)||edit.space==='socket'&&!validName(edit.socket)||edit.frameSource!==undefined&&!['character','layer'].includes(edit.frameSource))throw new RangeError('Invalid persisted edit reference');editIds.add(edit.id);
+    if(edit.frameSource==='layer'&&!rasterLayerIds.has(edit.target??'body'))throw new RangeError('Layer-cel edits require an imported raster layer target');
     if('patch'in edit){validatePatch(edit.patch);if(edit.semantic!==undefined&&!validName(edit.semantic))throw new RangeError('Invalid cel semantic name');}else{if(edit.allowEmpty!==undefined&&typeof edit.allowEmpty!=='boolean'||!validName(edit.name)||!Number.isSafeInteger(edit.x)||!Number.isSafeInteger(edit.y)||!Array.isArray(edit.rows)||!edit.rows.every(r=>typeof r==='string'))throw new RangeError('Invalid semantic mask edit');}
   }
   if(editIds.size>4096)throw new RangeError('Character edit budget exceeded');
@@ -227,7 +236,7 @@ function humanMasks(style:HumanStyle,pose:HumanPose,sprite:HumanSprite):Record<s
 function clipLayer(clip:SpriteClip2D,time:number,id:string,semantic:string,order:number,kind:'surface'|'optical',index=clip.frameAt(time)):NativeLayer{
   const pixels=index<0?new Uint32Array(clip.width*clip.height):clip.framePixels(index),mask=Uint8Array.from(pixels,c=>c>>>24?1:0);
   const sprite:RasterSprite2D={x:-clip.pivot[0],y:-clip.pivot[1],w:clip.width,h:clip.height,pixels,mask:{w:clip.width,h:clip.height,data:mask}};
-  return{id,sprite,masks:{[semantic]:mask.slice()},emission:index<0?null:clip.frameEmission(index),emissionKind:kind,order,semantic};
+  return{id,sprite,masks:{[semantic]:mask.slice()},emission:index<0?null:clip.frameEmission(index),emissionKind:kind,order,semantic,sourceFrame:index};
 }
 function transformedLayer(layer:NativeLayer,m:PixelTransform2D):NativeLayer{
   if(m[0]===1&&m[1]===0&&m[2]===0&&m[3]===1&&Number.isInteger(m[4])&&Number.isInteger(m[5])&&Number.isInteger(layer.sprite.x)&&Number.isInteger(layer.sprite.y))return{...layer,sprite:{...layer.sprite,x:layer.sprite.x+m[4],y:layer.sprite.y+m[5]}};
@@ -241,11 +250,11 @@ function transformedLayer(layer:NativeLayer,m:PixelTransform2D):NativeLayer{
   }
   return{...layer,sprite,masks,emission};
 }
-function editLayer(layer:NativeLayer,asset:CharacterAsset2D,clip:string,frame:number,sockets:Record<string,CharacterSocket2D>):void{
-  const matches=(e:{target?:string;clip?:string;frame?:number})=>(e.target??'body')===layer.id&&(e.clip===undefined||e.clip===clip)&&(e.frame===undefined||e.frame===frame);
-  const visit=(patch:{x:number;y:number;rows:readonly string[]},space:'local'|'socket'|undefined,socketName:string|undefined,fn:(i:number,symbol:string)=>void)=>{
+function editLayer(layer:NativeLayer,asset:CharacterAsset2D,clip:string,frame:number,sockets:Record<string,CharacterSocket2D>,stage:'source'|'placed',rasterToActor:PixelTransform2D=pixelTransform2D()):void{
+  const matches=(e:{target?:string;clip?:string;frame?:number;frameSource?:'character'|'layer';space?:'local'|'socket'|'layer'})=>(e.target??'body')===layer.id&&(e.clip===undefined||e.clip===clip)&&(e.frame===undefined||e.frame===(e.frameSource==='layer'?layer.sourceFrame:frame))&&((e.space==='layer')===(stage==='source'));
+  const visit=(patch:{x:number;y:number;rows:readonly string[]},space:'local'|'socket'|'layer'|undefined,socketName:string|undefined,fn:(i:number,symbol:string)=>void)=>{
     const socket=space==='socket'?sockets[socketName!]:undefined;if(space==='socket'&&!socket)throw new RangeError('Unknown edit socket: '+socketName);
-    const inverse=invertPixelTransform2D(socket?socketTransform2D(socket):pixelTransform2D()),rows=patch.rows.map(r=>[...r]);
+    const inverse=socket?composePixelTransform2D(invertPixelTransform2D(socketTransform2D(socket)),rasterToActor):rasterToActor,rows=patch.rows.map(r=>[...r]);
     for(let y=0;y<layer.sprite.h;y++)for(let x=0;x<layer.sprite.w;x++){
       const p=transformPixelPoint2D(inverse,[layer.sprite.x+x+.5,layer.sprite.y+y+.5]),row=Math.floor(p[1]-patch.y),col=Math.floor(p[0]-patch.x);
       if(row<0||row>=rows.length||col<0||col>=rows[row].length)continue;fn(y*layer.sprite.w+x,rows[row][col]);
@@ -298,6 +307,10 @@ export function createCharacterPlayer2D(input:CharacterAsset2D){
     const base=layerClips.get(l.id)!;return[name,{clip:binding.tag===undefined?base:base.withOptions({tag:binding.tag}),sync:binding.sync??'time'}];
   }))]));
   const layerSocketNames=new Map(allLayerDefs.map(l=>[l.id,new Set(l.generator?['weapon.base','weapon.tip','weapon.edge',...(l.generator==='human-bow'?['bow.upperTip','bow.lowerTip','bow.nock','muzzle']:[])]:l.clip.frames.flatMap(frame=>Object.keys(frame.sockets??{})))]));
+  const editSocketNames=new Map<string,Set<string>>();
+  for(const edit of [...asset.celEdits??[],...asset.maskEdits??[]])if(edit.space==='socket'){
+    const target=edit.target??'body',names=editSocketNames.get(target)??new Set<string>();names.add(edit.socket!);editSocketNames.set(target,names);
+  }
   const style=asset.pixelStyle?compilePixelStyle2D(asset.pixelStyle):undefined,emptyMasks=new Set(['negativeSpace',...(asset.maskEdits??[]).filter(e=>e.allowEmpty).map(e=>e.name)]);
   let reach=asset.nativeHeight*1.7;
   for(const l of allLayerDefs)reach=Math.max(reach,asset.nativeHeight+Math.max(Math.hypot(...l.clip.pivot),Math.hypot(l.clip.width-l.clip.pivot[0],l.clip.height-l.clip.pivot[1]))+Math.hypot(...l.offset??[0,0]));
@@ -334,7 +347,7 @@ export function createCharacterPlayer2D(input:CharacterAsset2D){
       const socketTracks=options.ignoreSocketTracks?undefined:socketTracksByClip.get(clipName);
       const correctSocket=(name:string,baseline:CharacterSocket2D|undefined,at=phaseTime)=>{const track=socketTracks?.get(name);return track?applyCharacterSocketKey2D(baseline,track.sample(at),track.mode):baseline;};
       let sockets:Record<string,CharacterSocket2D>=Object.create(null),rootMotion:[number,number]=[0,0],contacts={left:false,right:false};
-      let frameIndex=Math.floor(phaseTime*(clip.fps??60)+8*Number.EPSILON*Math.max(1,phaseTime*(clip.fps??60))),body:NativeLayer,humanPose:HumanPose|undefined,currentHumanStyle:HumanStyle|undefined;const projectiles:RasterSprite2D[]=[];
+      let frameIndex=Math.floor(phaseTime*(clip.fps??60)+8*Number.EPSILON*Math.max(1,phaseTime*(clip.fps??60))),body:NativeLayer,humanPose:HumanPose|undefined,currentHumanStyle:HumanStyle|undefined;const projectiles:{sprite:RasterSprite2D;transform?:PixelTransform2D}[]=[];
       const layerFrames:Record<string,number>=Object.fromEntries(allLayerDefs.filter(l=>!l.generator).map(l=>[l.id,-1]));
       if(clip.kind==='human'||clip.kind==='key-pose'){
         const humanStyle:HumanStyle={...(source as {style:HumanStyle}).style,height:asset.nativeHeight};let sprite:HumanSprite,pose:HumanPose;
@@ -362,7 +375,10 @@ export function createCharacterPlayer2D(input:CharacterAsset2D){
       sockets['hand.grip']??=sockets.hand;
       for(const name of socketTracks?.keys()??[]){const corrected=correctSocket(name,sockets[name]);if(corrected)sockets[name]=corrected;}
       const sourceVisible=clip.kind!=='sprite'||frameIndex>=0;if(!sourceVisible)for(const socket of Object.values(sockets))socket.visible=false;
-      if(sourceVisible)editLayer(body,asset,clipName,frameIndex,sockets);
+      // Preserve the socket definitions visible at this layer's assembly point. Later
+      // equipment may intentionally publish an override of the same canonical name.
+      const captureEditSockets=(layer:NativeLayer)=>{const names=editSocketNames.get(layer.id);if(names)layer.editSockets=Object.fromEntries([...names].filter(name=>sockets[name]).map(name=>[name,sockets[name]]));};
+      captureEditSockets(body);
       const selected:{definition:CharacterLayer2D;slot?:CharacterSlot2D}[]=(asset.layers??[]).map(definition=>({definition}));
       const loadout={...asset.loadout,...clip.loadout};for(const slot of asset.slots??[]){const item=loadout[slot.id];if(item)for(const definition of asset.equipment![item].layers)selected.push({definition,slot});}
       const layers:NativeLayer[]=[body];
@@ -384,37 +400,60 @@ export function createCharacterPlayer2D(input:CharacterAsset2D){
             return m.every((v,i)=>Math.abs(v-identity[i])<1e-10)?identity:m;
           };
           const correction=correctionFor(nativeGrip,phaseTime);
-          layer=transformedLayer(layer,correction);
+          layer.localToActor=correction;
           for(const[name,point]of Object.entries(weaponSockets))if(name.startsWith('weapon.')||name.startsWith('bow.')||name==='muzzle')sockets[name]=correctSocket(name,transformCharacterSocket2D(point,correction))!;
           sockets['hand.grip']=desiredGrip;
           if(weapon.projectile){
             // A released arrow retains the correction at release; later hand keys cannot drag it in flight.
-            if(!socketTracks?.has('hand.grip'))projectiles.push(weapon.projectile);
-            else{let releaseCorrection=releaseCorrections.get(clipName);if(!releaseCorrection){const release=HUMAN_WEAPON_TIMING.bow.cue,atRelease=renderHumanWeapon2D('bow',release,currentHumanStyle),releaseGrip=humanSockets2D(atRelease.actor,atRelease.sample.geometry)['hand.grip'];releaseCorrection=correctionFor(releaseGrip,release);releaseCorrections.set(clipName,releaseCorrection);}projectiles.push(transformSprite2D(weapon.projectile,releaseCorrection));}
+            if(!socketTracks?.has('hand.grip'))projectiles.push({sprite:weapon.projectile});
+            else{let releaseCorrection=releaseCorrections.get(clipName);if(!releaseCorrection){const release=HUMAN_WEAPON_TIMING.bow.cue,atRelease=renderHumanWeapon2D('bow',release,currentHumanStyle),releaseGrip=humanSockets2D(atRelease.actor,atRelease.sample.geometry)['hand.grip'];releaseCorrection=correctionFor(releaseGrip,release);releaseCorrections.set(clipName,releaseCorrection);}projectiles.push({sprite:weapon.projectile,transform:releaseCorrection});}
           }
         }else{
           const sourceFrame=binding?.sync==='source-frame'?frameIndex:binding?.sync==='phase'?nativeClip.frameAtPhase(phaseTime/info.duration):nativeClip.frameAt(independentTime);
           layerFrames[l.id]=sourceFrame;
-          layer=transformedLayer(clipLayer(nativeClip,independentTime,l.id,l.semantic,l.order??slot?.order??1,l.options?.emissionKind??'surface',sourceFrame),transform);
+          layer=clipLayer(nativeClip,independentTime,l.id,l.semantic,l.order??slot?.order??1,l.options?.emissionKind??'surface',sourceFrame);layer.localToActor=transform;
           const frameSockets=sourceFrame>=0?nativeClip.frameSockets(sourceFrame):{};hidePublishedSockets(new Set(Object.keys(frameSockets)));
           for(const[name,point]of Object.entries(frameSockets)){const local=characterSocket2D([point.x-nativeClip.pivot[0],point.y-nativeClip.pivot[1]],point.angle??0);local.visible=point.visible??true;if(point.basisX&&point.basisY){local.basisX=[...point.basisX];local.basisY=[...point.basisY];}local.mirrorPolicy=point.mirrorPolicy??'authored';sockets[name]=correctSocket(name,transformCharacterSocket2D(local,transform))!;}
         }
-        editLayer(layer,asset,clipName,frameIndex,sockets);
-        if(l.occludedBy?.length){const base=body.sprite;
-          for(let yy=0;yy<layer.sprite.h;yy++)for(let xx=0;xx<layer.sprite.w;xx++){
-            const px=Math.floor(layer.sprite.x+xx+.5-base.x),py=Math.floor(layer.sprite.y+yy+.5-base.y);if(px<0||py<0||px>=base.w||py>=base.h)continue;const bi=py*base.w+px;
-            if(!l.occludedBy.some(name=>body.masks[name]?.[bi]))continue;const i=yy*layer.sprite.w+xx;layer.sprite.pixels[i]=0;layer.sprite.mask.data[i]=0;for(const mask of Object.values(layer.masks))mask[i]=0;layer.emission?.fill(0,i*3,i*3+3);
-          }
-        }
+        captureEditSockets(layer);
+        layer.occludedBy=l.occludedBy;
         layers.push(layer);
       }
       const dx=(options.x??0)+(options.applyRootMotion?rootMotion[0]:0),dy=(options.y??0)+(options.applyRootMotion?rootMotion[1]:0),placement=pixelTransform2D(dx,dy);
-      for(const[name,socket]of Object.entries(sockets))sockets[name]=transformCharacterSocket2D(socket,placement);
-      const placed=layers.sort((a,b)=>a.order-b.order).map(layer=>{
-        if(style){layer.sprite=style.apply(layer.sprite,t,{objectToWorld:placement,...options.pixelContext});if(style.profile.emission==='none')layer.emission=null;for(const[name,mask]of Object.entries(layer.masks))if(!emptyMasks.has(name))for(let i=0;i<mask.length;i++)if(!layer.sprite.mask.data[i])mask[i]=0;}
-        return transformedLayer(layer,placement);
+      const rasterToActor=invertPixelTransform2D(placement),actorToWorld=options.pixelContext?.objectToWorld??placement;
+      // Keep authored source corrections on their source cells. Actor/socket-space edits are
+      // evaluated on final destination cells, without an intermediate attachment raster.
+      const placed=layers.map(layer=>{
+        const editSockets=layer.editSockets??sockets;
+        if(sourceVisible)editLayer(layer,asset,clipName,frameIndex,editSockets,'source');
+        const result=transformedLayer(layer,composePixelTransform2D(placement,layer.localToActor??pixelTransform2D()));
+        if(sourceVisible)editLayer(result,asset,clipName,frameIndex,editSockets,'placed',rasterToActor);
+        return result;
       });
-      const placedProjectiles=projectiles.map(sprite=>transformSprite2D(sprite,placement));
+      const placedBody=placed[0];
+      for(const layer of placed){
+        const base=placedBody.sprite;
+        if(layer.occludedBy?.length)for(let yy=0;yy<layer.sprite.h;yy++)for(let xx=0;xx<layer.sprite.w;xx++){
+          const px=Math.floor(layer.sprite.x+xx+.5-base.x),py=Math.floor(layer.sprite.y+yy+.5-base.y);if(px<0||py<0||px>=base.w||py>=base.h)continue;const bi=py*base.w+px;
+          if(!layer.occludedBy.some(name=>placedBody.masks[name]?.[bi]))continue;const i=yy*layer.sprite.w+xx;layer.sprite.pixels[i]=0;layer.sprite.mask.data[i]=0;for(const mask of Object.values(layer.masks))mask[i]=0;layer.emission?.fill(0,i*3,i*3+3);
+        }
+      }
+      if(style)for(let index=0;index<placed.length;index++){
+          const layer=placed[index],sourceLayer=layers[index];
+          const localToActor=sourceLayer.localToActor??pixelTransform2D(),localToRaster=composePixelTransform2D(placement,localToActor);
+          layer.sprite=style.apply(layer.sprite,t,{
+            ...options.pixelContext,
+            rasterToObject:options.pixelContext?.rasterToObject??invertPixelTransform2D(localToRaster),
+            objectToWorld:composePixelTransform2D(actorToWorld,localToActor),
+            // Use the direct mapping at world/screen threshold boundaries, not an inverse cancellation.
+            rasterToWorld:options.pixelContext?.rasterToWorld??composePixelTransform2D(actorToWorld,rasterToActor),
+          });
+          if(style.profile.emission==='none')layer.emission=null;
+          for(const[name,mask]of Object.entries(layer.masks))if(!emptyMasks.has(name))for(let i=0;i<mask.length;i++)if(!layer.sprite.mask.data[i])mask[i]=0;
+      }
+      placed.sort((a,b)=>a.order-b.order);
+      for(const[name,socket]of Object.entries(sockets))sockets[name]=transformCharacterSocket2D(socket,placement);
+      const placedProjectiles=projectiles.map(({sprite,transform})=>transformSprite2D(sprite,transform?composePixelTransform2D(placement,transform):placement));
       const sampleBounds={x0:Math.min(...placed.map(l=>l.sprite.x)),y0:Math.min(...placed.map(l=>l.sprite.y)),x1:Math.max(...placed.map(l=>l.sprite.x+l.sprite.w)),y1:Math.max(...placed.map(l=>l.sprite.y+l.sprite.h))},flat=assembled(placed,sampleBounds,emptyMasks);
       const drawingBounds={...sampleBounds};for(const s of placedProjectiles){drawingBounds.x0=Math.min(drawingBounds.x0,s.x);drawingBounds.y0=Math.min(drawingBounds.y0,s.y);drawingBounds.x1=Math.max(drawingBounds.x1,s.x+s.w);drawingBounds.y1=Math.max(drawingBounds.y1,s.y+s.h);}
       const anchors:ActorAnchors2D={root:sockets.root.position,head:sockets.head.position,chest:sockets.chest.position,hand:sockets.hand.position,otherHand:sockets.otherHand.position,foot:sockets.foot.position,otherFoot:sockets.otherFoot.position};
