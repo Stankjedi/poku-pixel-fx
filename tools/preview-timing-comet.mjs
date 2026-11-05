@@ -1,0 +1,20 @@
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {createFrame,clearFrame,createFx,composite} from '../build/core/index.js';
+import * as effect from '../build/fx/projectiles/timing-comet.js';
+import {canvas,upscale,spriteSheet,writeVideo} from '../build-tools/tools/lib/fxlib.mjs';
+import {encodePNG} from '../build-tools/tools/lib/png.mjs';
+const out=process.argv[2]??'records/projectiles/timing-comet';mkdirSync(out,{recursive:true});
+const[w,h]=effect.meta.size,fps=effect.meta.fps,n=Math.round(effect.meta.duration*fps)+1;
+function render(coast){const frame=createFrame(w,h),fx=createFx(effect,{x:112,y:104,coast}),frames=[];
+ for(let i=0;i<n;i++){if(i)fx.update(1/fps);clearFrame(frame);fx.draw(frame);frames.push({t:i/fps,color:composite(frame,new Uint8ClampedArray(w*h*4),0xff120806),clear:composite(frame,new Uint8ClampedArray(w*h*4),null)});}return{w,h,fps,n,frames,pivot:effect.meta.origin};}
+const continued=render(true),held=render(false);
+writeVideo(join(out,'timing-comet.gif'),continued,3);writeVideo(join(out,'timing-comet.mp4'),continued,3);
+const paired=continued.frames.map((f,i)=>{const c=canvas(w*2,h+18,[6,8,18,255]);c.text('AFTER: HOLD',8,5,1,[176,179,187]);c.text('AFTER: CONTINUE',w+8,5,1,[248,212,154]);c.paste(held.frames[i].color,w,h,0,18);c.paste(f.color,w,h,w,18);return{t:f.t,color:c.data,clear:c.data};});
+writeVideo(join(out,'endpoint-policy-comparison.gif'),{w:w*2,h:h+18,fps,n,frames:paired},2);
+const poses=canvas(w*3,(h+18)*2,[6,8,18,255]);for(const[i,t]of[.25,.65,1.1,1.4,1.7,2.0].entries()){const x=i%3*w,y=Math.floor(i/3)*(h+18);poses.text(t.toFixed(2)+' S',x+8,y+5,1,[248,212,154]);poses.paste(continued.frames[Math.round(t*fps)].color,w,h,x,y+18);}writeFileSync(join(out,'poses.png'),poses.png());
+writeFileSync(join(out,'hero.png'),encodePNG(w*3,h*3,upscale(continued.frames[75].color,w,h,3)));
+const sheet=spriteSheet({meta:effect.meta,mod:effect,id:'projectiles/timing-comet'},continued,'timing-comet');writeFileSync(join(out,'timing-comet.png'),sheet.png);writeFileSync(join(out,'timing-comet.json'),JSON.stringify(sheet.json,null,2));
+const tracks=effect.createCometTracks(),sampleTimes=[0,.25,.62,1.05,1.25,1.5,1.85,2.15,2.3];
+const report={purpose:'An authored timing example, not an aesthetic quality score.',resolvedKeys:Object.fromEntries(Object.entries(tracks).map(([name,curve])=>[name,curve.keys])),samples:sampleTimes.map(t=>({time:t,...Object.fromEntries(Object.entries(tracks).map(([name,curve])=>[name,curve.sample(t)]))})),heldEnd:effect.createCometTracks(false).travel.sample(1.8),continuedEnd:tracks.travel.sample(1.8),frames:n,fps,emptyLast:continued.frames.at(-1).clear.every(v=>v===0)};
+writeFileSync(join(out,'timing-data.json'),JSON.stringify(report,null,2));console.log({frames:n,fps,holdAt1_8:report.heldEnd,continueAt1_8:report.continuedEnd,emptyLast:report.emptyLast});

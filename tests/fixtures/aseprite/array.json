@@ -1,0 +1,12 @@
+{
+  "frames": [
+    {"filename":"burst 0.aseprite", "frame":{"x":0,"y":0,"w":2,"h":2}, "rotated":false, "trimmed":true, "spriteSourceSize":{"x":1,"y":1,"w":2,"h":2}, "sourceSize":{"w":4,"h":3}, "duration":75},
+    {"filename":"burst 1.aseprite", "frame":{"x":2,"y":0,"w":2,"h":2}, "rotated":false, "trimmed":true, "spriteSourceSize":{"x":0,"y":0,"w":2,"h":2}, "sourceSize":{"w":4,"h":3}, "duration":180}
+  ],
+  "meta": {
+    "app":"manually-authored Aseprite schema test fixture", "size":{"w":4,"h":2}, "scale":"1",
+    "frameTags":[{"name":"burst", "from":0,"to":1,"direction":"pingpong_reverse","repeat":"3"}],
+    "layers":[{"name":"Ink", "opacity":128,"blendMode":"multiply"}],
+    "pokuFx":{"pivot":[2,3]}
+  }
+}
