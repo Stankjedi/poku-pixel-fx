@@ -30,6 +30,8 @@
     "tools/export-catalog.mts",
     "tools/sync-site.mts",
     "tools/render-3d.mts",
-    "tools/render-3d-gif.mts"
+    "tools/render-3d-gif.mts",
+    "tools/review.mts",
+    "tools/aseprite.mts"
   ]
 }

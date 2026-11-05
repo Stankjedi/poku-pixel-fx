@@ -5,11 +5,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { FX_DIR, effectSymbol } from "./lib/fxlib.mjs";
+import { timingTemplate } from "./lib/timing-template.mjs";
 const { categories } = await import(new URL("../../build/fx/categories.js", import.meta.url).href);
 
-const id = process.argv[2], loop = process.argv.includes("--loop");
+const id = process.argv[2], loop = process.argv.includes("--loop"), timing = process.argv.includes("--timing");
+if (loop && timing) { console.error("--timing은 one-shot 시간 곡선 예제입니다. --loop와 함께 사용할 수 없습니다."); process.exit(1); }
 if (!id || !/^[a-z0-9-]+\/[a-z0-9-]+$/.test(id)) {
-  console.error("사용법: node build-tools/tools/new.mjs <category>/<name> [--loop]   (kebab-case)");
+  console.error("사용법: node build-tools/tools/new.mjs <category>/<name> [--loop | --timing]   (kebab-case)");
   process.exit(1);
 }
 const file = join(FX_DIR, id + ".ts"), legacyFile = join(FX_DIR, id + ".js");
@@ -70,7 +72,7 @@ const body = loop
     drawTrail(p, motionTrail(position, t, 0.055), { color: C[3], head: t / life < 0.35 ? C[6] : C[5], alpha, light: 0.12 });
   });
   p.glow(0, -1, 18, C[4], 0.28 * flash);`;
-const src = `import { PAL, fit, ${loop ? "cycle" : "burst, fly, smooth, pointedRibbon, sparkle"}, motionTrail, drawTrail, particleEnvelope, TAU } from "../../core/index.js";
+const src = timing ? timingTemplate(name, category) : `import { PAL, fit, ${loop ? "cycle" : "burst, fly, smooth, pointedRibbon, sparkle"}, motionTrail, drawTrail, particleEnvelope, TAU } from "../../core/index.js";
 
 export const meta = {
   addedAt: "${new Date().toISOString()}",
@@ -95,3 +97,5 @@ writeFileSync(file, src, { flag: "wx" });
 try { writeFileSync(registryFile, updatedRegistry); }
 catch (error) { unlinkSync(file); throw error; }
 console.log(`${file} 생성 완료\n다음: npm run build && node build-tools/tools/render.mjs ${id} 실행 후 records/${id}/contact.png 확인\n완성 전 docs/QUALITY.md 기준으로 원본 크기와 실제 속도를 확인하세요.\n캐릭터가 있으면 동작을 추가하세요: docs/AUTHORING.md의 "Acts"를 참고하고 node build-tools/tools/act.mjs ${id} 실행`);
+
+if (timing) console.log("시간 곡선 제작 안내: docs/TIMING_CURVES.md. 이동·두께·투명도·광원을 따로 조정하고 마지막 구간을 확인하세요.");

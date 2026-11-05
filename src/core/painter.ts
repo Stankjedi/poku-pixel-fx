@@ -494,8 +494,9 @@ export class Painter {
         }
         if (!c) continue;
         const col = opts.flip ? W - 1 - q : q, row = opts.flipY ? s.length - 1 - r : r;
-        if (k === 1) this.dot(x + col, y + row, c, a);
-        else this.rect(x + col * k, y + row * k, k, k, c, a);
+        // Sample the transformed source cell, not a locally rounded point. Otherwise
+        // fractional anchors change phase when switching to the rotated branch.
+        this.rect(x + col * k, y + row * k, k, k, c, a);
       }
   }
   /**
@@ -526,7 +527,7 @@ export class Painter {
       return;
     }
     for (let my = 0; my < m.h; my++)
-      for (let mx = 0; mx < m.w; mx++) if (m.data[my * m.w + mx]) this.dot(x + mx, y + my, call(c, mx, my), call(a, mx, my));
+      for (let mx = 0; mx < m.w; mx++) if (m.data[my * m.w + mx]) this.rect(x + mx, y + my, 1, 1, call(c, mx, my), call(a, mx, my));
   }
   /** The 1 px outline just outside a mask. */
   outline(m: Mask, x: number, y: number, c: PaintValue, a: PaintValue = 1) {
@@ -543,6 +544,6 @@ export class Painter {
     for (let my = -1; my <= m.h; my++)
       for (let mx = -1; mx <= m.w; mx++)
         if (!at(mx, my) && (at(mx - 1, my) || at(mx + 1, my) || at(mx, my - 1) || at(mx, my + 1)))
-          this.dot(x + mx, y + my, call(c, mx, my), call(a, mx, my));
+          this.rect(x + mx, y + my, 1, 1, call(c, mx, my), call(a, mx, my));
   }
 }

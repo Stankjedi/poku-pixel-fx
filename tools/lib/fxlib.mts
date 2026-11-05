@@ -184,8 +184,18 @@ export function canvas(w: number, h: number, fill: number[] = [12, 11, 16, 255])
           const tx = x + xx;
           if (tx < 0 || tx >= w) continue;
           const s = (yy * sw + xx) * 4, d = (ty * w + tx) * 4, a = src[s + 3] / 255;
-          for (let c = 0; c < 3; c++) data[d + c] = src[s + c] * a + data[d + c] * (1 - a);
-          data[d + 3] = Math.max(data[d + 3], src[s + 3]);
+          if (a === 0) continue;
+          if (a === 1 || data[d + 3] === 0) {
+            // PNG stores straight RGBA: pasting into empty cells must not darken RGB by alpha.
+            for (let c = 0; c < 4; c++) data[d + c] = src[s + c];
+          } else if (data[d + 3] === 255) {
+            // Preserve existing opaque contact-sheet/background pixels and rounding exactly.
+            for (let c = 0; c < 3; c++) data[d + c] = src[s + c] * a + data[d + c] * (1 - a);
+          } else {
+            const behind = data[d + 3] / 255 * (1 - a), outAlpha = a + behind;
+            for (let c = 0; c < 3; c++) data[d + c] = (src[s + c] * a + data[d + c] * behind) / outAlpha;
+            data[d + 3] = outAlpha * 255;
+          }
         }
       }
     },

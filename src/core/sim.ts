@@ -57,6 +57,47 @@ export const P = { SPARK: 0, MOTE: 1, STREAK: 2, FLAKE: 3, VAPOUR: 4, DUST: 5, S
 export const PF = { SMOKES: 1, BIG: 2, BACK: 4 };
 const SOFT = new Set([P.VAPOUR, P.DUST, P.SMOKE]);
 
+interface GroundContact { x: number; y: number; vx: number; vy: number; nx: number; ny: number }
+/** undefined retains the exact flat-floor response; null means no sloped-floor contact.
+ * Ground is a pure, continuous local height field. Follow the analytic trajectory to its crossing,
+ * then estimate the outward surface normal. No random draws occur during contact detection.
+ */
+function slopeContact(ground: (x: number) => number, p: Particle, x0: number, y0: number,
+  vx0: number, vy0: number, g0: number, dt: number, gravity: number, drag: number, dragY = drag): GroundContact | null | undefined {
+  const g1 = ground(p.x);
+  if (g1 === g0) return undefined;
+  if (!Number.isFinite(g0) || !Number.isFinite(g1) || p.y < g1) return null;
+  const at = (time: number) => {
+    const q = { x: x0, y: y0, vx: vx0, vy: vy0 };
+    integrateMotion2D(q, time, 0, gravity, drag, dragY);
+    return q;
+  };
+  let lo = 0, hi = dt;
+  // Already-submerged inputs recover at their current x; ordinary crossings start above the floor.
+  if (y0 <= g0) for (let i = 0; i < 28; i++) {
+    const mid = (lo + hi) / 2, q = at(mid), height = ground(q.x);
+    if (!Number.isFinite(height)) return null;
+    if (q.y >= height) hi = mid;
+    else lo = mid;
+  }
+  const q = at(hi), y = ground(q.x);
+  if (!Number.isFinite(y)) return null;
+  const delta = 0.001, left = ground(q.x - delta), right = ground(q.x + delta);
+  const slope = Number.isFinite(left) && Number.isFinite(right)
+    ? (right - left) / (2 * delta) : (g1 - g0) / (p.x - x0);
+  const length = Math.hypot(slope, 1);
+  if (!Number.isFinite(length)) return null;
+  return { ...q, y, nx: slope / length, ny: -1 / length };
+}
+function reflectGround(p: Particle, hit: GroundContact, bounce: number, friction: number, jitter = 0) {
+  const normal = Math.max(0, -(hit.vx * hit.nx + hit.vy * hit.ny)) * bounce;
+  const tangent = (-hit.vx * hit.ny + hit.vy * hit.nx) * friction + jitter;
+  p.x = hit.x; p.y = hit.y - 0.25;
+  p.vx = normal * hit.nx - tangent * hit.ny;
+  p.vy = normal * hit.ny + tangent * hit.nx;
+  p.trailAge = 0;
+}
+
 /**
  * A particle system. opts: { seed, ground: (x) => floor y (local px; sparks bounce on it), sparks: [head..tail]
  * colors for SPARK, haze: color vapour glows with }.
@@ -110,9 +151,14 @@ export class Particles {
           integrateMotion2D(p, dt, Math.sin(t * 17 + p.seed) * 30, -95, 5, 3.2);
           break;
         case P.GRIT: {
-          const g = this.ground(p.x), y0 = p.y;
+          const x0 = p.x, y0 = p.y, vx0 = p.vx, vy0 = p.vy, g = this.ground(x0);
           integrateMotion2D(p, dt, 0, GRAVITY, 0.8, 0);
-          if (p.vy > 0 && y0 <= g && p.y >= g) {
+          const hit = slopeContact(this.ground, p, x0, y0, vx0, vy0, g, dt, GRAVITY, 0.8, 0);
+          if (hit) {
+            const speed = -(hit.vx * hit.nx + hit.vy * hit.ny);
+            if (speed > 130 && R.chance(0.4)) reflectGround(p, hit, 0.25, 0.5, R.range(-10, 10));
+            else { p.x = hit.x; p.y = hit.y - 0.25; p.vx = p.vy = 0; p.life = Math.min(p.life, 0.5); }
+          } else if (hit === undefined && p.vy > 0 && y0 <= g && p.y >= g) {
             p.y = g - 0.25;
             if (p.vy > 130 && R.chance(0.4)) (p.vy = -p.vy * 0.25), (p.vx = p.vx * 0.5 + R.range(-10, 10));
             else (p.vx = p.vy = 0), (p.life = Math.min(p.life, 0.5));
@@ -120,19 +166,26 @@ export class Particles {
           break;
         }
         case P.BRAND: {
-          const x0 = p.x, y0 = p.y, g = this.ground(x0);
+          const x0 = p.x, y0 = p.y, vx0 = p.vx, vy0 = p.vy, g = this.ground(x0);
           integrateMotion2D(p, dt, 0, GRAVITY * 0.8, 0.9, 0);
           if (R.chance(0.9 * Math.min(1, dt * 60))) this.spawn(P.FIRE, x0, y0, p.vx * 0.1 + R.range(-7, 7), p.vy * 0.1 - 10, R.range(0.16, 0.32), 0, R.range(0.9, 1.7) * (0.5 + (p.life / p.max) * 0.6), 0, R.chance(0.4) ? PF.SMOKES : 0);
-          if (p.vy > 0 && y0 <= g && p.y >= g) {
+          const hit = slopeContact(this.ground, p, x0, y0, vx0, vy0, g, dt, GRAVITY * 0.8, 0.9, 0);
+          if (hit) {
+            p.x = hit.x; p.y = hit.y;
+            this.onLand?.(hit.x, hit.y);
+            p.life = 0;
+          } else if (hit === undefined && p.vy > 0 && y0 <= g && p.y >= g) {
             this.onLand?.(p.x, g);
             p.life = 0;
           }
           break;
         }
         case P.SPARK: {
-          const g = this.ground(p.x), y0 = p.y;
+          const x0 = p.x, y0 = p.y, vx0 = p.vx, vy0 = p.vy, g = this.ground(x0);
           integrateMotion2D(p, dt, 0, GRAVITY * 0.45, 2.2);
-          if (p.vy > 0 && y0 <= g && p.y >= g) {
+          const hit = slopeContact(this.ground, p, x0, y0, vx0, vy0, g, dt, GRAVITY * 0.45, 2.2);
+          if (hit) reflectGround(p, hit, 0.45, 0.7);
+          else if (hit === undefined && p.vy > 0 && y0 <= g && p.y >= g) {
             p.vy = -p.vy * 0.45; p.vx *= 0.7; p.y = g - 0.25; p.trailAge = 0;
           }
           break;

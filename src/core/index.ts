@@ -23,7 +23,7 @@ export type { PathOptions } from "./painter.js";
 export type { AlphaMode } from "../render/coverage.js";
 export { FONTS, textWidth } from "./font.js";
 export { createFrame, clearFrame, createFx, composite, painterFor, resolveOptions, sceneCameraOffset } from "./fx.js";
-export { stockActor, drawActor, actorAlphaOf, HERO, HERO2, HERO_PAL, DUMMY_PAL } from "./actor.js";
+export { stockActor, drawActor, actorAlphaOf, withActorPixels, HERO, HERO2, HERO_PAL, DUMMY_PAL } from "./actor.js";
 export { backdrop, BACKDROPS } from "./scene.js";
 export { createAct, actBounds, actSpan, actTiming, poseAt, lerpPose, Target, STAND, SKINS, posed } from "./act.js";
 export type { ActHit, ActTimingHit } from "./act.js";
@@ -50,3 +50,21 @@ export * from "./creature.js";
 export * from "./human-weapon.js";
 
 export * from './human-portrait.js';
+
+// Reimplemented opt-in 2.5D material response; existing renderers are unchanged.
+export { samplePointLight2D, localPointLight2D, createPointLightSampler2D } from './point-light-2d.js';
+export type { PointLight2D, PointLightSample2D, LightVector2D } from './point-light-2d.js';
+
+export * from './canvas-bounds.js';
+
+export * from "./detail-particles.js";
+
+export * from "./sprite-edit.js";
+
+export * from "./timing-curve.js";
+
+export * from "./material-ramp.js";
+
+export type { PixelActor2D } from "./actor.js";
+
+export * from "./sprite-clip.js";

@@ -1,4 +1,6 @@
 import { hex } from "./color.js";
+import type { Mask, PaintValue } from "./painter.js";
+import type { EditableSprite2D } from "./sprite-edit.js";
 // A stock character to try effects on: status effects wrap its silhouette, hits land on it, auras sit
 // behind it. Previews and the gallery draw it; effects only read its mask through o.actor.
 
@@ -107,9 +109,51 @@ export function stockActor(k = 1) {
   return { mask: m, pixels: PIXELS[k as 1 | 2], x, y, w: m.w, h: m.h, k, head: [0, y], chest: [0, k === 2 ? -26 : y + 11], ...(k === 2 ? { eyes: [[13, 3], [15, 3]] } : {}) };
 }
 
-/** Draw the stock actor with its feet at the painter's origin, at alpha a (dithered). */
-export function drawActor(p: { sprite: (rows: string[], palette: Record<string, string>, x: number, y: number, options: { a: number }) => unknown }, actor = stockActor(), a = 1) {
-  if (a > 0) p.sprite(SPRITES[actor.k === 2 ? 2 : 1], actor.k === 2 ? DUMMY_PAL : HERO_PAL, actor.x, actor.y, { a });
+/** A native raster actor whose local top-left is explicit. Extra anchors/rig metadata are optional
+ * for drawing, but effects using them still need the appropriate original actor metadata. */
+export interface PixelActor2D extends EditableSprite2D {
+  x: number;
+  y: number;
+  readonly renderSource: "pixels";
+}
+
+function validateActorPixels(actor: EditableSprite2D & { x: number; y: number }) {
+  const count = actor.w * actor.h;
+  if (![actor.w, actor.h, count].every(Number.isSafeInteger) || actor.w < 1 || actor.h < 1 || count > 16_777_216
+    || !Number.isFinite(actor.x) || !Number.isFinite(actor.y)
+    || !(actor.pixels instanceof Uint32Array) || actor.pixels.length !== count
+    || !actor.mask || actor.mask.w !== actor.w || actor.mask.h !== actor.h
+    || !(actor.mask.data instanceof Uint8Array) || actor.mask.data.length !== count)
+    throw new RangeError("Pixel actor needs finite x/y and matching native pixel/mask buffers");
+}
+
+/** Explicitly draw this actor's pixel buffer instead of stock row art. Returns a shallow wrapper:
+ * buffers and metadata are retained, not copied or normalized. Pair with editSpriteCluster2D for
+ * non-destructive edits. The marker survives further cluster edits and actor-option forwarding. */
+export function withActorPixels<T extends EditableSprite2D & { x: number; y: number }>(actor: T): T & PixelActor2D {
+  validateActorPixels(actor);
+  return { ...actor, renderSource: "pixels" };
+}
+
+interface ActorPainter {
+  sprite: (rows: string[], palette: Record<string, string>, x: number, y: number, options: { a: number }) => unknown;
+  mask?: (mask: Mask, x: number, y: number, color: PaintValue, alpha?: PaintValue) => unknown;
+}
+
+/** Draw an actor at its local x/y. Stock calls retain their original row-art path. A pixel actor
+ * explicitly opts into its current pixels/mask, using the painter's transform, fade and alpha mode. */
+export function drawActor(p: ActorPainter, actor: ReturnType<typeof stockActor> | PixelActor2D = stockActor(), a = 1) {
+  if ("renderSource" in actor && actor.renderSource === "pixels") {
+    validateActorPixels(actor);
+    if (!Number.isFinite(a)) throw new RangeError("Pixel actor alpha must be finite");
+    if (a <= 0) return;
+    if (typeof p.mask !== "function") throw new TypeError("Drawing pixel actors requires a painter with mask()");
+    p.mask(actor.mask, actor.x, actor.y, (x, y) => actor.pixels[y * actor.w + x], a);
+    return;
+  }
+  // Do not infer opt-in from a different buffer reference: legacy actors keep identical output.
+  const k = "k" in actor && actor.k === 2 ? 2 : 1;
+  if (a > 0) p.sprite(SPRITES[k], k === 2 ? DUMMY_PAL : HERO_PAL, actor.x, actor.y, { a });
 }
 /** How visible an effect wants the stand-in character at time t (effects may export actorAlpha). */
 export const actorAlphaOf = (mod: { actorAlpha?: (t: number, options: any) => number }, t: number, o: any) => (typeof mod.actorAlpha === "function" ? mod.actorAlpha(t, o) : 1);
