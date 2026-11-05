@@ -83,6 +83,7 @@ export type { FrameRendererOptions, FrameRendererStatus } from "../render/frame-
 export * from './sprite-raster.js';
 export * from './pixel-tools.js';
 export * from './pixel-style.js';
+export * from './pixel-quantize.js';
 export * from './material-surface.js';
 export * from './character-animation.js';
 export * from './character-identity.js';

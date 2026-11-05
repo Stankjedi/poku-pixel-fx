@@ -23,6 +23,21 @@ export function createLanternlingCharacter2D():CharacterAsset2D{
   const clip={version:1 as const,width,height,pivot:[10,22] as const,frames,tags:[{name:'walk',from:0,to:3,direction:'forward' as const}],source:{author:'Original Poku example',kind:'hand-authored-native-cels'}};
   return createCharacterAsset2D({schema:'poku.character/v1',id:'lanternling',name:'Lanternling',nativeHeight:24,source:{kind:'sprite',clip,options:{loop:true,emissionKind:'surface'}},defaultClip:'walk',clips:{walk:{kind:'sprite',options:{tag:'walk',loop:true,emissionKind:'surface'},events:[{id:'left-step',at:0,kind:'footstep',socket:'foot'},{id:'right-step',at:.3,kind:'footstep',socket:'otherFoot'}]}}});
 }
+/** A removable native crest follows the body's source cels in forward and reverse-tag playback. */
+export function createSynchronizedLanternling2D():CharacterAsset2D{
+  const base=createLanternlingCharacter2D();
+  if(base.source.kind!=='sprite')throw new TypeError('Lanternling needs authored raster cels');
+  const clip={...base.source.clip,tags:[...base.source.clip.tags??[],{name:'return',from:0,to:3,direction:'pingpong_reverse' as const}]};
+  const crest={version:1 as const,width:5,height:4,pivot:[2,3] as const,frames:clip.frames.map((_,cel)=>{
+    const f:PaintFrame={w:5,h:4,ox:0,oy:0,color:new Uint32Array(20),light:new Uint32Array(20)},p=new Painter(f);
+    p.rect(1,2,3,1,hex('#b27545'));p.line(2,2,cel&1?3:1,0,hex('#e6bf72'));p.px(cel&1?3:1,0,hex('#ffe4a0'));
+    return{durationMs:100,runs:encodeSpritePixels2D(f.color),sockets:{'crest.tip':{x:cel&1?3:1,y:0}}};
+  })};
+  return createCharacterAsset2D({...base,id:'lanternling-cel-gear',name:'Lanternling Cel Gear',source:{...base.source,clip},
+    clips:{...base.clips,return:{kind:'sprite',options:{tag:'return',loop:true,emissionKind:'surface'}}},
+    slots:[{id:'headwear',socket:'head',order:1}],equipment:{crest:{id:'crest',slots:['headwear'],layers:[{id:'crest',clip:crest,semantic:'metal',offset:[0,-2],animations:{walk:{sync:'source-frame'},return:{sync:'source-frame'}}}]}},loadout:{headwear:'crest'},
+  });
+}
 export function createSerpentCharacter2D():CharacterAsset2D{
   const rig=createSerpentRig2D(64);return createCharacterAsset2D({schema:'poku.character/v1',id:rig.id,name:'Moss Serpent',nativeHeight:64,source:{kind:'creature-rig',rig},defaultClip:'slither',clips:{slither:{kind:'creature-rig',duration:2}}});
 }

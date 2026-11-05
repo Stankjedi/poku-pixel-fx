@@ -9,6 +9,9 @@ use std::{
 };
 use wgpu::util::DeviceExt;
 const DRAW: &str = include_str!("../../src/render/shaders/draw-ir.wgsl");
+const DRAW_TILES: &str = include_str!("../../src/render/shaders/draw-tiles.wgsl");
+const TILE_SIZE: u32 = 16;
+const TILE_CAPACITY: u32 = 256;
 const PREPARE: &str = include_str!("../../src/render/shaders/cinematic-prepare.wgsl");
 const BLOOM: &str = include_str!("../../src/render/shaders/cinematic-bloom.wgsl");
 const RESOLVE: &str = include_str!("../../src/render/shaders/cinematic-resolve.wgsl");
@@ -43,6 +46,8 @@ pub struct Renderer {
     pub queue: wgpu::Queue,
     pub adapter_info: wgpu::AdapterInfo,
     draw: wgpu::ComputePipeline,
+    tile_draw: wgpu::ComputePipeline,
+    tiles: Option<wgpu::Buffer>,
     prepare: wgpu::ComputePipeline,
     down: wgpu::ComputePipeline,
     horizontal: wgpu::ComputePipeline,
@@ -243,6 +248,7 @@ impl Renderer {
         ));
         let resolve_layout = layout(&device, &resolve_entries);
         let draw = pipeline(&device, DRAW, "main", None);
+        let tile_draw = pipeline(&device, DRAW_TILES, "main", None);
         let prepare = pipeline(&device, PREPARE, "main", Some(&prepare_layout));
         let down = pipeline(&device, BLOOM, "down", Some(&bloom_layout));
         let horizontal = pipeline(&device, BLOOM, "horizontal", Some(&bloom_layout));
@@ -273,6 +279,8 @@ impl Renderer {
             queue,
             adapter_info: info,
             draw,
+            tile_draw,
+            tiles: None,
             prepare,
             down,
             horizontal,
@@ -397,6 +405,35 @@ impl Renderer {
         let assets = self.upload("asset color", &scene.color, &scene.asset_revision)?;
         let emission = self.upload("asset emission", &scene.emission, &scene.asset_revision)?;
         let pixels = scene.width as usize * scene.height as usize;
+        let tile_count = scene.width.div_ceil(TILE_SIZE) * scene.height.div_ceil(TILE_SIZE);
+        let tile_bytes = u64::from(tile_count) * u64::from(TILE_CAPACITY + 1) * 4;
+        let wants_tiles = match options["drawCulling"].as_str() {
+            None | Some("auto") => scene.count >= 32 && pixels >= 256,
+            Some("none") => false,
+            Some("tiled") => scene.count > 0,
+            Some(_) => return Err("Unknown DrawIR culling mode".into()),
+        };
+        let tiles_fit = tile_bytes
+            <= u64::from(self.device.limits().max_storage_buffer_binding_size)
+            && tile_bytes <= self.device.limits().max_buffer_size
+            && tile_bytes
+                + pixels as u64 * 110
+                + scene.commands.len() as u64
+                + scene.color.len() as u64
+                + scene.emission.len() as u64
+                <= 256 * 1024 * 1024;
+        let use_tiles = wants_tiles && tiles_fit;
+        if use_tiles {
+            if self.tiles.as_ref().is_none_or(|b| b.size() != tile_bytes) {
+                self.tiles = Some(buffer(
+                    &self.device,
+                    tile_bytes,
+                    wgpu::BufferUsages::STORAGE,
+                ));
+            }
+        } else {
+            self.tiles = None;
+        }
         let radiance_buffer =
             self.upload_float_layer("external radiance", radiance, pixels * 3, None)?;
         let occlusion_buffer =
@@ -479,10 +516,27 @@ impl Renderer {
         self.queue.write_buffer(
             &self.draw_params,
             0,
-            &bytes_u32(&[scene.width, scene.height, scene.count, 0]),
+            &bytes_u32(&[
+                scene.width,
+                scene.height,
+                scene.count,
+                if use_tiles { TILE_CAPACITY } else { 0 },
+            ]),
         );
         self.uploaded_bytes += 96;
         let t = self.target.as_ref().unwrap();
+        let tiles = self.tiles.as_ref().unwrap_or(&self.zero);
+        let tile_group = use_tiles.then(|| {
+            group(
+                &self.device,
+                &self.tile_draw,
+                &[
+                    self.draw_params.as_entire_binding(),
+                    commands.as_entire_binding(),
+                    tiles.as_entire_binding(),
+                ],
+            )
+        });
         let draw_group = group(
             &self.device,
             &self.draw,
@@ -494,6 +548,7 @@ impl Renderer {
                 t.color_buffer.as_entire_binding(),
                 t.light_buffer.as_entire_binding(),
                 t.hdr_buffer.as_entire_binding(),
+                tiles.as_entire_binding(),
             ],
         );
         let prepare_group = group(
@@ -535,6 +590,11 @@ impl Renderer {
         let mut encoder = self.device.create_command_encoder(&Default::default());
         {
             let mut pass = encoder.begin_compute_pass(&Default::default());
+            if let Some(tile_group) = &tile_group {
+                pass.set_pipeline(&self.tile_draw);
+                pass.set_bind_group(0, tile_group, &[]);
+                pass.dispatch_workgroups(tile_count.div_ceil(64), 1, 1);
+            }
             pass.set_pipeline(&self.draw);
             pass.set_bind_group(0, &draw_group, &[]);
             pass.dispatch_workgroups(t.w.div_ceil(4), t.h.div_ceil(4), 1);

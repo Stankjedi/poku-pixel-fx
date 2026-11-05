@@ -41,8 +41,16 @@ export type CharacterClip2D = CharacterClipBase2D & (
   | {kind:'creature-rig';duration?:number}
   | {kind:'sprite';data?:SpriteClipData2D;options?:SpriteClipOptions2D}
 );
+export interface CharacterLayerAnimation2D {
+  /** Select a layer tag for this character clip. Omit to retain the layer's default tag. */
+  tag?:string;
+  /** Time preserves the independent clock; phase retimes one sequence; source-frame follows imported body cels. */
+  sync?:'time'|'phase'|'source-frame';
+}
 export interface CharacterLayer2D {
   id:string;clip:SpriteClipData2D;options?:SpriteClipOptions2D;
+  /** Per-character-clip raster animation bindings. Native articulated generators already follow the pose. */
+  animations?:Readonly<Record<string,CharacterLayerAnimation2D>>;
   /** Optional native articulated equipment; clip remains its portable inventory thumbnail. */
   generator?:'human-sword'|'human-bow';
   /** If omitted on equipment, the slot's socket is used. */
@@ -82,6 +90,10 @@ export type CharacterAsset=CharacterAsset2D;
 export interface CharacterSample2D extends ActorSample2D {
   sockets:Record<string,CharacterSocket2D>;semanticMasks:Record<string,Uint8Array>;
   events:readonly CharacterEvent2D[];rootMotion:[number,number];frameIndex:number;
+  /** Effective clip-local time after authored cel holding, and its loop cycle. Editor keys use phaseTime. */
+  phaseTime:number;cycle:number;
+  /** Original source frame of each raster layer; -1 when hidden. Native articulated layers have no raster cel. */
+  layerFrames:Record<string,number>;
   clip:string;duration:number;loop:boolean;contacts:{left:boolean;right:boolean};
   /** Coverage-weighted native radiance aligned with actor pixels, independent of color alpha. */
   emission:Float32Array;
@@ -107,11 +119,14 @@ function validatePatch(patch:SpriteClusterPatch2D){
   if(!Number.isSafeInteger(patch.x)||!Number.isSafeInteger(patch.y)||!Array.isArray(patch.rows)||patch.rows.length>4096||!patch.rows.every(r=>typeof r==='string'&&[...r].length<=4096)||!patch.palette||typeof patch.palette!=='object')throw new RangeError('Invalid persisted cel patch');
   for(const[symbol,color]of Object.entries(patch.palette))if([...symbol].length!==1||color!==null&&(!Number.isInteger(color)||color< -0x80000000||color>0xffffffff))throw new RangeError('Cel patch palette needs code points and packed colors/null');
 }
+function spriteOptions(source:CharacterSource2D,clip:Extract<CharacterClip2D,{kind:'sprite'}>):SpriteClipOptions2D{
+  return{...(source.kind==='sprite'?source.options:undefined),...clip.options};
+}
 function clipMetadata(source:CharacterSource2D,clip:CharacterClip2D):{duration:number;loop:boolean;events:readonly CharacterEvent2D[]}{
   let duration:number,loop:boolean,events:readonly CharacterEvent2D[]=[];
   if(clip.kind==='human'){({duration,loop,events}=humanAnimationInfo2D(clip.action));}
   else if(clip.kind==='key-pose'){duration=clip.poses.duration;loop=clip.poses.loop??false;events=clip.poses.events??[];}
-  else if(clip.kind==='sprite'){const data=clip.data??(source.kind==='sprite'?source.clip:undefined);if(!data)throw new RangeError('Sprite clip data is required');const c=createSpriteClip2D(data,clip.options??(source.kind==='sprite'?source.options:undefined));duration=c.duration;loop=clip.options?.loop??(source.kind==='sprite'?source.options?.loop:false)??false;}
+  else if(clip.kind==='sprite'){const data=clip.data??(source.kind==='sprite'?source.clip:undefined);if(!data)throw new RangeError('Sprite clip data is required');const options=spriteOptions(source,clip),c=createSpriteClip2D(data,options);duration=c.duration;loop=options.loop??false;}
   else if(clip.kind==='creature-rig'){duration=clip.duration??(source.kind==='creature-rig'?source.rig.duration:2);loop=true;}
   else {duration=clip.duration??2;loop=true;}
   events=clip.events??events;createCharacterEventCursor2D(duration,events,loop);return{duration,loop,events};
@@ -124,7 +139,7 @@ export function createCharacterAsset2D(input:CharacterAsset2D):CharacterAsset2D 
   const rasterDefinitions:SpriteClipData2D[]=[];
   for(const clip of Object.values(asset.clips))if(clip.kind==='sprite'){const data=clip.data??(source.kind==='sprite'?source.clip:undefined);if(data)rasterDefinitions.push(data);}
   for(const layer of [...asset.layers??[],...Object.values(asset.equipment??{}).flatMap(item=>item.layers??[])])if(layer.clip)rasterDefinitions.push(layer.clip);
-  let decodedCells=0;for(const data of rasterDefinitions){decodedCells+=data.width*data.height*(data.frames?.length??0);if(!Number.isSafeInteger(decodedCells)||decodedCells>16_777_216)throw new RangeError('Character clips exceed the total decoded-cell budget');}
+  let decodedCells=0;for(const data of new Set(rasterDefinitions)){decodedCells+=data.width*data.height*(data.frames?.length??0);if(!Number.isSafeInteger(decodedCells)||decodedCells>16_777_216)throw new RangeError('Character clips exceed the total decoded-cell budget');}
 
   if(source.kind==='human')humanRig2D({...source.style,height:asset.nativeHeight});
   else if(source.kind==='creature')renderCreature2D({...source.style,size:asset.nativeHeight},'idle',0);
@@ -138,7 +153,18 @@ export function createCharacterAsset2D(input:CharacterAsset2D):CharacterAsset2D 
   const layer=(l:CharacterLayer2D)=>{
     if(!validName(l.id)||layerIds.has(l.id)||!validName(l.semantic)||l.order!==undefined&&!Number.isFinite(l.order)||l.angle!==undefined&&!Number.isFinite(l.angle)||l.offset!==undefined&&!finitePoint(l.offset))throw new RangeError('Character layers need unique IDs, semantics and finite transforms');
     if(l.generator&&(source.kind!=='human'||!['human-sword','human-bow'].includes(l.generator)||l.offset!==undefined||l.angle!==undefined||l.secondary!==undefined||l.socket!==undefined&&l.socket!=='hand.grip'))throw new RangeError('Articulated human equipment uses the human grip, without a second local transform');
-    layerIds.add(l.id);createSpriteClip2D(l.clip,l.options);
+    layerIds.add(l.id);const nativeClip=createSpriteClip2D(l.clip,l.options);
+    if(l.animations){
+      if(l.generator||typeof l.animations!=='object'||Array.isArray(l.animations)||Object.keys(l.animations).length>128)throw new RangeError('Raster layer animations need a named clip map; articulated equipment already follows its pose');
+      for(const[name,binding]of Object.entries(l.animations)){
+        if(!own(asset.clips,name)||!binding||typeof binding!=='object'||Array.isArray(binding)||binding.sync!==undefined&&!['time','phase','source-frame'].includes(binding.sync))throw new RangeError('Layer animation must reference a character clip and a valid synchronization mode');
+        if(binding.tag!==undefined)nativeClip.withOptions({tag:binding.tag});
+        if(binding.sync==='source-frame'){
+          const bodyClip=asset.clips[name],data=bodyClip.kind==='sprite'?bodyClip.data??(source.kind==='sprite'?source.clip:undefined):undefined;
+          if(binding.tag!==undefined||!data||data.frames.length!==nativeClip.frameCount)throw new RangeError('Source-frame layer synchronization requires a sprite body with matching source frame count and no binding tag');
+        }
+      }
+    }
     for(const name of l.visibleIn??[])if(!own(asset.clips,name))throw new RangeError('Layer references an unknown clip');
     if(l.secondary){if(!Number.isFinite(l.secondary.duration)||l.secondary.duration<=0||!l.secondary.keys.length)throw new RangeError('Invalid baked secondary track');l.secondary.keys.forEach((k,i)=>{if(!Number.isFinite(k.at)||k.at<0||k.at>l.secondary!.duration||!Number.isFinite(k.angle)||i>0&&k.at<=l.secondary!.keys[i-1].at)throw new RangeError('Invalid secondary motion keys');});}
   };
@@ -198,8 +224,8 @@ function humanMasks(style:HumanStyle,pose:HumanPose,sprite:HumanSprite):Record<s
   }
   return masks;
 }
-function clipLayer(clip:SpriteClip2D,time:number,id:string,semantic:string,order:number,kind:'surface'|'optical'):NativeLayer{
-  const index=clip.frameAt(time),pixels=index<0?new Uint32Array(clip.width*clip.height):clip.framePixels(index),mask=Uint8Array.from(pixels,c=>c>>>24?1:0);
+function clipLayer(clip:SpriteClip2D,time:number,id:string,semantic:string,order:number,kind:'surface'|'optical',index=clip.frameAt(time)):NativeLayer{
+  const pixels=index<0?new Uint32Array(clip.width*clip.height):clip.framePixels(index),mask=Uint8Array.from(pixels,c=>c>>>24?1:0);
   const sprite:RasterSprite2D={x:-clip.pivot[0],y:-clip.pivot[1],w:clip.width,h:clip.height,pixels,mask:{w:clip.width,h:clip.height,data:mask}};
   return{id,sprite,masks:{[semantic]:mask.slice()},emission:index<0?null:clip.frameEmission(index),emissionKind:kind,order,semantic};
 }
@@ -262,11 +288,15 @@ export function createCharacterPlayer2D(input:CharacterAsset2D){
   const asset=createCharacterAsset2D(input),source=asset.source,clips=Object.freeze(Object.keys(asset.clips));
   const metadata=new Map(clips.map(name=>[name,clipMetadata(source,asset.clips[name])]));
   const socketTracksByClip=new Map(clips.map(name=>[name,new Map(Object.entries(asset.clips[name].socketTracks??{}).map(([socket,track])=>[socket,compileCharacterSocketTrack2D(track,metadata.get(name)!.duration)]))]));
-  const spriteClips=new Map<string,SpriteClip2D>(),poseClips=new Map<string,ReturnType<typeof compileHumanPoseClip2D>>();
-  for(const name of clips){const clip=asset.clips[name];if(clip.kind==='sprite')spriteClips.set(name,createSpriteClip2D(clip.data??(source as {clip:SpriteClipData2D}).clip,clip.options??(source.kind==='sprite'?source.options:undefined)));if(clip.kind==='key-pose')poseClips.set(name,compileHumanPoseClip2D(clip.poses));}
+  const spriteClips=new Map<string,SpriteClip2D>(),poseClips=new Map<string,ReturnType<typeof compileHumanPoseClip2D>>(),decodedSprites=new Map<SpriteClipData2D,SpriteClip2D>();
+  const decode=(data:SpriteClipData2D)=>{let clip=decodedSprites.get(data);if(!clip){clip=createSpriteClip2D(data);decodedSprites.set(data,clip);}return clip;};
+  for(const name of clips){const clip=asset.clips[name];if(clip.kind==='sprite')spriteClips.set(name,decode(clip.data??(source as {clip:SpriteClipData2D}).clip).withOptions(spriteOptions(source,clip)));if(clip.kind==='key-pose')poseClips.set(name,compileHumanPoseClip2D(clip.poses));}
   const rig=source.kind==='creature-rig'?compileCreatureRig2D(source.rig):undefined;
   const allLayerDefs=[...asset.layers??[],...Object.values(asset.equipment??{}).flatMap(item=>item.layers)];
-  const layerClips=new Map(allLayerDefs.map(l=>[l.id,createSpriteClip2D(l.clip,{loop:true,...l.options})]));
+  const layerClips=new Map(allLayerDefs.map(l=>[l.id,decode(l.clip).withOptions({loop:true,...l.options})]));
+  const layerAnimations=new Map(allLayerDefs.map(l=>[l.id,new Map(Object.entries(l.animations??{}).map(([name,binding])=>{
+    const base=layerClips.get(l.id)!;return[name,{clip:binding.tag===undefined?base:base.withOptions({tag:binding.tag}),sync:binding.sync??'time'}];
+  }))]));
   const layerSocketNames=new Map(allLayerDefs.map(l=>[l.id,new Set(l.generator?['weapon.base','weapon.tip','weapon.edge',...(l.generator==='human-bow'?['bow.upperTip','bow.lowerTip','bow.nock','muzzle']:[])]:l.clip.frames.flatMap(frame=>Object.keys(frame.sockets??{})))]));
   const style=asset.pixelStyle?compilePixelStyle2D(asset.pixelStyle):undefined,emptyMasks=new Set(['negativeSpace',...(asset.maskEdits??[]).filter(e=>e.allowEmpty).map(e=>e.name)]);
   let reach=asset.nativeHeight*1.7;
@@ -280,26 +310,39 @@ export function createCharacterPlayer2D(input:CharacterAsset2D){
   const bounds={x0:-Math.ceil(reach),y0:-Math.ceil(reach),x1:Math.ceil(reach),y1:Math.ceil(reach)},boundsCache=new Map<string,typeof bounds>();
   const releaseCorrections=new Map<string,PixelTransform2D>();
   const player={asset,clips,bounds,
-    /** Exact envelope for this export frame grid, with two native cells of guard padding. */
+    /** Envelope for this export cadence plus the non-loop endpoint, with two native cells of guard padding. */
     boundsForClip(clipName=asset.defaultClip,fps=30){
       if(!Number.isInteger(fps)||fps<1||fps>240)throw new RangeError('Bounds cadence must be 1..240 fps');const info=metadata.get(clipName);if(!info)throw new RangeError('Unknown character clip: '+clipName);const key=clipName+'@'+fps,cached=boundsCache.get(key);if(cached)return{...cached};
-      const n=Math.ceil(info.duration*fps);if(n>28800)throw new RangeError('Clip bounds frame budget exceeded');const box={x0:Infinity,y0:Infinity,x1:-Infinity,y1:-Infinity};for(let i=0;i<Math.max(1,n);i++){const b=player.sample(i/fps,clipName).bounds;box.x0=Math.min(box.x0,b.x0);box.y0=Math.min(box.y0,b.y0);box.x1=Math.max(box.x1,b.x1);box.y1=Math.max(box.y1,b.y1);}const result={x0:Math.floor(box.x0)-2,y0:Math.floor(box.y0)-2,x1:Math.ceil(box.x1)+2,y1:Math.ceil(box.y1)+2};boundsCache.set(key,result);return{...result};
+      const n=Math.ceil(info.duration*fps);if(n>28800)throw new RangeError('Clip bounds frame budget exceeded');
+      const box={x0:Infinity,y0:Infinity,x1:-Infinity,y1:-Infinity};
+      const include=(time:number)=>{const b=player.sample(time,clipName).bounds;box.x0=Math.min(box.x0,b.x0);box.y0=Math.min(box.y0,b.y0);box.x1=Math.max(box.x1,b.x1);box.y1=Math.max(box.y1,b.y1);};
+      for(let i=0;i<Math.max(1,n+(info.loop?0:1));i++)include(i/fps);
+      if(!info.loop&&n/fps!==info.duration)include(info.duration);
+      const result={x0:Math.floor(box.x0)-2,y0:Math.floor(box.y0)-2,x1:Math.ceil(box.x1)+2,y1:Math.ceil(box.y1)+2};boundsCache.set(key,result);return{...result};
     },
     clipInfo(clipName=asset.defaultClip){const info=metadata.get(clipName);if(!info)throw new RangeError('Unknown character clip: '+clipName);return copy(info);},
     createEventCursor(clipName=asset.defaultClip){const info=metadata.get(clipName);if(!info)throw new RangeError('Unknown character clip: '+clipName);return createCharacterEventCursor2D(info.duration,info.events,info.loop);},
     sample(time:number,clipName=asset.defaultClip,options:CharacterSampleOptions2D={}):CharacterSample2D{
       if(!Number.isFinite(time)||Math.abs(time)>1e9||!Number.isFinite(options.x??0)||!Number.isFinite(options.y??0))throw new RangeError('Character sample needs finite time and placement');
       if(!own(asset.clips,clipName))throw new RangeError('Unknown character clip: '+clipName);
-      const clip=asset.clips[clipName],info=metadata.get(clipName)!,t=clip.fps?Math.floor((clip.kind==='sprite'?time:Math.max(0,time))*clip.fps)/clip.fps:clip.kind==='sprite'?time:Math.max(0,time),wrappedTime=characterClipTime2D(t,info.duration,info.loop),phaseTime=wrappedTime.time;
+      const clip=asset.clips[clipName],info=metadata.get(clipName)!,rawTime=clip.kind==='sprite'?time:Math.max(0,time),wrappedTime=characterClipTime2D(rawTime,info.duration,info.loop);
+      // A loop starts at its own cel zero even when duration * fps is not an integer.
+      // Preserve the exact non-loop endpoint so final poses settle and raster clips disappear on time.
+      const cel=wrappedTime.time*(clip.fps??1),phaseTime=clip.fps&&wrappedTime.time!==info.duration?Math.floor(cel+8*Number.EPSILON*Math.max(1,Math.abs(cel)))/clip.fps:wrappedTime.time;
+      const t=rawTime<0?rawTime:info.loop?wrappedTime.cycle*info.duration+phaseTime:phaseTime;
+      const independentTime=clip.fps?Math.floor(rawTime*clip.fps)/clip.fps:rawTime;
       const socketTracks=options.ignoreSocketTracks?undefined:socketTracksByClip.get(clipName);
       const correctSocket=(name:string,baseline:CharacterSocket2D|undefined,at=phaseTime)=>{const track=socketTracks?.get(name);return track?applyCharacterSocketKey2D(baseline,track.sample(at),track.mode):baseline;};
       let sockets:Record<string,CharacterSocket2D>=Object.create(null),rootMotion:[number,number]=[0,0],contacts={left:false,right:false};
-      let frameIndex=Math.floor(phaseTime*(clip.fps??60)),body:NativeLayer,humanPose:HumanPose|undefined,currentHumanStyle:HumanStyle|undefined;const projectiles:RasterSprite2D[]=[];
+      let frameIndex=Math.floor(phaseTime*(clip.fps??60)+8*Number.EPSILON*Math.max(1,phaseTime*(clip.fps??60))),body:NativeLayer,humanPose:HumanPose|undefined,currentHumanStyle:HumanStyle|undefined;const projectiles:RasterSprite2D[]=[];
+      const layerFrames:Record<string,number>=Object.fromEntries(allLayerDefs.filter(l=>!l.generator).map(l=>[l.id,-1]));
       if(clip.kind==='human'||clip.kind==='key-pose'){
         const humanStyle:HumanStyle={...(source as {style:HumanStyle}).style,height:asset.nativeHeight};let sprite:HumanSprite,pose:HumanPose;
         if(clip.kind==='human'){const sampled=sampleHumanAnimation2D(clip.action,t,humanStyle,{weaponPixels:false,rootMotion:clip.rootMotion??false});({sprite,pose,sockets,rootMotion,contacts}=sampled);}
         else{const key=poseClips.get(clipName)!.sample(t);pose=key.pose;rootMotion=key.rootMotion;contacts=key.contacts;sprite=renderHuman2D(humanStyle,pose);sockets=humanSockets2D(sprite);}
-        const face=clip.faceTrack?.filter(key=>key.at<=phaseTime).at(-1);if(face){pose={...pose,...(face.blink===undefined?{}:{blink:face.blink}),...(face.gaze===undefined?{}:{gaze:face.gaze})};sprite=renderHuman2D(humanStyle,pose);}
+        const face:Pick<HumanPose,'blink'|'gaze'>={};
+        for(let i=(clip.faceTrack?.length??0)-1;i>=0;i--){const key=clip.faceTrack![i];if(key.at>phaseTime)continue;if(face.blink===undefined&&key.blink!==undefined)face.blink=key.blink;if(face.gaze===undefined&&key.gaze!==undefined)face.gaze=key.gaze;if(face.blink!==undefined&&face.gaze!==undefined)break;}
+        if(face.blink!==undefined||face.gaze!==undefined){pose={...pose,...face};sprite=renderHuman2D(humanStyle,pose);}
         humanPose=pose;currentHumanStyle=humanStyle;body={id:'body',sprite,masks:humanMasks(humanStyle,pose,sprite),emission:null,emissionKind:'surface',order:0,semantic:'body'};
       }else if(clip.kind==='creature'){
         const creatureStyle={...(source as {style:CreatureStyle}).style,size:asset.nativeHeight},sprite=renderCreature2D(creatureStyle,clip.motion,t),r=sprite.rig,near=r.legs.find(l=>l.name==='nearFront'),far=r.legs.find(l=>l.name==='farFront'),flip=r.facing==='left';
@@ -309,7 +352,7 @@ export function createCharacterPlayer2D(input:CharacterAsset2D){
       }else if(clip.kind==='creature-rig'){
         const sampled=rig!.sample(t);sockets=sampled.sockets;body={id:'body',sprite:sampled.sprite,masks:{...sampled.semanticMasks,body:sampled.sprite.mask.data.slice(),solidSubject:sampled.sprite.mask.data.slice()},emission:null,emissionKind:'surface',order:0,semantic:'body'};
       }else{
-        const c=spriteClips.get(clipName)!;frameIndex=c.frameAt(t);body=clipLayer(c,t,'body','body',0,clip.options?.emissionKind??(source.kind==='sprite'?source.options?.emissionKind:undefined)??'optical');
+        const c=spriteClips.get(clipName)!,spriteTime=rawTime<0?rawTime:phaseTime;frameIndex=c.frameAt(spriteTime);body=clipLayer(c,spriteTime,'body','body',0,clip.options?.emissionKind??(source.kind==='sprite'?source.options?.emissionKind:undefined)??'optical');
         sockets.root=characterSocket2D([0,0]);if(frameIndex>=0)for(const[name,socket]of Object.entries(c.frameSockets(frameIndex))){sockets[name]=characterSocket2D([socket.x-c.pivot[0],socket.y-c.pivot[1]],socket.angle??0);sockets[name].visible=socket.visible??true;if(socket.basisX&&socket.basisY){sockets[name].basisX=[...socket.basisX];sockets[name].basisY=[...socket.basisY];}sockets[name].mirrorPolicy=socket.mirrorPolicy??'authored';}
         body.masks.solidSubject=body.sprite.mask.data.slice();
       }
@@ -330,7 +373,7 @@ export function createCharacterPlayer2D(input:CharacterAsset2D){
         const attachmentName=l.generator?'hand.grip':l.socket??slot?.socket??'root',socket=sockets[attachmentName];if(!socket)throw new RangeError('Unknown equipment socket: '+attachmentName);if(!socket.visible){hidePublishedSockets();continue;}
         const localTime=l.secondary?.loop?phaseTime%l.secondary.duration:phaseTime,secondary=l.secondary?sampleSecondaryMotion2D(l.secondary.keys,localTime):0;
         const transform=composePixelTransform2D(socketTransform2D(socket),pixelTransform2D(l.offset?.[0]??0,l.offset?.[1]??0,(l.angle??0)+secondary));
-        const nativeClip=layerClips.get(l.id)!;let layer:NativeLayer;
+        const binding=layerAnimations.get(l.id)?.get(clipName),nativeClip=binding?.clip??layerClips.get(l.id)!;let layer:NativeLayer;
         if(l.generator&&humanPose&&currentHumanStyle){
           const kind=l.generator==='human-sword'?'sword':'bow',weapon=clip.kind==='human'&&clip.action===kind?renderHumanWeapon2D(kind,t,currentHumanStyle):renderHumanWeaponPose2D(kind,humanPose,currentHumanStyle);
           layer={id:l.id,sprite:weapon.held,masks:{[l.semantic]:weapon.held.mask.data.slice()},emission:null,emissionKind:'surface',order:l.order??slot?.order??1,semantic:l.semantic};
@@ -350,8 +393,10 @@ export function createCharacterPlayer2D(input:CharacterAsset2D){
             else{let releaseCorrection=releaseCorrections.get(clipName);if(!releaseCorrection){const release=HUMAN_WEAPON_TIMING.bow.cue,atRelease=renderHumanWeapon2D('bow',release,currentHumanStyle),releaseGrip=humanSockets2D(atRelease.actor,atRelease.sample.geometry)['hand.grip'];releaseCorrection=correctionFor(releaseGrip,release);releaseCorrections.set(clipName,releaseCorrection);}projectiles.push(transformSprite2D(weapon.projectile,releaseCorrection));}
           }
         }else{
-          layer=transformedLayer(clipLayer(nativeClip,t,l.id,l.semantic,l.order??slot?.order??1,l.options?.emissionKind??'surface'),transform);
-          const sourceFrame=nativeClip.frameAt(t),frameSockets=sourceFrame>=0?nativeClip.frameSockets(sourceFrame):{};hidePublishedSockets(new Set(Object.keys(frameSockets)));
+          const sourceFrame=binding?.sync==='source-frame'?frameIndex:binding?.sync==='phase'?nativeClip.frameAtPhase(phaseTime/info.duration):nativeClip.frameAt(independentTime);
+          layerFrames[l.id]=sourceFrame;
+          layer=transformedLayer(clipLayer(nativeClip,independentTime,l.id,l.semantic,l.order??slot?.order??1,l.options?.emissionKind??'surface',sourceFrame),transform);
+          const frameSockets=sourceFrame>=0?nativeClip.frameSockets(sourceFrame):{};hidePublishedSockets(new Set(Object.keys(frameSockets)));
           for(const[name,point]of Object.entries(frameSockets)){const local=characterSocket2D([point.x-nativeClip.pivot[0],point.y-nativeClip.pivot[1]],point.angle??0);local.visible=point.visible??true;if(point.basisX&&point.basisY){local.basisX=[...point.basisX];local.basisY=[...point.basisY];}local.mirrorPolicy=point.mirrorPolicy??'authored';sockets[name]=correctSocket(name,transformCharacterSocket2D(local,transform))!;}
         }
         editLayer(layer,asset,clipName,frameIndex,sockets);
@@ -374,7 +419,7 @@ export function createCharacterPlayer2D(input:CharacterAsset2D){
       const drawingBounds={...sampleBounds};for(const s of placedProjectiles){drawingBounds.x0=Math.min(drawingBounds.x0,s.x);drawingBounds.y0=Math.min(drawingBounds.y0,s.y);drawingBounds.x1=Math.max(drawingBounds.x1,s.x+s.w);drawingBounds.y1=Math.max(drawingBounds.y1,s.y+s.h);}
       const anchors:ActorAnchors2D={root:sockets.root.position,head:sockets.head.position,chest:sockets.chest.position,hand:sockets.hand.position,otherHand:sockets.otherHand.position,foot:sockets.foot.position,otherFoot:sockets.otherFoot.position};
       const actor:AdaptedActor2D={...flat.sprite,renderSource:'pixels',k:asset.nativeHeight/19,head:[anchors.head[0],flat.sprite.y],chest:[...anchors.chest],anchors};
-      return{actor,bounds:drawingBounds,pivot:[-flat.sprite.x,-flat.sprite.y],anchors,sockets,semanticMasks:flat.masks,rootMotion,frameIndex,clip:clipName,...info,contacts,emission:flat.emission??emptyEmission(flat.sprite),projectiles:placedProjectiles,
+      return{actor,bounds:drawingBounds,pivot:[-flat.sprite.x,-flat.sprite.y],anchors,sockets,semanticMasks:flat.masks,rootMotion,frameIndex,phaseTime,cycle:wrappedTime.cycle,layerFrames,clip:clipName,...info,contacts,emission:flat.emission??emptyEmission(flat.sprite),projectiles:placedProjectiles,
         drawBack(p:Painter,alpha=1){for(const layer of placed)if(layer.order<0)drawLayer(p,layer,alpha);},
         drawFront(p:Painter,alpha=1){for(const layer of placed)if(layer.order>=0)drawLayer(p,layer,alpha);for(const projectile of placedProjectiles)blitSprite2D(p,projectile,alpha);}};
     },

@@ -1,16 +1,16 @@
 import {
+  catalogEntries,
+  loadCatalogEffect
+} from "./chunks/chunk-YU4ABWEI.js";
+import {
   copyAtlasFrame,
   encodeRGBAPNG
 } from "./chunks/chunk-OHTBDYQJ.js";
 import {
-  catalogEntries,
-  loadCatalogEffect
-} from "./chunks/chunk-Z3SHPHVH.js";
-import {
   FrameRenderer,
   defineRestorationTiming2D,
   effectExampleCode2D
-} from "./chunks/chunk-KJLRN7JI.js";
+} from "./chunks/chunk-MCTSDHND.js";
 import {
   BACKDROPS,
   actBounds,
@@ -30,12 +30,13 @@ import {
   resolveEffectExport,
   sceneCameraOffset,
   stockActor
-} from "./chunks/chunk-NY4VHNMV.js";
+} from "./chunks/chunk-YQJJU7UN.js";
 import {
   PAL,
   transformImpactContact2D
-} from "./chunks/chunk-WFSCDWU6.js";
-import "./chunks/chunk-T3JNBT34.js";
+} from "./chunks/chunk-FEXYTCCO.js";
+import "./chunks/chunk-3L2ANF6Q.js";
+import "./chunks/chunk-JQMAFXP4.js";
 import "./chunks/chunk-WSFCRVEQ.js";
 
 // src/fx/categories.ts

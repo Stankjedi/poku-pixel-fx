@@ -1,27 +1,29 @@
 import {
-  CinematicFrameRenderer,
-  PlaybackClock,
-  integerViewport
-} from "./chunks/chunk-QRRJDY7M.js";
-import {
-  encodeRGBAPNG
-} from "./chunks/chunk-OHTBDYQJ.js";
-import {
   finishProjectRGBA,
   postprocessProjectFrame
-} from "./chunks/chunk-IXDL6S4B.js";
+} from "./chunks/chunk-6HAS6H5C.js";
 import {
   createProject,
   parseProject,
   serializeProject
-} from "./chunks/chunk-JIMPAKU2.js";
+} from "./chunks/chunk-FLVIEPJE.js";
+import {
+  CinematicFrameRenderer,
+  PlaybackClock,
+  integerViewport
+} from "./chunks/chunk-I4QYMUT2.js";
+import {
+  encodeRGBAPNG
+} from "./chunks/chunk-OHTBDYQJ.js";
+import {
+  blendOver,
+  enableHDRLight
+} from "./chunks/chunk-3L2ANF6Q.js";
 import {
   CinematicCompositor,
   SRGB_TO_LINEAR,
-  blendOver,
-  channelToLinear,
-  enableHDRLight
-} from "./chunks/chunk-T3JNBT34.js";
+  channelToLinear
+} from "./chunks/chunk-JQMAFXP4.js";
 import {
   __export
 } from "./chunks/chunk-WSFCRVEQ.js";

@@ -14,11 +14,12 @@ mkdirSync(OUT, { recursive: true });
 mkdirSync(PAGE, { recursive: true });
 
 for (const dir of [OUT, PAGE]) rmSync(join(dir, "chunks"), { recursive: true, force: true });
-await build({ entryPoints: ["app", "3d", "studio", "studio-worker"].map(name => join(G, name + ".ts")),
+await build({ entryPoints: ["app", "3d", "studio", "studio-worker", "gpu-lab", "gpu-lab-worker"].map(name => join(G, name + ".ts")),
   bundle: true, splitting: true, format: "esm", minify: true, outdir: OUT, chunkNames: "chunks/[name]-[hash]", legalComments: "none" });
 cpSync(join(G, "3d.html"), join(OUT, "3d.html"));
-for (const name of ["studio.html", "studio.css"]) cpSync(join(G, name), join(OUT, name));
+for (const name of ["studio.html", "studio.css", "gpu-lab.html"]) cpSync(join(G, name), join(OUT, name));
 cpSync(join(G, "fonts"), join(OUT, "fonts"), { recursive: true });
+cpSync(join(G, "fonts"), join(PAGE, "fonts"), { recursive: true });
 writeFileSync(join(OUT, "style.css"), readFileSync(join(G, "style.css")));
 writeFileSync(join(OUT, "index.html"), readFileSync(join(G, "index.html")));
 // Keep the complete notices alongside both publicly served distributions.
@@ -47,7 +48,7 @@ writeFileSync(
 cpSync(join(OUT, "app.js"), join(PAGE, "app.js"));
 cpSync(join(OUT, "3d.html"), join(PAGE, "3d.html"));
 cpSync(join(OUT, "3d.js"), join(PAGE, "3d.js"));
-for (const name of ["studio.js", "studio-worker.js", "studio.html", "studio.css"]) cpSync(join(OUT, name), join(PAGE, name));
+for (const name of ["studio.js", "studio-worker.js", "studio.html", "studio.css", "gpu-lab.js", "gpu-lab-worker.js", "gpu-lab.html"]) cpSync(join(OUT, name), join(PAGE, name));
 if (existsSync(join(OUT, "chunks"))) cpSync(join(OUT, "chunks"), join(PAGE, "chunks"), { recursive: true });
 console.log(`dist/gallery 및 dist/page 빌드 완료 (스크립트 ${(readFileSync(join(OUT, "app.js")).length / 1024).toFixed(0)} KB)`);
 

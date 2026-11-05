@@ -14,6 +14,8 @@ export const RECIPE_LAYERS: readonly RecipeLayer[] = ['environment', 'trail', 'b
 export interface RecipeSpec {
   schema: 'poku.effect-recipe/v1'; kind: RecipeKind; intentRef: string;
   duration: number; loop: boolean; seed: number;
+  /** Whole-choreography retiming, including fixed anticipation/contact/release intervals. */
+  timeScale?: number;
   size: [number, number]; origin: [number, number];
   parameters: Record<string, any>;
   path: [Point, Point, Point, Point];
@@ -39,6 +41,30 @@ export const RECIPE_PARAMETERS: readonly Parameter[] = [
   { key: 'material', label: '접촉 재질', group: '접촉', type: 'enum', default: 'metal', choices: ['metal', 'stone', 'water', 'ice'], invalidates: 'asset' },
   { key: 'palette', label: '주 팔레트', group: '빛', type: 'color-ramp', default: ['#101c32', '#284c70', '#3c8fc1', '#70d9ee', '#d0fbf3', '#f8fff4'], invalidates: 'frame', protected: true },
 ];
+const activeParameters: Record<RecipeKind, readonly string[]> = {
+  'thrown-blade': ['width', 'spin', 'travel', 'density', 'glow', 'trail', 'material', 'palette'],
+  'ribbon-slash': ['width', 'density', 'glow', 'material', 'palette'],
+  lightning: ['width', 'density', 'glow', 'material', 'palette'],
+  explosion: ['density', 'glow', 'palette'],
+  flame: ['density', 'glow', 'palette'],
+  portal: ['density', 'glow', 'palette'],
+};
+function scaledParameters(timeScale: number): Parameter[] {
+  return RECIPE_PARAMETERS.map(parameter => {
+    const factor = parameter.key === 'spin' ? 1 / timeScale : ['travel', 'trail'].includes(parameter.key) ? timeScale : 1;
+    if (factor === 1) return parameter;
+    return { ...parameter, default: Number(parameter.default) * factor,
+      ...(parameter.min === undefined ? {} : { min: parameter.min * factor }),
+      ...(parameter.max === undefined ? {} : { max: parameter.max * factor }),
+      ...(parameter.step === undefined ? {} : { step: parameter.step * factor }) };
+  });
+}
+/** Hide controls which do not affect this recipe; displayed motion units remain real seconds/turns. */
+export function recipeParameters(input: RecipeKind | Pick<RecipeSpec, 'kind' | 'timeScale'>): readonly Parameter[] {
+  const kind = typeof input === 'string' ? input : input.kind, timeScale = typeof input === 'string' ? 1 : input.timeScale ?? 1;
+  if (!RECIPE_KINDS.includes(kind) || !Number.isFinite(timeScale) || timeScale <= 0) throw new RangeError('Invalid recipe kind/time scale');
+  return scaledParameters(timeScale).filter(parameter => activeParameters[kind].includes(parameter.key));
+}
 const durationOf = (kind: RecipeKind) => ({ 'thrown-blade': 2.2, 'ribbon-slash': 1.2, lightning: 1.6, explosion: 2.4, flame: 3, portal: 3 })[kind];
 export function createRecipeSpec(kind: RecipeKind, overrides: Partial<RecipeSpec> = {}): RecipeSpec {
   if (!RECIPE_KINDS.includes(kind)) throw new RangeError('Unknown recipe kind');
@@ -47,11 +73,13 @@ export function createRecipeSpec(kind: RecipeKind, overrides: Partial<RecipeSpec
   const keys = loop ? [{ time: 0, value: 1 }, { time: duration, value: 1 }] : [
     { time: 0, value: 0 }, { time: .05 * duration, value: 1 }, { time: .72 * duration, value: 1 }, { time: duration, value: 0 },
   ];
-  const parameters = resolveParameters(RECIPE_PARAMETERS, overrides.parameters);
-  if(kind==='thrown-blade'&&duration<=.14+parameters.travel)throw new RangeError('Thrown blade duration must include its travel and contact; use project.seconds for an intentional crop');
+  const timeScale = overrides.timeScale ?? 1;
+  if (!Number.isFinite(timeScale) || timeScale < 1e-6 || timeScale > 1e6) throw new RangeError('Invalid recipe time scale');
+  const parameters = resolveParameters(scaledParameters(timeScale), overrides.parameters);
+  if(kind==='thrown-blade'&&duration<=.14*timeScale+parameters.travel)throw new RangeError('Thrown blade duration must include its travel and contact; use project.seconds for an intentional crop');
   if (kind === 'flame' || kind === 'explosion') parameters.palette = overrides.parameters?.palette ?? ['#241c32', '#6f2941', '#bf4939', '#f68a3c', '#ffd778', '#fff1c9'];
   const spec: RecipeSpec = {
-    schema: 'poku.effect-recipe/v1', kind, intentRef: overrides.intentRef ?? '', duration, loop, seed: overrides.seed ?? 1,
+    schema: 'poku.effect-recipe/v1', kind, intentRef: overrides.intentRef ?? '', duration, loop, seed: overrides.seed ?? 1, timeScale,
     size: overrides.size ?? [320, 180], origin: overrides.origin ?? [50, 146], parameters,
     path: overrides.path ?? [[0, -36], [76, -79], [162, -59], [210, -27]],
     tracks: Object.fromEntries(RECIPE_LAYERS.map(l => [l, cloneJSON(overrides.tracks?.[l] ?? keys)])) as RecipeSpec['tracks'],
@@ -69,8 +97,19 @@ export function resolveRecipe(input: unknown): RecipeSpec {
   if (s.schema !== 'poku.effect-recipe/v1') throw new RangeError('Unsupported recipe schema');
   return createRecipeSpec(s.kind, s);
 }
+/** Preserve the complete choreography while stretching its presentation clock; never crop the release. */
+export function retimeRecipeSpec(input: unknown, duration: number): RecipeSpec {
+  const spec = resolveRecipe(input);
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 60) throw new RangeError('Recipe duration must be in (0, 60]');
+  const ratio = duration / spec.duration;
+  return createRecipeSpec(spec.kind, { ...spec, duration, timeScale: (spec.timeScale ?? 1) * ratio,
+    parameters: { ...spec.parameters, travel: spec.parameters.travel * ratio, trail: spec.parameters.trail * ratio, spin: spec.parameters.spin / ratio },
+    tracks: Object.fromEntries(RECIPE_LAYERS.map(layer => [layer, spec.tracks[layer].map(key => ({ ...key, time: key.time * ratio,
+      ...(key.velocity === undefined ? {} : { velocity: key.velocity / ratio }) }))])) as RecipeSpec['tracks'],
+  });
+}
 export function recipePosition(spec: RecipeSpec, time: number): Point {
-  const u = clamp((time - .14) / spec.parameters.travel), v = 1 - u, [a, b, c, d] = spec.path;
+  const u = clamp((time - .14 * (spec.timeScale ?? 1)) / spec.parameters.travel), v = 1 - u, [a, b, c, d] = spec.path;
   return [v ** 3 * a[0] + 3 * v * v * u * b[0] + 3 * v * u * u * c[0] + u ** 3 * d[0], v ** 3 * a[1] + 3 * v * v * u * b[1] + 3 * v * u * u * c[1] + u ** 3 * d[1]];
 }
 function hash(seed: number, i: number): number {
@@ -113,18 +152,24 @@ function contact(p: Painter, x: number, y: number, age: number, spec: RecipeSpec
 }
 
 export function createRecipeEffect(input: unknown) {
-  const spec = resolveRecipe(input), colors = fit(spec.parameters.palette, 6);
-  const tracks = Object.fromEntries(RECIPE_LAYERS.map(l => [l, createTimingCurve(spec.tracks[l])])) as Record<RecipeLayer, ReturnType<typeof createTimingCurve>>;
+  const authored = resolveRecipe(input), timeScale = authored.timeScale ?? 1;
+  // Hardcoded choreography is evaluated in its original authored clock. Public parameters still
+  // describe presentation seconds/turns, so a whole-clip retime can preserve every native cel.
+  const spec = timeScale === 1 ? authored : { ...authored, duration: authored.duration / timeScale, timeScale: 1,
+    parameters: { ...authored.parameters, travel: authored.parameters.travel / timeScale, trail: authored.parameters.trail / timeScale, spin: authored.parameters.spin * timeScale } };
+  const colors = fit(spec.parameters.palette, 6);
+  const tracks = Object.fromEntries(RECIPE_LAYERS.map(l => [l, createTimingCurve(authored.tracks[l])])) as Record<RecipeLayer, ReturnType<typeof createTimingCurve>>;
   const [name, desc] = titles[spec.kind], impactTime = .14 + spec.parameters.travel;
   const contactAt = spec.kind === 'thrown-blade' ? impactTime : spec.kind === 'ribbon-slash' ? .4 : .32;
   const endPoint: Point = spec.kind === 'thrown-blade' ? spec.path[3] : spec.kind === 'ribbon-slash' ? [151, -25] : [155, -9];
   const contacts = ['thrown-blade', 'ribbon-slash', 'lightning'].includes(spec.kind)
-    ? [defineImpactContact2D({ id: 'primary', at: contactAt, position: endPoint, normal: spec.kind === 'lightning' ? [0, -1] : [-1, 0], material: spec.parameters.material })] : [];
+    ? [defineImpactContact2D({ id: 'primary', at: contactAt * timeScale, position: endPoint, normal: spec.kind === 'lightning' ? [0, -1] : [-1, 0], material: spec.parameters.material })] : [];
   let coefficientSeed=-1; let coefficients:number[][]=[];
   function resolveCoefficients(seed:number){if(seed!==coefficientSeed){coefficientSeed=seed;coefficients=Array.from({length:Math.round(spec.parameters.density)},(_,i)=>[hash(seed,i),hash(seed,i+193),hash(seed,i+773)]);}return coefficients;}
   function draw(p: Painter, absoluteTime: number, options: Record<string, any> = {}) {
-    const t = spec.loop ? ((absoluteTime % spec.duration) + spec.duration) % spec.duration : absoluteTime;
-    if (t < 0 || (!spec.loop && t >= spec.duration)) return;
+    const presentationTime = authored.loop ? ((absoluteTime % authored.duration) + authored.duration) % authored.duration : absoluteTime;
+    if (presentationTime < 0 || (!authored.loop && presentationTime >= authored.duration)) return;
+    const t = presentationTime / timeScale;
     const seed=Number.isSafeInteger(options.seed)?options.seed>>>0:spec.seed;
     const liveSpec=seed===spec.seed?spec:{...spec,seed};
     const coefficients=resolveCoefficients(seed);
@@ -132,7 +177,7 @@ export function createRecipeEffect(input: unknown) {
     const density = coefficients.length, k = spec.parameters.glow;
     const layer = (id: RecipeLayer, body: () => void) => {
       if (!spec.layers[id] || options.layers?.[id] === false) return;
-      const fade = p.fade; p.fade *= clamp(tracks[id].sample(t).value);
+      const fade = p.fade; p.fade *= clamp(tracks[id].sample(presentationTime).value);
       try { if (p.fade > .001) body(); } finally { p.fade = fade; }
     };
     if (spec.kind === 'thrown-blade') {
@@ -244,7 +289,7 @@ export function createRecipeEffect(input: unknown) {
     }
   }
   return {
-    meta: { name, desc, tags: ['recipe', spec.kind, spec.parameters.material], size: spec.size, origin: spec.origin, duration: spec.duration, loop: spec.loop, fps: 30, bg: 'dark', heroTime:({'thrown-blade':.65,'ribbon-slash':.35,lightning:.38,explosion:.45,flame:.7,portal:1})[spec.kind],options: { seed: spec.seed, palette: spec.parameters.palette }, recipe: spec.kind },
+    meta: { name, desc, tags: ['recipe', spec.kind, spec.parameters.material], size: spec.size, origin: spec.origin, duration: authored.duration, loop: spec.loop, fps: 30, bg: 'dark', heroTime:({'thrown-blade':.65,'ribbon-slash':.35,lightning:.38,explosion:.45,flame:.7,portal:1})[spec.kind]*timeScale,options: { seed: spec.seed, palette: spec.parameters.palette }, recipe: spec.kind },
     contacts: () => contacts,
     draw,
   };

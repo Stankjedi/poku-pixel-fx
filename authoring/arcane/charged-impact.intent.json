@@ -1,0 +1,42 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "arcane/charged-impact",
+  "intent": {
+    "oneSentence": "하나의 청록색 번개가 바닥에 도달한 뒤 같은 가로 위치에서 따뜻한 폭발과 냉각 연기를 일으킨다.",
+    "firstRead": "번개가 도착해서 일으킨 하나의 국소적인 폭발",
+    "mustNotReadAs": "서로 무관한 두 효과가 동시에 재생되거나 폭발이 접촉보다 먼저 일어나는 장면",
+    "useContext": "기존 두 레시피를 독립 큐로 합치는 384×224 네이티브 제작 예제. 어두운 전투 배경에서 원인과 반응을 확인한다."
+  },
+  "readability": {
+    "primaryShape": "위에서 오른쪽 아래로 이어지는 굵은 번개 통로와 그 끝의 연결된 화염 덩어리",
+    "focalPoint": "두 큐가 공유하는 바닥 부근의 가로 위치",
+    "depthAndOverlap": "번개가 먼저 읽히고, 접촉 뒤 더 오래 남는 폭발 본체와 연기가 같은 공간을 채운다.",
+    "contrast": "차가운 방전과 따뜻한 반응을 구분하되, 색보다 발생 순서와 위치를 우선한다.",
+    "intendedBackgrounds": ["dark"],
+    "secondaryDetailBudget": "원본 레시피의 파편 밀도를 유지한다. 추가 장식은 넣지 않는다."
+  },
+  "mechanics": {
+    "model": "magic-with-rules",
+    "source": "좌측 위의 방전원",
+    "driver": "주 번개가 정해진 접점에 도달하면 같은 가로 위치의 에너지가 폭발한다.",
+    "direction": "방전은 아래쪽, 폭발 압력은 수평으로, 냉각 연기는 위쪽으로 진행한다.",
+    "weightAndMaterial": "전기 채널 자체에 고체 무게를 부여하지 않는다. 폭발의 파편은 돌이며 연기는 발광하지 않는다.",
+    "causalChain": "방전 형성 → 0.32초 접촉 → 폭발 큐 시작 → 연기와 파편의 냉각",
+    "endingRule": "번개는 원래 수명에 끝나고 폭발 큐의 냉각 꼬리가 끝난 2.72초에는 프레임을 비운다.",
+    "exaggerationAndLimits": "JSON 시퀀스 합성의 제작 예제이며, 실제 전기·열 전달 시뮬레이션 또는 최종 미술 승인으로 보지 않는다. 각각의 원본 재질은 그대로 유지한다."
+  },
+  "timeline": {
+    "durationSeconds": 2.72,
+    "loop": false,
+    "phases": [
+      { "name": "preparation", "from": 0, "to": 0.02, "action": "아직 주 방전을 노출하지 않는다.", "cause": "방전 형성 직전", "visibleCue": "빈 상태에서 시작" },
+      { "name": "action", "from": 0.02, "to": 0.32, "action": "주 방전과 가는 가지가 접점으로 이어진다.", "cause": "위쪽 방전원", "visibleCue": "단일 굵은 번개 통로" },
+      { "name": "response", "from": 0.32, "to": 1.6, "action": "접점과 같은 가로 위치에 폭발을 시작한다.", "cause": "번개의 접촉", "visibleCue": "따뜻한 연결 화염과 바닥 압력 전면" },
+      { "name": "ending", "from": 1.6, "to": 2.72, "action": "남은 연기와 파편이 사라진다.", "cause": "방전과 폭발 동력이 종료됨", "visibleCue": "냉각 연기 뒤 빈 마지막 프레임" }
+    ],
+    "omittedPhases": {}
+  },
+  "references": [
+    { "source": "examples/projects/charged-impact.poku-project.json", "observed": "기존 focused-arc와 layered-detonation을 두 개의 시간 큐로 합성한다.", "application": "원본 효과를 수정하지 않고 시작 시점, 위치, 시드와 내보내기 메타데이터를 프로젝트에 저장한다.", "limits": "이 의도서는 목표를 기록한다. 실제 결과의 첫 인상과 정상 속도 관찰은 별도로 남겨야 한다." }
+  ]
+}

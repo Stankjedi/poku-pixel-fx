@@ -5,25 +5,25 @@ import { basename, dirname, join } from "node:path";
 import type { AssetManifest, AssetSocket } from "../../src/render/export.js";
 import { ROOT, frameDurationMs, type EffectData, type FrameData, type RenderInfo } from "./fxlib.mjs";
 import { encodePNG } from "./png.mjs";
-const { createAtlasPacker, frameContentBounds, resolveAssetEvents, collectAssetEvents } = await import(new URL("../../../build/render/export.js", import.meta.url).href);
+const { createAtlasPacker, frameContentBounds, resolveAssetEvents, collectAssetEvents, resolveAtlasExportSettings, extrudeAtlasRegion } = await import(new URL("../../../build/render/export.js", import.meta.url).href);
 
 export interface AssetBundleOptions {
-  maxTextureSize?: number; padding?: number; trim?: boolean; deduplicate?: boolean;
+  maxTextureSize?: number; padding?: number; extrude?:number; trim?: boolean; deduplicate?: boolean;
   source?: Partial<AssetManifest["source"]>;
   tags?: AssetManifest["tags"];
 }
 const sha256 = (value: Uint8Array | string) => createHash("sha256").update(value).digest("hex");
 
 export function createAssetBundle(base: string, fx: EffectData, info: RenderInfo, options: AssetBundleOptions = {}) {
-  const size = options.maxTextureSize ?? 2048;
-  if (!Number.isSafeInteger(size) || size < 1 || size > 4096) throw new RangeError("Asset pages must be 1..4096 pixels");
+  const settings=resolveAtlasExportSettings(Object.fromEntries(Object.entries(options).filter(([key,value])=>['maxTextureSize','padding','extrude','trim','deduplicate'].includes(key)&&value!==undefined)));
+  const size = settings.maxTextureSize;
   if (!Number.isSafeInteger(info.n) || info.n < 1) throw new RangeError("Asset requires at least one frame");
   // The legacy 2D/ACT renderer is the default even when no project/profile was supplied.
   // Store that choice explicitly so another renderer cannot silently reinterpret raw channels.
   const renderMode = info.settings?.renderMode ??
     (info.settings?.project?.kind === "3d" || info.settings?.project?.renderProfile?.mode === "cinematic" ? "cinematic" : "legacy");
   if (!["legacy", "cinematic", "linear-transparent"].includes(renderMode)) throw new RangeError("Unsupported asset finishing mode");
-  const packer = createAtlasPacker(size, options.padding ?? 1), name = basename(base), parent = dirname(base);
+  const packer = createAtlasPacker(size, settings.padding), name = basename(base), parent = dirname(base);
   mkdirSync(parent, { recursive: true });
   const temp = mkdtempSync(join(parent, ".poku-asset-"));
   const engineVersion = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
@@ -33,7 +33,7 @@ export function createAssetBundle(base: string, fx: EffectData, info: RenderInfo
     coordinates: "untrimmed-pixel-edges-y-down", pages: [], frames: [],
     tags: options.tags ?? [{ name, from: 0, to: info.n - 1, direction: "forward" }],
     ...(info.contacts?.length ? { contacts: info.contacts } : {}),
-    settings: { ...info.settings, renderMode },
+    settings: { ...info.settings, renderMode, atlas:settings },
     source: { engineVersion, rng: "poku-rng/v1",
       ...(fx.file && existsSync(fx.file) ? { sourceSha256: sha256(readFileSync(fx.file)) } : {}), ...options.source },
     files: [],
@@ -78,16 +78,20 @@ export function createAssetBundle(base: string, fx: EffectData, info: RenderInfo
       if (light && !light.every(v => Number.isFinite(v) && v >= 0)) throw new RangeError("Emission must be finite, non-negative linear RGB");
       if (rad && !rad.every(v => Number.isFinite(v) && v >= 0)) throw new RangeError("Radiance must be finite, non-negative linear RGB");
       if (ao && !ao.every(v => Number.isFinite(v) && v >= 0 && v <= 1)) throw new RangeError("Occlusion must be finite within 0..1");
-      const bounds = options.trim ? frameContentBounds(info.w, info.h, rgba, light, rad, ao) : { x: 0, y: 0, w: info.w, h: info.h };
-      const hash = createHash("sha256"); hash.update(`${bounds.w},${bounds.h};${mode};`);
-      for (let y = bounds.y; y < bounds.y + bounds.h; y++) {
-        hash.update(rgba.subarray((y * info.w + bounds.x) * 4, (y * info.w + bounds.x + bounds.w) * 4));
-        for (const [buffer, channels] of [[light, 3], [rad, 3], [ao, 1]] as const) if (buffer) {
-          const row = buffer.subarray((y * info.w + bounds.x) * channels, (y * info.w + bounds.x + bounds.w) * channels);
-          hash.update(new Uint8Array(row.buffer, row.byteOffset, row.byteLength));
+      const bounds = settings.trim ? frameContentBounds(info.w, info.h, rgba, light, rad, ao) : { x: 0, y: 0, w: info.w, h: info.h };
+      let key='';
+      if(settings.deduplicate){
+        const hash = createHash("sha256"); hash.update(`${bounds.w},${bounds.h};${mode};`);
+        for (let y = bounds.y; y < bounds.y + bounds.h; y++) {
+          hash.update(rgba.subarray((y * info.w + bounds.x) * 4, (y * info.w + bounds.x + bounds.w) * 4));
+          for (const [buffer, channels] of [[light, 3], [rad, 3], [ao, 1]] as const) if (buffer) {
+            const row = buffer.subarray((y * info.w + bounds.x) * channels, (y * info.w + bounds.x + bounds.w) * channels);
+            hash.update(new Uint8Array(row.buffer, row.byteOffset, row.byteLength));
+          }
         }
+        key=hash.digest('hex');
       }
-      const key = hash.digest("hex"), previous = options.deduplicate ? duplicates.get(key) : undefined;
+      const previous = settings.deduplicate ? duplicates.get(key) : undefined;
       const placement = previous ?? packer.place(bounds.w, bounds.h);
       if (!previous) {
         if (placement.page !== activePage) {
@@ -104,7 +108,13 @@ export function createAssetBundle(base: string, fx: EffectData, info: RenderInfo
           if (rad) radiance!.set(rad.subarray(src * 3, (src + bounds.w) * 3), dst * 3);
           if (ao) occlusion!.set(ao.subarray(src, src + bounds.w), dst);
         }
-        if (options.deduplicate) duplicates.set(key, placement);
+        if(settings.extrude){
+          extrudeAtlasRegion(color!,size,4,placement.rect,settings.extrude);
+          if(emission)extrudeAtlasRegion(emission,size,3,placement.rect,settings.extrude);
+          if(radiance)extrudeAtlasRegion(radiance,size,3,placement.rect,settings.extrude);
+          if(occlusion)extrudeAtlasRegion(occlusion,size,1,placement.rect,settings.extrude);
+        }
+        if (settings.deduplicate) duplicates.set(key, placement);
       }
       const duration = frame.durationMs ?? frameDurationMs(index, info.fps);
       if (!Number.isSafeInteger(duration) || duration < 1 || !Number.isFinite(frame.t)) throw new RangeError("Asset frame timing is invalid");

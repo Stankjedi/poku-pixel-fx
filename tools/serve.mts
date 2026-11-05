@@ -20,7 +20,7 @@ createServer(async (req, res) => {
   catch { return res.writeHead(400).end("잘못된 요청"); }
   if (path === "/") return res.writeHead(302, { location: "/gallery/" }).end();
   if (path.endsWith("/")) path += "index.html";
-  if (["app.js", "3d.js", "studio.js", "studio-worker.js"].some(name => path === `/gallery/${name}`)) path = path.replace("/gallery/", "/build-gallery/");
+  if (["app.js", "3d.js", "studio.js", "studio-worker.js", "gpu-lab.js", "gpu-lab-worker.js"].some(name => path === `/gallery/${name}`)) path = path.replace("/gallery/", "/build-gallery/");
   if (path.startsWith("/gallery/chunks/")) path = path.replace("/gallery/chunks/", "/build-gallery/chunks/");
   const noticePaths: Record<string, string> = {
     "/gallery/LICENSE.txt": "/LICENSE", "/gallery/NOTICE.txt": "/NOTICE.md",

@@ -56,6 +56,10 @@ export interface SpriteClip2D {
   readonly frameCount: number;
   /** Global source-frame index, or -1 outside the visible playback interval. */
   frameAt(time: number): number;
+  /** Global source-frame index at normalized sequence time 0..1; 1 holds the last cel. */
+  frameAtPhase(phase: number): number;
+  /** Select another tag/playback policy without decoding or duplicating the native frames. */
+  withOptions(options: SpriteClipOptions2D): SpriteClip2D;
   /** Independent decoded copy, including hidden RGB in fully transparent pixels. */
   framePixels(index: number): Uint32Array;
   /** Copies preserve interchange coordinates; runtime sockets subtract the pivot. */
@@ -77,6 +81,12 @@ const object = (value: unknown): boolean =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 const integer = (value: number, min: number, max: number) =>
   Number.isSafeInteger(value) && value >= min && value <= max;
+const validateOptions = (options: SpriteClipOptions2D) => {
+  if (!object(options) || (options.tag !== undefined && (typeof options.tag !== "string" || !options.tag.length))
+    || (options.loop !== undefined && typeof options.loop !== "boolean")
+    || (options.emissionKind !== undefined && !["surface", "optical"].includes(options.emissionKind)))
+    throw new RangeError("Sprite clip options need a tag name and/or a boolean loop flag");
+};
 
 /** Validate, snapshot and decode once. Seeking and drawing never mutate the source or painter state.
  * Tag repeat counts are retained in SpriteClipData2D for interchange, not automatically played. */
@@ -94,10 +104,7 @@ export function createSpriteClip2D(data: SpriteClipData2D, options: SpriteClipOp
     throw new RangeError("Sprite clip needs 1 to 4096 frames and at most 16,777,216 decoded cells in total");
   if (data.source !== undefined && !object(data.source))
     throw new RangeError("Sprite clip source metadata must be an object");
-  if (!object(options) || (options.tag !== undefined && (typeof options.tag !== "string" || !options.tag.length))
-    || (options.loop !== undefined && typeof options.loop !== "boolean")
-    || (options.emissionKind !== undefined && !["surface", "optical"].includes(options.emissionKind)))
-    throw new RangeError("Sprite clip options need a tag name and/or a boolean loop flag");
+  validateOptions(options);
 
   const count = width * height, frameCount = data.frames.length;
   const pivot = Object.freeze([data.pivot[0], data.pivot[1]] as [number, number]);
@@ -110,11 +117,10 @@ export function createSpriteClip2D(data: SpriteClipData2D, options: SpriteClipOp
         || (tag.direction !== undefined && !["forward", "reverse", "pingpong", "pingpong_reverse"].includes(tag.direction))
         || (tag.repeat !== undefined && !integer(tag.repeat, 0, Number.MAX_SAFE_INTEGER)))
         throw new RangeError("Sprite clip tags need unique names, valid frame ranges, directions and nonnegative integer repeats");
-      tags.set(tag.name, tag);
+      tags.set(tag.name, { ...tag });
     }
   }
-  const tag = options.tag === undefined ? undefined : tags.get(options.tag);
-  if (options.tag !== undefined && !tag) throw new RangeError(`Unknown sprite clip tag: ${options.tag}`);
+  if (options.tag !== undefined && !tags.has(options.tag)) throw new RangeError(`Unknown sprite clip tag: ${options.tag}`);
 
   const pixels: Uint32Array[] = [], durations: number[] = [], masks: Uint8Array[] = [];
   const sockets: Record<string, SpriteClipSocket2D>[] = [], emissions: (Float32Array | null)[] = [];
@@ -165,6 +171,13 @@ export function createSpriteClip2D(data: SpriteClipData2D, options: SpriteClipOp
     sockets.push(socketMap); emissions.push(emission); durations.push(frame.durationMs);
   }
 
+  // Playback views own only a small sequence/timing table. Pixel, mask, emission and
+  // socket snapshots stay private and are shared across equipment tag bindings.
+  function playback(viewOptions: SpriteClipOptions2D): SpriteClip2D {
+  validateOptions(viewOptions);
+  const selected = { ...viewOptions };
+  const tag = selected.tag === undefined ? undefined : tags.get(selected.tag);
+  if (selected.tag !== undefined && !tag) throw new RangeError(`Unknown sprite clip tag: ${selected.tag}`);
   const from = tag?.from ?? 0, to = tag?.to ?? frameCount - 1, direction = tag?.direction ?? "forward";
   const reverse = direction === "reverse" || direction === "pingpong_reverse";
   const sequence: number[] = [];
@@ -182,15 +195,8 @@ export function createSpriteClip2D(data: SpriteClipData2D, options: SpriteClipOp
       throw new RangeError("Sprite clip sequence duration must be finite with distinguishable frame boundaries");
     return end;
   });
-  const duration = durationMs / 1000, loop = options.loop ?? false, emissionKind = options.emissionKind ?? "optical";
-  const frameAt = (time: number): number => {
-    if (!Number.isFinite(time) || time < 0 || (!loop && time >= duration)) return -1;
-    if (loop) {
-      // Work in authored milliseconds where possible, avoiding e.g. 0.5 % 0.4 falling just below 0.1.
-      const milliseconds = time * 1000;
-      time = Number.isFinite(milliseconds) ? (milliseconds % durationMs) / 1000 : time % duration;
-      if (time >= duration) time = 0; // Unit conversion can round an exact wrap back up to duration.
-    }
+  const duration = durationMs / 1000, loop = selected.loop ?? false, emissionKind = selected.emissionKind ?? "optical";
+  const frameInSequence = (time: number): number => {
     let low = 0, high = ends.length - 1;
     while (low < high) {
       const middle = (low + high) >>> 1;
@@ -199,9 +205,27 @@ export function createSpriteClip2D(data: SpriteClipData2D, options: SpriteClipOp
     }
     return sequence[low];
   };
+  const frameAt = (time: number): number => {
+    if (!Number.isFinite(time) || time < 0 || (!loop && time >= duration)) return -1;
+    if (loop) {
+      // Work in authored milliseconds where possible, avoiding e.g. 0.5 % 0.4 falling just below 0.1.
+      const milliseconds = time * 1000;
+      time = Number.isFinite(milliseconds) ? (milliseconds % durationMs) / 1000 : time % duration;
+      if (time >= duration) time = 0; // Unit conversion can round an exact wrap back up to duration.
+    }
+    return frameInSequence(time);
+  };
 
   return Object.freeze({
     width, height, pivot, duration, frameCount, frameAt,
+    frameAtPhase(phase: number): number {
+      if (!Number.isFinite(phase) || phase < 0 || phase > 1) return -1;
+      return phase === 1 ? sequence[sequence.length - 1] : frameInSequence(phase * duration);
+    },
+    withOptions(overrides: SpriteClipOptions2D): SpriteClip2D {
+      validateOptions(overrides);
+      return playback({ ...selected, ...overrides });
+    },
     framePixels(index: number): Uint32Array {
       if (!integer(index, 0, frameCount - 1)) throw new RangeError("Sprite clip frame index is out of bounds");
       return pixels[index].slice();
@@ -243,4 +267,6 @@ export function createSpriteClip2D(data: SpriteClipData2D, options: SpriteClipOp
       }
     },
   });
+  }
+  return playback(options);
 }

@@ -56,6 +56,13 @@ export function applyProjectEdits(frame: EditableProjectFrame, edits: readonly u
   }
 }
 const styles = new WeakMap<object, ReturnType<typeof compilePixelStyle2D>>();
+/** Compile and validate once before an editor commits new finishing settings. */
+export function prepareProjectStyle(project: ResolvedProject): ReturnType<typeof compilePixelStyle2D> | undefined {
+  if (!project.pixelStyle) return;
+  let style = styles.get(project.pixelStyle);
+  if (!style) { style = compilePixelStyle2D(createPixelStyleProfile2D(project.pixelStyle)); styles.set(project.pixelStyle, style); }
+  return style;
+}
 interface FrameScratch { before: Uint8Array; mask: Uint8Array; empty: Set<string>; physicalMasks: Uint8Array[] }
 const scratches = new WeakMap<object, FrameScratch>();
 function frameScratch(frame: EditableProjectFrame): FrameScratch {
@@ -89,10 +96,10 @@ export function postprocessProjectFrame(frame: EditableProjectFrame, project: Re
   for (const raw of project.edits) { const e = raw as unknown as ProjectPixelEdit; if (e?.mask && e.allowEmpty) emptyMasks.add(e.mask); }
   applyProjectEdits(frame, project.edits, time, project.fps, frameIndex, emptyMasks);
   if (!project.pixelStyle) return;
-  let style = styles.get(project.pixelStyle);
-  if (!style) { style = compilePixelStyle2D(createPixelStyleProfile2D(project.pixelStyle)); styles.set(project.pixelStyle, style); }
+  const style = prepareProjectStyle(project)!;
   const profile = style.profile;
-  if (context.space === 'screen-only' && profile.alpha === 'authored-dither' && profile.dither.anchor !== 'screen') throw new RangeError('Projected 3D frames support screen-space alpha dithering; object/world patterns need per-surface coordinates');
+  const patterned=profile.alpha==='authored-dither'||profile.quantization==='ordered'&&(profile.surfaceColors==='indexed'||profile.finalColorPolicy==='palette-locked');
+  if (context.space === 'screen-only' && patterned && profile.dither.anchor !== 'screen') throw new RangeError('Projected 3D frames support screen-space alpha dithering and color dithering; object/world patterns need per-surface coordinates');
   if (context.space !== undefined && context.space !== 'world-2d' && context.space !== 'screen-only') throw new RangeError('Invalid project pixel coordinate space');
   const simple = profile.surfaceColors === 'authored-rgba' && profile.finalColorPolicy !== 'palette-locked' && profile.outline === 'none' && !profile.pixelTracks?.length;
   // Common native coverage path has no full-frame color/mask copies. The scratch arrays are reused per render frame.

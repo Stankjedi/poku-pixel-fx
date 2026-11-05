@@ -1,10 +1,10 @@
-import { createAtlasPacker, frameContentBounds, frameDurationMs, resolveAssetEvents, type AssetManifest } from '../src/render/export.js';
+import { createAtlasPacker, frameContentBounds, frameDurationMs, resolveAssetEvents, resolveAtlasExportSettings, extrudeAtlasRegion, type AssetManifest } from '../src/render/export.js';
 import { serializeProject, type ResolvedProject } from '../src/authoring/project.js';
 import { encodeRGBAPNG } from './png.js';
 import { ENGINE_VERSION } from '../src/version.js';
 
 export interface DownloadFile {name:string;blob:Blob}
-const encoder=new TextEncoder(),PAGE=2048,MAX_BYTES=128*1024*1024;
+const encoder=new TextEncoder(),MAX_BYTES=128*1024*1024;
 export async function sha256(data:Blob|ArrayBuffer):Promise<string>{
   const buffer=data instanceof Blob?await data.arrayBuffer():data;
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256',buffer))].map(v=>v.toString(16).padStart(2,'0')).join('');
@@ -31,15 +31,18 @@ export async function zipFiles(files:readonly DownloadFile[]):Promise<Blob>{
 
 /** One worker frame is in flight. Each page is encoded and released before the next page begins. */
 export function exportProjectAtlas(project:ResolvedProject,onProgress:(message:string)=>void){
+  const settings=resolveAtlasExportSettings({trim:true,...project.exportSettings}),PAGE=settings.maxTextureSize;
+  if(PAGE>2048)throw new RangeError('브라우저 atlas는 최대 2048입니다. 더 큰 페이지는 CLI에서 내보내세요.');
   const worker=new Worker(new URL('./studio-worker.js',import.meta.url),{type:'module'}),id=1;
   let cancelled=false,settled=false,finish!:(value:DownloadFile[])=>void,fail!:(reason:unknown)=>void;
   const promise=new Promise<DownloadFile[]>((resolve,reject)=>{finish=resolve;fail=reject;});
-  const packer=createAtlasPacker(PAGE,1),files:DownloadFile[]=[],records:AssetManifest['files']=[];
+  const packer=createAtlasPacker(PAGE,settings.padding),files:DownloadFile[]=[],records:AssetManifest['files']=[];
+  const duplicates=new Map<string,{page:number;rect:{x:number;y:number;w:number;h:number}}>();let reused=0;
   const renderMode=project.renderProfile?.mode==='cinematic'?'cinematic':'legacy';
   let info:any,page=-1,pageColor=new Uint8Array(0),pageEmission=new Float32Array(0),bytes=0;
   const manifest:AssetManifest={schema:'poku-asset/v1',id:project.id,name:project.name,loop:false,durationMs:0,
     color:{format:'RGBA8888',colorSpace:'srgb',alpha:'straight'},coordinates:'untrimmed-pixel-edges-y-down',pages:[],frames:[],tags:[],
-    settings:{project,renderMode,renderProfile:{...project.renderProfile,mode:renderMode},assetLayers:'straight color + linear HDR emission',previewBackground:project.bg},source:{engineVersion:ENGINE_VERSION,rng:'poku-rng/v1',...(project.sourceRevision?{sourceRevision:project.sourceRevision}:{})},files:records};
+    settings:{project,renderMode,renderProfile:{...project.renderProfile,mode:renderMode},atlas:settings,assetLayers:'straight color + linear HDR emission',previewBackground:project.bg},source:{engineVersion:ENGINE_VERSION,rng:'poku-rng/v1',...(project.sourceRevision?{sourceRevision:project.sourceRevision}:{})},files:records};
   async function add(name:string,blob:Blob){
     if(cancelled)throw new Error('내보내기가 취소되었습니다.');
     bytes+=blob.size;if(bytes>MAX_BYTES)throw new RangeError('브라우저 내보내기 한도(128 MiB)를 넘었습니다. CLI asset-bundle 내보내기를 사용하세요.');
@@ -59,14 +62,29 @@ export function exportProjectAtlas(project:ResolvedProject,onProgress:(message:s
     if(m.type==='begin'){info=m;manifest.loop=m.loop;manifest.contacts=m.contacts;manifest.tags=[{name:project.options.clip??project.name,from:0,to:m.count-1,direction:'forward'}];return;}
     if(m.type==='error')throw new Error(m.message);
     if(m.type==='frame'){
-      const rgba=new Uint8Array(m.rgba),emission=new Float32Array(m.emission),trim=frameContentBounds(info.width,info.height,rgba,emission),placement=packer.place(trim.w,trim.h);
-      if(placement.page!==page){await flush();page=placement.page;if(page>=16)throw new RangeError('브라우저 내보내기는 최대 16개 atlas 페이지입니다. CLI를 사용하세요.');pageColor=new Uint8Array(PAGE*PAGE*4);pageEmission=new Float32Array(PAGE*PAGE*3);}
-      for(let y=0;y<trim.h;y++){
-        const source=(y+trim.y)*info.width+trim.x,dest=(placement.rect.y+y)*PAGE+placement.rect.x;
-        pageColor.set(rgba.subarray(source*4,(source+trim.w)*4),dest*4);pageEmission.set(emission.subarray(source*3,(source+trim.w)*3),dest*3);
+      const rgba=new Uint8Array(m.rgba),emission=new Float32Array(m.emission),trim=settings.trim?frameContentBounds(info.width,info.height,rgba,emission):{x:0,y:0,w:info.width,h:info.height};
+      let key='';
+      if(settings.deduplicate){
+        const data=new Uint8Array(8+trim.w*trim.h*16),view=new DataView(data.buffer);view.setUint32(0,trim.w,true);view.setUint32(4,trim.h,true);let at=8;
+        for(let y=0;y<trim.h;y++)for(let x=0;x<trim.w;x++){
+          const src=(trim.y+y)*info.width+trim.x+x;data.set(rgba.subarray(src*4,src*4+4),at);at+=4;
+          for(let c=0;c<3;c++){view.setFloat32(at,emission[src*3+c],true);at+=4;}
+        }
+        key=await sha256(data.buffer);
+      }
+      const previous=settings.deduplicate?duplicates.get(key):undefined,placement=previous??packer.place(trim.w,trim.h);
+      if(previous)reused++;
+      else{
+        if(placement.page!==page){await flush();page=placement.page;if(page>=16)throw new RangeError('브라우저 내보내기는 최대 16개 atlas 페이지입니다. CLI를 사용하세요.');pageColor=new Uint8Array(PAGE*PAGE*4);pageEmission=new Float32Array(PAGE*PAGE*3);}
+        for(let y=0;y<trim.h;y++){
+          const source=(y+trim.y)*info.width+trim.x,dest=(placement.rect.y+y)*PAGE+placement.rect.x;
+          pageColor.set(rgba.subarray(source*4,(source+trim.w)*4),dest*4);pageEmission.set(emission.subarray(source*3,(source+trim.w)*3),dest*3);
+        }
+        if(settings.extrude){extrudeAtlasRegion(pageColor,PAGE,4,placement.rect,settings.extrude);extrudeAtlasRegion(pageEmission,PAGE,3,placement.rect,settings.extrude);}
+        if(settings.deduplicate)duplicates.set(key,placement);
       }
       manifest.frames.push({...placement,sourceSize:[info.width,info.height],trimOffset:[trim.x,trim.y],pivot:info.origin,duration:frameDurationMs(m.index,info.fps),time:m.time,frozen:m.frozen,...(m.sockets?{sockets:m.sockets}:{})});
-      onProgress(`${m.index+1} / ${info.count} 프레임 · ${page+1}페이지 · ${Math.round(bytes/1048576)} MiB`);
+      onProgress(`${m.index+1} / ${info.count} 프레임 · ${page+1}페이지 · 중복 ${reused}장 재사용 · ${Math.round(bytes/1048576)} MiB`);
       worker.postMessage({type:'ack',id});return;
     }
     if(m.type==='done'){

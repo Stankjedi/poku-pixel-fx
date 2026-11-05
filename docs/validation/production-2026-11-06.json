@@ -1,0 +1,101 @@
+{
+  "schema": "poku.production-validation/v1",
+  "date": "2026-11-06",
+  "baseCommit": "7fc01f763d89101b11df2548c378a663160d473e",
+  "version": "0.5.0",
+  "status": "local-checks-passed-browser-ci-pending",
+  "node": {
+    "runtime": "24.22.1",
+    "fullSuite": {
+      "command": "node --test --test-concurrency=4 tests/*.test.mjs",
+      "tests": 811,
+      "passed": 809,
+      "failed": 2,
+      "skipped": 0,
+      "durationMs": 60773.794783,
+      "resolvedFailures": [
+        {
+          "test": "Studio and CLI render the same stored sequence and export the same metadata",
+          "cause": "The new test fixture requested extrusion 2 with default padding 1; production validation correctly rejected it.",
+          "fix": "The fixture now declares padding 2 and extrusion 2. Browser/CLI frame and metadata parity passed on rerun."
+        },
+        {
+          "test": "GPU Lab scene preserves one six-second loop and portable atlas data across JSON save/open",
+          "cause": "JSON normalizes negative zero to positive zero, changing one stored float bit pattern in the example's initial star axis.",
+          "fix": "The authored axis starts with canonical positive zero. Loop replay and JSON round-trip are now byte-exact."
+        }
+      ]
+    },
+    "targetedCorrectionRun": {
+      "command": "node --test tests/authoring-sequence.test.mjs tests/gpu-tiles.test.mjs tests/palette-atlas-production.test.mjs",
+      "tests": 22,
+      "passed": 22,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 435.411662,
+      "includesNewGpuBudgetTestAddedAfterFullRun": true
+    },
+    "coverageNote": "The full suite included 3D, authoring, character, export, package-install and existing quality regressions. The original two failures were fixed and rechecked in the targeted run; this is not presented as one uninterrupted all-green full-suite invocation.",
+    "finalSequenceRegression": {
+      "command": "node --test tests/authoring-sequence.test.mjs tests/authoring-project-update.test.mjs",
+      "tests": 14,
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 407.371103
+    }
+  },
+  "rust": {
+    "toolchain": "1.99.1",
+    "command": "cargo test --locked --manifest-path native/Cargo.toml",
+    "passed": 7,
+    "failed": 0,
+    "playerBuild": "passed"
+  },
+  "wgsl": {
+    "report": "production-2026-11-06-gpu-tiles.json",
+    "status": "passed",
+    "adapter": "llvmpipe LLVM 20.1.2, Mesa 25.2.8, OpenGL",
+    "softwareAdapter": true,
+    "sceneCases": 6,
+    "computeDispatches": 18,
+    "directAndTiledByteExact": 1061120,
+    "sparse512CandidatePixelVisits": {
+      "direct": 25395712,
+      "tiled": 221696
+    },
+    "sparse512BinningBoundsUpperBound": 113152,
+    "physicalGpuBenchmark": false
+  },
+  "nativeExecution": {
+    "report": "production-2026-11-06-native.json",
+    "status": "passed",
+    "sceneCases": 15,
+    "catalogCases": 1,
+    "capturedNativeFrames": 46,
+    "comparedChannels": 273764,
+    "softwareAdapter": true
+  },
+  "browser": {
+    "local": "unavailable",
+    "reason": "The local execution identity cannot start a sandboxed Chromium process or switch to the available non-root account. Browser sandbox policy was not disabled.",
+    "ci": "pending",
+    "requiredJob": "browser-studio",
+    "newHarness": "tools/production-browser-harness.mjs",
+    "scope": "Actual Studio palette/retiming/sequence controls, undo/redo, worker atlas export, GPU Lab initial frame; actual browser WebGPU availability is reported separately."
+  },
+  "visualEvidence": {
+    "character": "production-2026-11-06-character.json",
+    "sequence": "production-2026-11-06-sequence.json",
+    "nativeStillFramesObserved": true,
+    "fullSpeedPlaybackObserved": false,
+    "artisticApproval": false,
+    "note": "The charged-impact example remains provisional: its existing source lightning is already connected before the authored 0.32-second contact marker. The sequence correctly schedules the response, but this does not establish the intended arrival timing or final art quality."
+  },
+  "preparedSite": {
+    "status": "passed",
+    "catalogCount": 272,
+    "sourceHash": "7f74e2e154f5bf2d7b7ea08913c2263d64a6d5a1b0000f410aa0d4194016d9c6",
+    "command": "node site/scripts/prepare-engine.mjs --check"
+  }
+}

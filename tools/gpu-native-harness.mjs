@@ -8,6 +8,7 @@ import { renderDrawSceneCPU } from '../build/render/draw-ir.js';
 import { CinematicCompositor } from '../build/render/cinematic.js';
 import { decodePNG } from '../build-tools/tools/lib/png-read.mjs';
 import { encodePNG } from '../build-tools/tools/lib/png.mjs';
+import { drawTileFixtures } from '../tests/fixtures/draw-tiles.mjs';
 const binary = resolve(process.env.GPU_NATIVE_BINARY ?? 'native/target/debug/poku-player');
 const directory = await mkdtemp(join(tmpdir(), 'poku-native-qa-')), checks = [];
 const run = args => execFileSync(binary, args, { encoding: 'utf8', timeout: 30000, maxBuffer: 1024 * 1024 });
@@ -35,6 +36,10 @@ try {
   const layers = [rect(0, 0xff0000ff, 1, [3, 0, 0], 'opaque'), rect(1, 0xff00ff00, .25, [0, 1, 0]), rect(2, 0xffff0000, .5, [0, 0, .3])];
   for (const order of [[0, 1, 2], [2, 0, 1], [1, 2, 0]]) await checkScene(`depth-order-${order.join('')}`, { schema: 'poku-draw/v1', width: 3, height: 3, commands: order.map(i => layers[i]) });
   await checkScene('one-pixel-bloom', { schema: 'poku-draw/v1', width: 1, height: 1, commands: [rect(0, 0xff887766, 1, [0, 0, 12])] }, { bloom: { levels: 6 }, highlightColor: 1 });
+
+  for (const { name, scene: tileScene } of drawTileFixtures()) {
+    await checkScene(`tiled-${name}`, tileScene, { drawCulling: 'tiled', bloom: false });
+  }
 
   const assetDir = join(directory, 'asset'); await mkdir(assetDir);
   const color = new Uint32Array([0xff0000ff, 0, 0xff00ff00, 0x80ff0000, 0xffffffff, 0xff0000ff, 0xff00ff00, 0xffff0000]);
@@ -111,7 +116,7 @@ try {
     if (d.maxDelta > 2) throw new Error(`Production frost export/native mismatch at ${i}: ${JSON.stringify(d)}`);
     checks.push({ name: `catalog-frost-lighting-${i}`, ...d });
   }
-  report = { status: 'passed', adapter, checks, sceneCases: 9, catalogCases: 1, capturedNativeFrames, comparedChannels: checks.reduce((n, c) => n + c.channels, 0), tolerance: 'max 2 encoded channel values; same-device replay exact', scope: 'Actual native wgpu shared WGSL and production 3D export. Software adapter is reported; browser canvas and physical GPUs remain separate validation targets.' };
+  report = { status: 'passed', adapter, checks, sceneCases: 9 + drawTileFixtures().length, catalogCases: 1, capturedNativeFrames, comparedChannels: checks.reduce((n, c) => n + c.channels, 0), tolerance: 'max 2 encoded channel values; same-device replay exact', scope: 'Actual native wgpu shared WGSL and production 3D export. Software adapter is reported; browser canvas and physical GPUs remain separate validation targets.' };
 } catch (error) { report = { status: error.code === 'ENOENT' ? 'unavailable' : 'failed', reason: String(error), checks, adapter }; }
 finally { await rm(directory, { recursive: true, force: true }); }
 console.log(JSON.stringify(report, null, 2)); if (process.env.GPU_NATIVE_REPORT_PATH) await writeFile(process.env.GPU_NATIVE_REPORT_PATH, JSON.stringify(report, null, 2));

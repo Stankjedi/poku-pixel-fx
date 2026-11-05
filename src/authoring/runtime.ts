@@ -3,12 +3,13 @@ import { createRecipeEffect } from './recipes.js';
 import { createFrame, clearFrame, createFx, painterFor,sceneCameraOffset } from '../core/fx.js';
 import { createAct, actBounds } from '../core/act.js';
 import { drawActor, stockActor, actorAlphaOf } from '../core/actor.js';
-import { resolveEffectExport, resolveActExport, exportLayout2D, edgeFade,transformExportSockets,transformExportContacts,collectAssetEvents,type AssetSocket } from '../render/export.js';
+import { resolveEffectExport, resolveActExport, exportLayout2D, edgeFade,transformExportSockets,transformExportContacts,collectAssetEvents,resolveAtlasExportSettings,type AssetSocket } from '../render/export.js';
 import { enableHDRLight } from '../render/hdr.js';
 import { backdrop } from '../core/scene.js';
 import { loadCatalogEffect } from './registry.js';
 import { createCharacterEffect } from './character-effect.js';
-import { postprocessProjectFrame } from './edits.js';
+import { createSequenceEffect } from './sequence.js';
+import { postprocessProjectFrame, prepareProjectStyle } from './edits.js';
 import { compositeProjectFrame } from './composite.js';
 import { BudgetCache, retainedBytes } from './cache.js';
 import { pixelTransform2D } from '../core/sprite-raster.js';
@@ -23,8 +24,10 @@ export interface ProjectFrameSample {
 export async function createProjectRuntime(input: unknown, suppliedModule?: any) {
   let project = resolveProject(input);
   if (project.kind === '3d') throw new RangeError('Use the 3D profile player for 3D projects');
+  prepareProjectStyle(project);resolveAtlasExportSettings(project.exportSettings);
   const mod = suppliedModule ?? (project.kind === 'recipe' ? createRecipeEffect(project.recipe)
     : project.kind === 'character' ? createCharacterEffect(project.character, project.options.clip,project.fps)
+    : project.kind === 'sequence' ? await createSequenceEffect(project.sequence,undefined,project.fps)
     : await loadCatalogEffect(project.id));
   const options:Record<string,any> = { ...project.options, seed:project.seed, layers:project.layers, ...(project.cameraMotion !== undefined?{cameraMotion:project.cameraMotion}:{}) };
   const acted = project.kind === 'act';
@@ -42,7 +45,7 @@ export async function createProjectRuntime(input: unknown, suppliedModule?: any)
   const make=()=>acted?createAct(mod,{...options,x,y}):createFx(mod,{...options,x,y});
   let instance=make(), last=0;
   const facts=acted?(instance as ReturnType<typeof createAct>).fx:instance as EffectInstance;
-  const contacts=transformExportContacts(facts.contacts,facts.options),events=collectAssetEvents(mod);
+  const contacts=transformExportContacts(facts.contacts,facts.options),events=mod.eventsFor?.(facts.options)??collectAssetEvents(mod);
   const checkpoints=new Map<number,{snapshot:EffectCheckpoint;bytes:number}>();let checkpointBytes=0,lastCheckpoint=-1;
   const supportsCheckpoint=!acted&&(instance as EffectInstance).supportsCheckpoint;
   function capture(time:number){
@@ -99,7 +102,7 @@ export async function createProjectRuntime(input: unknown, suppliedModule?: any)
     return{frame,rgba,time:instance.t,frameIndex,drawMs:performance.now()-start,cached:false,...metadata};
   }
   function simulationKey(p:ResolvedProject){
-    const {name,notes,intentRef,intentSha256,sourceRevision,renderProfile,pixelStyle,edits,bg,...simulation}=p;
+    const {name,notes,intentRef,intentSha256,sourceRevision,renderProfile,exportSettings,pixelStyle,edits,bg,...simulation}=p;
     return JSON.stringify(simulation);
   }
   return{get project(){return project;},mod,width:w,height:h,origin:layout.pivot,duration,frameCount,loop:!!mod.meta.loop,contacts,events,frame,rgba,get bg(){return bg;},cache,render,
@@ -113,9 +116,12 @@ export async function createProjectRuntime(input: unknown, suppliedModule?: any)
     /** Finishing/paint edits invalidate rendered cels, while complete simulation checkpoints remain valid. */
     tryUpdateProject(input:unknown){
       const next=resolveProject(input);if(simulationKey(next)!==simulationKey(project))return false;
+      prepareProjectStyle(next);resolveAtlasExportSettings(next.exportSettings);
       const nextPlan=resolveEffectExport(mod.meta,{fps:next.fps,seconds:next.seconds,options,margin:next.margin??0,edgeFade:next.pixelStyle?.edgeFade});
       const nextBg=next.bg===project.bg?bg:next.bg==='none'?null:backdrop(next.bg,w,h,y-layout.oy);
-      project=next;plan=nextPlan;bg=nextBg;cache.clear();return true;
+      const finishingKey=(p:ResolvedProject)=>JSON.stringify([p.renderProfile,p.pixelStyle,p.edits,p.bg]);
+      const invalidate=finishingKey(next)!==finishingKey(project);
+      project=next;plan=nextPlan;bg=nextBg;if(invalidate)cache.clear();return true;
     },
     get seekStats(){return{mode:supportsCheckpoint?'checkpoint':'replay',checkpoints:checkpoints.size,bytes:checkpointBytes};},
     reset(){instance=make();last=0;cache.clear();checkpoints.clear();checkpointBytes=0;lastCheckpoint=-1;capture(0);},dispose(){cache.clear();checkpoints.clear();checkpointBytes=0;}};

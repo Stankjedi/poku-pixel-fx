@@ -4,7 +4,22 @@
 
 > **Origin:** POKU Pixel FX is a Korean-localized, TypeScript-based open-source fork/derivative of [PixelFX by Patch](https://github.com/patch-gg/pixelfx). This repository is maintained separately and is not linked as a GitHub network fork. The upstream MIT license credits Patch and Hugo Duprez; see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for copyright and third-party notices.
 
-## 0.4 Studio · GPU · CharacterAsset
+## 0.5 · 시퀀스 제작 · 타일 GPU 렌더링 · 도트 스타일
+
+여러 이펙트를 시간표로 합치는 **시퀀스 편집**, 동작과 접촉을 함께 바꾸는 길이 조정,
+**16×16 GPU 타일 분류**, 직접 GPU 도형을 확인하는 **GPU Lab**, 장비 원화 동기화,
+색상 디더와 편집 가능한 팔레트, 브라우저 Atlas 중복 제거·가장자리 확장을 추가했습니다.
+상세 내용과 실제 구현 범위는 [0.5 개선 보고서](docs/PRODUCTION_UPGRADE_2026-11-06.md),
+[시퀀스 사용법](docs/SEQUENCES.md)을 참고하세요.
+
+`npm run build && npm run gallery` 후 Studio의 **현재 효과로 시퀀스 제작** 또는
+`http://127.0.0.1:8080/gallery/gpu-lab.html`을 엽니다.
+
+```sh
+npm run render -- --project examples/projects/charged-impact.poku-project.json --bundle --trim --deduplicate --padding 2 --extrude 1
+```
+
+## 0.4에서 이어지는 Studio · GPU · CharacterAsset
 
 0.4는 **저장 가능한 제작 프로젝트**를 중심으로 편집·검토·게임 자산 출력을 연결합니다. [Studio 사용법](docs/STUDIO.md), [80개 개선 항목의 구현과 검증 범위](docs/IMPROVEMENT_IMPLEMENTATION.md)를 함께 읽으세요.
 
