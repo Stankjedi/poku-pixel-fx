@@ -74,3 +74,8 @@ export { resolveEffectExport, exportLayout2D, frameDurationMs, edgeFade, separat
 export type { ActorSelection2D, ActorAdapter2D, ActorSample2D } from './actor-adapter.js';
 
 export { effectExampleCode2D } from './example-code.js';
+
+export { WebGLCompositor } from "../render/webgl-compositor.js";
+export type { CompositeBackground, WebGLCanvas } from "../render/webgl-compositor.js";
+export { FrameRenderer } from "../render/frame-renderer.js";
+export type { FrameRendererOptions, FrameRendererStatus } from "../render/frame-renderer.js";

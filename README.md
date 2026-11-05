@@ -19,6 +19,8 @@ Node.js 18 이상과 로컬 개발 의존성을 준비한 뒤 `npm run build`를
 
 **Aseprite 편집 연동:** `npm run aseprite -- export fire/torch --out ./aseprite-work/torch`로 투명 PNG/JSON을 만들고, 명시한 Aseprite 실행 파일로 편집용 문서를 생성하거나 편집 결과를 엔진으로 가져올 수 있습니다. 가변 프레임 시간·투명도·태그를 유지하며, 원래 절차형 레이어와 발광 버퍼는 평면 이미지로 합쳐집니다. 실제 앱 실행 검증 범위와 사용법은 [Aseprite 연결 문서](docs/ASEPRITE_BRIDGE.md)를 확인하세요.
 
+**선택형 GPU 합성:** 상세 미리보기의 “GPU 합성 시도” 또는 `FrameRenderer(canvas, { backend: "auto" })`로 WebGL2 색·광원 합성을 사용할 수 있습니다. 픽셀 작성·시뮬레이션은 CPU이며 GPU가 불가하면 이유와 함께 CPU로 돌아갑니다. 실제 장치 검증 범위와 제약은 [GPU 합성 문서](docs/GPU_COMPOSITING.md)를 확인하세요.
+
 **새 선택형 시네마틱 엔진:** 기존 255개 2D 이펙트 및 3D 이펙트 파일을 변경하지 않고, 선형 RGB 기반 HDR 발광 누적, 멀티스케일 블룸, ACES 톤매핑, 월드 좌표 3D 포인트 광원 및 SSAO를 추가했습니다. `enableHDRLight(frame)`로 8비트 포화 없는 발광을 활성화하고, `CinematicCompositor`로 픽셀 경계를 보존하면서 후처리할 수 있습니다. 3D 프리뷰의 **CINEMATIC** 스위치에서 기존 출력과 비교할 수 있습니다. 사용법과 제약은 [시네마틱 렌더링 문서](docs/CINEMATIC_RENDERER.md)를 참고하세요.
 
 GIF·MP4 미리보기에는 로컬 ffmpeg가 필요합니다. 갤러리의 한글은 시스템 글꼴 대체를 사용하며 Poku Pixel 글꼴은 영문·숫자·기본 기호를 제공합니다. 이펙트 식별자와 코드 API, 내보낸 원본 메타데이터는 호환성을 위해 그대로 유지합니다.

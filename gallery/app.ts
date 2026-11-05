@@ -2,7 +2,7 @@
 // opens one effect with its options, a sprite sheet and the code to use it.
 
 import { effects, categories as catalogCategories } from "../src/fx/index.js";
-import { createFrame, clearFrame, createFx, createAct, actBounds, composite, backdrop, drawActor, painterFor, stockActor, actorAlphaOf, sceneCameraOffset, PAL, BACKDROPS, resolveEffectExport, edgeFade, frameDurationMs, effectExampleCode2D, type ActorSelection2D, atlasMetadata, actTiming, transformImpactContact2D, defineRestorationTiming2D } from "../src/core/index.js";
+import { createFrame, clearFrame, createFx, createAct, actBounds, composite, backdrop, drawActor, painterFor, stockActor, actorAlphaOf, sceneCameraOffset, PAL, BACKDROPS, resolveEffectExport, edgeFade, frameDurationMs, effectExampleCode2D, type ActorSelection2D, atlasMetadata, actTiming, transformImpactContact2D, defineRestorationTiming2D, FrameRenderer } from "../src/core/index.js";
 import { effectsKo, tagsKo } from "../src/i18n/ko/index.js";
 import { encodeAnimatedWebP } from "./animated-webp.js";
 import { encodeRGBAPNG, copyAtlasFrame } from "./png.js";
@@ -73,6 +73,8 @@ class Player {
   declare opts: Record<string, any>; declare flip: boolean; declare actor: boolean; declare speed: number; declare playing: boolean;
   declare bg: string; declare bgBuf: Uint32Array | null; declare aspect: number; declare pad: number;
   declare W: number; declare H: number; declare x: number; declare y: number; declare frame: ReturnType<typeof createFrame>; declare img: ImageData;
+  gpuRequested = false;
+  presenter: FrameRenderer | null = null;
   declare inst: any; declare acc: number; declare wait: number; declare dirty: boolean;
   constructor(canvas: HTMLCanvasElement, fx: GalleryEffect, aspect: number, pad: number) {
     Object.assign(this, { canvas, fx, ctx: canvas.getContext("2d"), opts: {}, flip: false, actor: true, speed: 1, playing: true });
@@ -136,14 +138,28 @@ class Player {
     this.inst.update(t);
     this.render();
   }
+  setGpu(enabled: boolean) {
+    this.presenter?.dispose(); this.presenter = null; this.gpuRequested = enabled;
+    if (enabled) this.presenter = new FrameRenderer(this.canvas, { backend: 'auto', onStatus: () => {
+      if (detail === this) queueMicrotask(() => { if (detail === this) gpuStatus(this); });
+    } });
+    this.dirty = true;
+  }
+  dispose() { this.presenter?.dispose(); this.presenter = null; }
+  present(frame: ReturnType<typeof createFrame>, sx: number, sy: number) {
+    if (this.presenter) this.presenter.render(frame, this.bgBuf, 1, [sx, sy]);
+    else {
+      composite(frame, this.img.data, this.bgBuf);
+      if (sx || sy) this.ctx.clearRect(0, 0, this.W, this.H);
+      this.ctx.putImageData(this.img, sx, sy);
+    }
+  }
   render() {
     const f = clearFrame(this.frame);
     if (this.acted) {
       this.inst.draw(f);
-      composite(f, this.img.data, this.bgBuf);
       const [sx, sy] = sceneCameraOffset(this.inst.shake, reduced, this.bg === "none");
-      if (sx || sy) this.ctx.clearRect(0, 0, this.W, this.H);
-      this.ctx.putImageData(this.img, sx, sy);
+      this.present(f, sx, sy);
       this.dirty = false;
       return;
     }
@@ -151,10 +167,8 @@ class Player {
     const m = this.fx.meta, tt = m.loop ? this.inst.t % m.duration : Math.min(this.inst.t, m.duration);
     if (m.actor && this.actor) drawActor(painterFor(f).place(this.x, this.y, this.flip), this.inst.options.actor ?? stockActor(), actorAlphaOf(this.fx.mod, tt, this.inst.options));
     this.inst.draw(f, "front");
-    composite(f, this.img.data, this.bgBuf);
     const [sx, sy] = sceneCameraOffset(this.inst.shake, reduced, this.bg === "none");
-    if (sx || sy) this.ctx.clearRect(0, 0, this.W, this.H);
-    this.ctx.putImageData(this.img, sx, sy);
+    this.present(f, sx, sy);
     this.dirty = false;
   }
 }
@@ -245,12 +259,22 @@ function filter() {
 let detail: Player | null = null;
 const downloadURLs:string[]=[];
 function clearDownloadURLs(){for(const url of downloadURLs)URL.revokeObjectURL(url);downloadURLs.length=0;}
+function gpuStatus(player: Player) {
+  const status = player.presenter?.status;
+  $('#d-gpu').setAttribute('aria-pressed', String(player.gpuRequested));
+  $('#d-gpu').textContent = player.gpuRequested ? 'GPU 요청 끄기' : 'GPU 합성 시도';
+  $('#d-renderer').textContent = status?.backend === 'webgl2'
+    ? 'WebGL2 합성 · 픽셀 작성/시뮬레이션은 CPU'
+    : status?.reason ? `CPU 대체 · ${status.reason}` : 'CPU 합성';
+}
 function openDetail(fx: GalleryEffect) {
+  detail?.dispose();
   clearDownloadURLs();
   const d = $("#detail");
   const big = $("#big"), screen = isScreen(fx);
   big.parentElement!.classList.toggle("screen", screen);
   detail = screen ? new Player(big, fx, 16 / 9, 1) : new Player(big, fx, 16 / 10, 1.6);
+  gpuStatus(detail);
   const m = fx.meta;
   $("#d-name").textContent = m.name;
   $("#d-id").textContent = fx.id;
@@ -332,7 +356,7 @@ function code(fx: GalleryEffect) {
   const p = detail!;
   $("#d-code").textContent = effectExampleCode2D({ id: fx.id, width: p.W, height: p.H,
     x: p.x, y: p.y, options: { seed: p.inst.options?.seed ?? p.inst.fx?.options.seed ?? fx.meta.options.seed ?? 1, ...p.opts },
-    flip: p.flip, acted: p.acted, actor: p.actor, background: p.bg, speed: p.speed });
+    flip: p.flip, acted: p.acted, actor: p.actor, background: p.bg, speed: p.speed, renderer: p.gpuRequested ? "auto" : "cpu" });
 }
 
 async function sheet() {
@@ -449,7 +473,11 @@ async function sceneSheet(status:HTMLElement){
 function wireDetail() {
   const d = $("#detail");
   $("#d-close").addEventListener("click", () => d.close());
-  d.addEventListener("close", () => { detail = null; clearDownloadURLs(); });
+  d.addEventListener("close", () => { detail?.dispose(); detail = null; clearDownloadURLs(); });
+  $("#d-gpu").addEventListener("click", () => {
+    if (!detail) return;
+    detail.setGpu(!detail.gpuRequested); detail.render(); gpuStatus(detail); code(detail.fx);
+  });
   d.addEventListener("click", (e) => e.target === d && d.close());
   $("#d-play").addEventListener("click", (e) => {
     detail!.playing = !detail!.playing;
