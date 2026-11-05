@@ -27,6 +27,9 @@ if (full && !check) {
 const manifestPath = join(prepared, 'build-manifest.json');
 if (!existsSync(manifestPath)) throw new Error('Missing prepared engine manifest. Run npm run sync:site from the full repository.');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+for (const name of ['fonts/SUIT-Variable.woff2', 'fonts/OFL-SUIT.txt', 'fonts/NOTICE.md']) {
+  if (typeof manifest.files?.[name] !== 'string') throw new Error(`Missing prepared Studio font/license: ${name}. Run npm run sync:site.`);
+}
 for (const [name, expected] of Object.entries(manifest.files)) {
   const actual = createHash('sha256').update(readFileSync(join(prepared, name))).digest('hex');
   if (actual !== expected) throw new Error(`Stale engine asset: ${name}. Run npm run sync:site.`);
@@ -45,6 +48,7 @@ if (full) {
     ['gallery/style.css', 'style.css'],
   ];
   for (const name of Object.keys(manifest.files).filter(name => name.startsWith('chunks/'))) copies.push([`build-gallery/${name}`, name]);
+  for (const name of Object.keys(manifest.files).filter(name => name.startsWith('fonts/'))) copies.push([`gallery/${name}`, name]);
   for (const [source, destination] of copies) {
     const sourcePath = join(root, source);
     // CI builds first; source-only checkouts can still validate the prepared

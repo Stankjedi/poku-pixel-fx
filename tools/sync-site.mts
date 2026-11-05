@@ -18,10 +18,15 @@ rmSync(join(publicDir, 'chunks'), { recursive: true, force: true });
 if (existsSync(join(ROOT, 'build-gallery', 'chunks'))) cpSync(join(ROOT, 'build-gallery', 'chunks'), join(publicDir, 'chunks'), { recursive: true });
 copyFileSync(join(ROOT, 'gallery', '3d.html'), join(publicDir, '3d.html'));
 copyFileSync(join(ROOT, 'gallery', 'style.css'), join(publicDir, 'style.css'));
+const fontDir = join(ROOT, 'gallery', 'fonts');
+const fontNames = readdirSync(fontDir, { withFileTypes: true }).filter(entry => entry.isFile()).map(entry => entry.name).sort();
+mkdirSync(join(publicDir, 'fonts'), { recursive: true });
+for (const name of fontNames) copyFileSync(join(fontDir, name), join(publicDir, 'fonts', name));
 const { sourceFingerprint } = await import(new URL('../../tools/site-source.mjs', import.meta.url).href);
 // The hosted entry point has community controls; preserve it and verify its
 // integrity alongside the generated engine assets instead of replacing it.
 const names = ['index.html', 'app.js', '3d.js', '3d.html', 'studio.js', 'studio-worker.js', 'studio.html', 'studio.css', 'style.css', 'community.css', 'catalog.json'];
+names.push(...fontNames.map(name => `fonts/${name}`));
 if (existsSync(join(publicDir, 'chunks'))) names.push(...readdirSync(join(publicDir, 'chunks')).filter(name => name.endsWith('.js')).map(name => `chunks/${name}`));
 const files = Object.fromEntries(names.map(name => [name, createHash('sha256').update(readFileSync(join(publicDir, name))).digest('hex')]));
 writeFileSync(join(publicDir, 'build-manifest.json'), JSON.stringify({

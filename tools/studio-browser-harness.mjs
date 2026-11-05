@@ -24,6 +24,14 @@ try {
     };
     await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 2, mobile: false });
     await browser.navigate('/gallery/studio.html'); await ready(); await waitFor("document.getElementById('performance').textContent.startsWith('CPU')");
+    const koreanFont = await evaluate(async () => {
+      await document.fonts.load('13px "Poku Studio UI"', '한국어 픽셀 이펙트 제작');
+      await document.fonts.ready;
+      return [...document.fonts].some(font => font.family.includes('Poku Studio UI') && font.status === 'loaded')
+        && document.fonts.check('13px "Poku Studio UI"', '한국어 픽셀 이펙트 제작')
+        && [document.body, document.querySelector('.view-label'), document.getElementById('project-json')].every(element => getComputedStyle(element).fontFamily.includes('Poku Studio UI'));
+    });
+    assert(koreanFont, 'The bundled Korean UI font loads without an operating-system CJK font or an external font service');
     assert(await evaluate("document.querySelectorAll('#recipes button').length") === 6, 'Studio boots all six recipe buttons using real bundled modules');
     const kinds = ['thrown-blade', 'ribbon-slash', 'lightning', 'explosion', 'flame', 'portal'];
     for (let i = 0; i < 6; i++) {

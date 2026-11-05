@@ -11,4 +11,6 @@ https://github.com/rehan-remade/hollow-crown, Copyright (c) 2026 rehan-remade, M
 
 **Poku Pixel.** The gallery font is an original 5×7 pixel font created for this fork. Its source and font file are available under the repository MIT license.
 
+**SUIT Variable.** Studio includes the unmodified SUIT v2.0.5 interface font by SUNN under the SIL Open Font License 1.1. See [the complete font license](gallery/fonts/OFL-SUIT.txt) and [font provenance and coverage](gallery/fonts/NOTICE.md).
+
 The complete MIT license and copyright notice for Hollow Crown are included in `licenses/HOLLOW-CROWN.txt`; the project license and associated Patch and Hugo Duprez notices are in `LICENSE`.

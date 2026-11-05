@@ -21,7 +21,7 @@ test('packed release installs without build tools and runs ESM + CLI from a work
     const packed=JSON.parse(run(root,[cli,'pack','--json','--ignore-scripts','--pack-destination',temp]).stdout)[0];
     const paths=new Set(packed.files.map(file=>file.path));
     for(const path of ['tools/poku.mjs','tools/effect-intent.mjs','tools/lib/effect-intent.mjs','build-tools/tools/render.mjs','build/authoring/project.js',
-      'build-gallery/studio.js','build-gallery/studio-worker.js','gallery/studio.html','src/fx/projectiles/arrow.ts','LICENSE','NOTICE.md'])assert.ok(paths.has(path),`release is missing ${path}`);
+      'build-gallery/studio.js','build-gallery/studio-worker.js','gallery/studio.html','gallery/fonts/SUIT-Variable.woff2','src/fx/projectiles/arrow.ts','LICENSE','NOTICE.md'])assert.ok(paths.has(path),`release is missing ${path}`);
     writeFileSync(join(work,'package.json'),JSON.stringify({name:'synthetic-poku-consumer',version:'1.0.0',private:true,type:'module'}));
     run(work,[cli,'install','--ignore-scripts','--offline','--no-audit','--no-fund','--omit=dev',join(temp,packed.filename)]);
     const installed=join(work,'node_modules/poku-pixel-fx');
