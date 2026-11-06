@@ -90,7 +90,10 @@
     "test:browser:gpu": "node tools/gpu-browser-harness.mjs",
     "test:native": "cargo test --locked --manifest-path native/Cargo.toml",
     "test:production": "node --test tests/character-animation-tracks.test.mjs tests/palette-atlas-production.test.mjs tests/authoring-sequence.test.mjs tests/authoring-retiming.test.mjs tests/gpu-tiles.test.mjs tests/atlas-memory.test.mjs",
-    "test:browser:production": "node tools/production-browser-harness.mjs"
+    "test:browser:production": "node tools/production-browser-harness.mjs",
+    "test:pixel-art": "node --test tests/pixel-contour.test.mjs tests/pixel-material.test.mjs tests/pixel-art-analysis.test.mjs tests/pixel-art-project.test.mjs",
+    "preview:pixel-art": "node tools/preview-pixel-art.mjs",
+    "test:browser:pixel-art": "node tools/pixel-art-browser-harness.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

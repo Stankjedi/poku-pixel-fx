@@ -1,0 +1,34 @@
+{
+  "schema": "poku.pixel-art-validation/v1",
+  "date": "2026-11-06",
+  "baseCommit": "a7c02b1503ec9a2915284a41045d323030dff5b8",
+  "build": "passed",
+  "nodeRegression": {"tests": 865, "passed": 865, "failed": 0, "skipped": 0},
+  "newPixelArtTests": 45,
+  "preservation": {
+    "existingEffectSourcesUnchanged": true,
+    "existing3DEffectSourcesUnchanged": true,
+    "legacyPainterAndEffectRuntimeUnchanged": true,
+    "libraryEffects": 274,
+    "preparedPublicCatalogEffects": 272
+  },
+  "localBrowser": {
+    "status": "unavailable",
+    "reason": "Chromium startup failed at process_singleton_posix socket() with Operation not permitted; no browser assertions ran locally.",
+    "sandboxSettingsChanged": false,
+    "requiredFollowUp": "The browser-studio CI job runs tools/pixel-art-browser-harness.mjs with PIXEL_ART_REQUIRED=1. Use the PR check result as browser execution evidence."
+  },
+  "visualObservation": {
+    "files": ["docs/previews/pixel-art-lab/material-studies.png", "docs/previews/pixel-art-lab/stone-comparison.png"],
+    "nativeStudySize": [192, 112],
+    "observed": [
+      "Stone has connected curved value groups, intermittent crevices and selective edge highlights.",
+      "Metal highlights follow the authored ridge; wood grain is directional.",
+      "Fabric shows a deliberate regular weave; crystal retains intentional facets."
+    ],
+    "userApproval": false,
+    "artisticQualityCertifiedByTests": false,
+    "scope": "New material authoring studies on explicit input shapes, not a redesign of existing effects or a claim of automatic finished character art."
+  },
+  "metrics": "docs/previews/pixel-art-lab/metrics.json"
+}

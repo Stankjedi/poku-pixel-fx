@@ -54,6 +54,7 @@ jobs:
       - run: npm run test:export-studio
       - run: npm run test:install
       - run: npm run test:production
+      - run: npm run test:pixel-art
       - name: Smoke-test integrated cinematic image exports
         run: |
           for effect in frost slash blackhole wind windOriginal water shield; do
@@ -82,6 +83,7 @@ jobs:
       - run: npm run test:export-studio
       - run: npm run test:install
       - run: npm run test:production
+      - run: npm run test:pixel-art
 
   site-build:
     runs-on: ubuntu-latest
@@ -136,6 +138,12 @@ jobs:
         env:
           GPU_REPORT_PATH: gpu-browser-result.json
         run: node tools/gpu-browser-harness.mjs
+      - name: Exercise material authoring, selected edits and native PNG/project round trips
+        env:
+          PIXEL_ART_REQUIRED: "1"
+          PIXEL_ART_REPORT_PATH: pixel-art-browser-result.json
+          PIXEL_ART_SCREENSHOT_PATH: pixel-art-browser.png
+        run: node tools/pixel-art-browser-harness.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -146,6 +154,8 @@ jobs:
             gpu-browser-result.json
             production-browser-result.json
             production-browser.png
+            pixel-art-browser-result.json
+            pixel-art-browser.png
 
   native-wgpu:
     runs-on: ubuntu-latest
