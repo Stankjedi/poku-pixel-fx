@@ -67,7 +67,23 @@
     <label>높이가 만드는 그림자 <output for="cast-shadow" id="cast-shadow-value"></output><input id="cast-shadow" type="range" min="0" max="1" value="0" step=".05"></label>
     <label>결 방향 <output for="grain-angle" id="grain-angle-value"></output><input id="grain-angle" type="range" min="-180" max="180" value="0" step="1"></label>
     <label class="inline"><input id="seamless-material" type="checkbox">캔버스 크기로 반복되는 재질</label><p class="hint" id="tile-material-note">반복 무늬를 만들 때 사용합니다. 켜면 가장자리 입체감은 0이 됩니다.</p><label class="inline"><input id="use-height" type="checkbox" checked>형태의 높이 사용</label><p class="hint">예제의 부피와 천의 주름을 조명에 반영합니다. 가져온 PNG는 선택한 재질의 요철과 가장자리로 표현합니다.</p>
-    <details class="relight-panel"><summary>원화 색을 유지하는 재조명</summary><label>주 광원 색 <input id="relight-key-color" type="color" value="#ffecd0"></label><label>보조 광원 색 <input id="relight-fill-color" type="color" value="#9ab9ff"></label><label>주 광원 밝기 <input id="relight-intensity" type="range" min="0" max="2" value="0.8" step="0.05"></label><label>보조 광원 밝기 <input id="relight-fill" type="range" min="0" max="1" value="0.2" step="0.05"></label><label>명암 단계 <input id="relight-bands" type="number" min="2" max="64" value="12"></label><label>적용 강도 <input id="relight-strength" type="range" min="0" max="1" value="1" step="0.05"></label><label class="inline"><input id="relight-palette" type="checkbox">작업 팔레트 안에서 표현</label><button id="apply-relight" class="wide">재조명 레이어 추가</button><p class="hint">현재 높이·법선과 위의 빛 방향을 사용합니다. 색과 무늬를 유지하며 명암을 조절합니다.</p></details>
+    <details class="relight-panel"><summary>원화 색을 유지하는 재조명</summary>
+      <p class="hint">아래 설정은 재조명에만 사용하며, 재질 설정이나 현재 그림을 바꾸지 않습니다. 레이어를 추가할 때 적용됩니다.</p>
+      <label>조명 방향 <output for="relight-angle" id="relight-angle-value"></output><input id="relight-angle" type="range" min="-180" max="180" value="-132" step="1"></label>
+      <label>조명 고도 <output for="relight-elevation" id="relight-elevation-value"></output><input id="relight-elevation" type="range" min="-90" max="90" value="39" step="1"></label>
+      <label>주 광원 색 <input id="relight-key-color" type="color" value="#ffecd0"></label><label>보조 광원 색 <input id="relight-fill-color" type="color" value="#9ab9ff"></label>
+      <label>주 광원 밝기 <output for="relight-intensity" id="relight-intensity-value"></output><input id="relight-intensity" type="range" min="0" max="2" value="0.8" step="0.05"></label>
+      <label>보조 광원 밝기 <output for="relight-fill" id="relight-fill-value"></output><input id="relight-fill" type="range" min="0" max="1" value="0.2" step="0.05"></label>
+      <label>주변 밝기 <output for="relight-ambient" id="relight-ambient-value"></output><input id="relight-ambient" type="range" min="0" max="1" value="0.25" step="0.05"></label>
+      <label>표면 거칠기 <output for="relight-roughness" id="relight-roughness-value"></output><input id="relight-roughness" type="range" min="0" max="1" value="0.6" step="0.05"></label>
+      <label>홈과 접촉부 음영 <output for="relight-ao" id="relight-ao-value"></output><input id="relight-ao" type="range" min="0" max="1" value="0" step="0.05"></label>
+      <label>높이가 만드는 그림자 <output for="relight-shadow" id="relight-shadow-value"></output><input id="relight-shadow" type="range" min="0" max="1" value="0" step="0.05"></label>
+      <label>명암 단계 <input id="relight-bands" type="number" min="2" max="64" value="12"></label>
+      <label>적용 강도 <output for="relight-strength" id="relight-strength-value"></output><input id="relight-strength" type="range" min="0" max="1" value="1" step="0.05"></label>
+      <label class="inline"><input id="relight-wrap" type="checkbox">반복 타일의 경계를 연결해 조명 계산</label>
+      <label class="inline"><input id="relight-palette" type="checkbox">작업 팔레트 안에서 표현</label><button id="apply-relight" class="wide">재조명 레이어 추가</button>
+      <p class="hint">현재 높이·법선과 위의 재조명 설정을 사용합니다. 적용하지 않은 재질 미리보기가 있으면 함께 확정됩니다. 원래 색에만 적용하려면 재질 미리보기를 먼저 취소하세요.</p>
+    </details>
     <div class="separator"></div><button class="primary wide" id="apply-material">선택 영역에 재질 적용</button><button class="wide cancel-preview" id="cancel-preview">미리보기 취소</button><div class="export-actions"><button id="save-png">원본 크기 PNG</button><button id="save-project">프로젝트 저장</button></div>
     <details class="map-exports"><summary>게임용 표면 맵 출력</summary><label>법선 방향 <select id="normal-convention"><option value="opengl">OpenGL · Y+</option><option value="directx">DirectX · Y−</option></select></label><div class="export-actions"><button id="save-normal">Normal PNG</button><button id="save-height">Height PNG</button><button id="save-occlusion">AO PNG</button><button id="save-shadow">Shadow PNG</button><button id="save-map-info">맵 정보 JSON</button></div><p class="hint">직접 작성한 높이에서 계산합니다. Height PNG는 8비트이며, 정확한 높이는 프로젝트에 보존됩니다.</p></details><div id="downloads" class="downloads"></div>
   </aside>

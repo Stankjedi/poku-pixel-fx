@@ -58,6 +58,17 @@ function palette(colors: readonly (string | number)[]) {
 function settings(): PixelMaterialOptions2D {
   return structuredClone(workingOptions);
 }
+function matchTilePeriodToCanvas() {
+  if(project.width<2||project.height<2){
+    delete workingOptions.tileSize;
+    input('seamless-material').checked=false;
+    element('tile-material-note').textContent='반복 재질은 가로·세로가 모두 2픽셀 이상인 캔버스에서 사용합니다.';
+    return;
+  }
+  workingOptions={...workingOptions,tileSize:[project.width,project.height],bevel:0};
+  input('seamless-material').checked=true;input('bevel').value='0';
+  element('tile-material-note').textContent=`${project.width} × ${project.height} px 간격으로 무늬가 반복됩니다. 전체를 채운 타일에서 사용하세요.`;
+}
 function loadSettings(options: PixelMaterialOptions2D) {
   const p = createPixelMaterial2D(options).options;
   workingOptions=structuredClone(p);
@@ -86,9 +97,8 @@ function editSetting(id:string) {
   else if(id==='ambient-occlusion')workingOptions.ambientOcclusion=number(id);
   else if(id==='cast-shadow')workingOptions.castShadow=number(id);
   else if(id==='seamless-material'){
-    if(input(id).checked){workingOptions.tileSize=[project.width,project.height];workingOptions.bevel=0;input('bevel').value='0';}
-    else delete workingOptions.tileSize;
-    element('tile-material-note').textContent=input(id).checked?`${project.width} × ${project.height} px 간격으로 무늬가 반복됩니다. 전체를 채운 타일에서 사용하세요.`:'반복 재질을 껐습니다.';
+    if(input(id).checked)matchTilePeriodToCanvas();
+    else {delete workingOptions.tileSize;element('tile-material-note').textContent='반복 재질을 껐습니다.';}
   }
   else if(id!=='use-height')workingOptions={...workingOptions,[id]:number(id)};
   changed();
@@ -300,7 +310,13 @@ function prepareImported(next: PixelArtDocument2D,replaceHistory=true,preparedRa
   input('use-height').checked=!!authoredHeight;input('use-height').disabled=!authoredHeight;
   selection=next.selection?Uint8Array.from(next.selection):last?.selection?Uint8Array.from(last.selection):Uint8Array.from(project.pixels,(c,i)=>(project.mask?.[i]??1)&&c>>>24?1:0);
   protectedMask=next.protectedMask?Uint8Array.from(next.protectedMask):last?.protectedMask?Uint8Array.from(last.protectedMask):new Uint8Array(selection.length);protectionVersion++;
-  if(last)loadSettings(last.material);if(replaceHistory)resetHistory();revision++;committed=raster;renderedRevision=revision;draft=false;editingMaterialId=undefined;paintPreview=undefined;schedule();
+  if(last)loadSettings(last.material);
+  else if(workingOptions.tileSize){
+    // The UI mode follows a new canvas; authored material layers retain their
+    // explicit periods through loadSettings above, including non-canvas periods.
+    matchTilePeriodToCanvas();
+  }
+  if(replaceHistory)resetHistory();revision++;committed=raster;renderedRevision=revision;draft=false;editingMaterialId=undefined;paintPreview=undefined;schedule();
 }
 input('project-file').onchange=async()=>{
   const file=input('project-file').files?.[0];if(!file||busy)return;busy=true;

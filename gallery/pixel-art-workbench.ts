@@ -248,17 +248,28 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
       ...(field('paint-in-selection').checked ? { selection: Array.from(host.selection()) } : {}), protectedMask: Array.from(host.protection()) };
     host.commit({ ...doc, activeLayerId: id, layers: [...doc.layers, layer] });
   });
+  // These controls are independent of the material inspector. Changing a light must never
+  // create a material draft that would replace a hand-painted multicolor albedo on apply.
+  const relightRanges = ['angle', 'elevation', 'intensity', 'fill', 'ambient', 'roughness', 'ao', 'shadow', 'strength'];
+  function showRelightValues() {
+    for (const name of relightRanges) {
+      const value = Number(field(`relight-${name}`).value);
+      el(`relight-${name}-value`).textContent = `${Math.round(value * 1000) / 1000}${name === 'angle' || name === 'elevation' ? '°' : ''}`;
+    }
+  }
+  for (const name of relightRanges) field(`relight-${name}`).addEventListener('input', showRelightValues);
+  showRelightValues();
   btn('apply-relight').onclick = () => attempt(() => {
     finishStroke();
     const doc = host.outputDocument(), source = renderPixelArtDocument2D(doc);
     if (!source.channels) throw new Error('재질 레이어를 적용해 높이·법선을 만든 뒤 재조명을 사용하세요.');
-    const angle = Number(field('light-angle').value) * Math.PI / 180, elevation = Number(field('light-height').value) * Math.PI / 180;
+    const angle = Number(field('relight-angle').value) * Math.PI / 180, elevation = Number(field('relight-elevation').value) * Math.PI / 180;
     const lighting = createPixelRelighter2D({
-      lights: [{ direction: [Math.cos(angle) * Math.cos(elevation), Math.sin(angle) * Math.cos(elevation), Math.sin(elevation)], color: field('relight-key-color').value, intensity: Number(field('relight-intensity').value), castShadow: Number(field('cast-shadow').value) },
+      lights: [{ direction: [Math.cos(angle) * Math.cos(elevation), Math.sin(angle) * Math.cos(elevation), Math.sin(elevation)], color: field('relight-key-color').value, intensity: Number(field('relight-intensity').value), castShadow: Number(field('relight-shadow').value) },
         { direction: [-Math.cos(angle), -Math.sin(angle), .7], color: field('relight-fill-color').value, intensity: Number(field('relight-fill').value) }],
-      ambient: Number(field('ambient').value), diffuseBands: integer('relight-bands', 2, 64), roughness: Number(field('roughness').value),
-      ambientOcclusion: Number(field('ambient-occlusion').value), strength: Number(field('relight-strength').value),
-      wrap: field('seamless-material').checked,
+      ambient: Number(field('relight-ambient').value), diffuseBands: integer('relight-bands', 2, 64), roughness: Number(field('relight-roughness').value),
+      ambientOcclusion: Number(field('relight-ao').value), strength: Number(field('relight-strength').value),
+      wrap: field('relight-wrap').checked,
       ...(field('relight-palette').checked ? { palette: [...(authoredPalette ?? host.palette())] } : {}),
     }).options;
     const id = nextPixelArtLayerId2D(doc, 'relight');

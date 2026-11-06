@@ -1071,22 +1071,31 @@ function installPixelArtWorkbench(host) {
     };
     host.commit({ ...doc, activeLayerId: id, layers: [...doc.layers, layer] });
   });
+  const relightRanges = ["angle", "elevation", "intensity", "fill", "ambient", "roughness", "ao", "shadow", "strength"];
+  function showRelightValues() {
+    for (const name2 of relightRanges) {
+      const value = Number(field2(`relight-${name2}`).value);
+      el2(`relight-${name2}-value`).textContent = `${Math.round(value * 1e3) / 1e3}${name2 === "angle" || name2 === "elevation" ? "\xB0" : ""}`;
+    }
+  }
+  for (const name2 of relightRanges) field2(`relight-${name2}`).addEventListener("input", showRelightValues);
+  showRelightValues();
   btn("apply-relight").onclick = () => attempt2(() => {
     finishStroke();
     const doc = host.outputDocument(), source = renderPixelArtDocument2D(doc);
     if (!source.channels) throw new Error("\uC7AC\uC9C8 \uB808\uC774\uC5B4\uB97C \uC801\uC6A9\uD574 \uB192\uC774\xB7\uBC95\uC120\uC744 \uB9CC\uB4E0 \uB4A4 \uC7AC\uC870\uBA85\uC744 \uC0AC\uC6A9\uD558\uC138\uC694.");
-    const angle = Number(field2("light-angle").value) * Math.PI / 180, elevation = Number(field2("light-height").value) * Math.PI / 180;
+    const angle = Number(field2("relight-angle").value) * Math.PI / 180, elevation = Number(field2("relight-elevation").value) * Math.PI / 180;
     const lighting = createPixelRelighter2D({
       lights: [
-        { direction: [Math.cos(angle) * Math.cos(elevation), Math.sin(angle) * Math.cos(elevation), Math.sin(elevation)], color: field2("relight-key-color").value, intensity: Number(field2("relight-intensity").value), castShadow: Number(field2("cast-shadow").value) },
+        { direction: [Math.cos(angle) * Math.cos(elevation), Math.sin(angle) * Math.cos(elevation), Math.sin(elevation)], color: field2("relight-key-color").value, intensity: Number(field2("relight-intensity").value), castShadow: Number(field2("relight-shadow").value) },
         { direction: [-Math.cos(angle), -Math.sin(angle), 0.7], color: field2("relight-fill-color").value, intensity: Number(field2("relight-fill").value) }
       ],
-      ambient: Number(field2("ambient").value),
+      ambient: Number(field2("relight-ambient").value),
       diffuseBands: integer("relight-bands", 2, 64),
-      roughness: Number(field2("roughness").value),
-      ambientOcclusion: Number(field2("ambient-occlusion").value),
+      roughness: Number(field2("relight-roughness").value),
+      ambientOcclusion: Number(field2("relight-ao").value),
       strength: Number(field2("relight-strength").value),
-      wrap: field2("seamless-material").checked,
+      wrap: field2("relight-wrap").checked,
       ...field2("relight-palette").checked ? { palette: [...authoredPalette ?? host.palette()] } : {}
     }).options;
     const id = nextPixelArtLayerId2D(doc, "relight");
@@ -2388,6 +2397,18 @@ function palette(colors) {
 function settings() {
   return structuredClone(workingOptions);
 }
+function matchTilePeriodToCanvas() {
+  if (project.width < 2 || project.height < 2) {
+    delete workingOptions.tileSize;
+    input("seamless-material").checked = false;
+    element("tile-material-note").textContent = "\uBC18\uBCF5 \uC7AC\uC9C8\uC740 \uAC00\uB85C\xB7\uC138\uB85C\uAC00 \uBAA8\uB450 2\uD53D\uC140 \uC774\uC0C1\uC778 \uCE94\uBC84\uC2A4\uC5D0\uC11C \uC0AC\uC6A9\uD569\uB2C8\uB2E4.";
+    return;
+  }
+  workingOptions = { ...workingOptions, tileSize: [project.width, project.height], bevel: 0 };
+  input("seamless-material").checked = true;
+  input("bevel").value = "0";
+  element("tile-material-note").textContent = `${project.width} \xD7 ${project.height} px \uAC04\uACA9\uC73C\uB85C \uBB34\uB2AC\uAC00 \uBC18\uBCF5\uB429\uB2C8\uB2E4. \uC804\uCCB4\uB97C \uCC44\uC6B4 \uD0C0\uC77C\uC5D0\uC11C \uC0AC\uC6A9\uD558\uC138\uC694.`;
+}
 function loadSettings(options) {
   const p = createPixelMaterial2D(options).options;
   workingOptions = structuredClone(p);
@@ -2419,12 +2440,11 @@ function editSetting(id) {
   else if (id === "ambient-occlusion") workingOptions.ambientOcclusion = number(id);
   else if (id === "cast-shadow") workingOptions.castShadow = number(id);
   else if (id === "seamless-material") {
-    if (input(id).checked) {
-      workingOptions.tileSize = [project.width, project.height];
-      workingOptions.bevel = 0;
-      input("bevel").value = "0";
-    } else delete workingOptions.tileSize;
-    element("tile-material-note").textContent = input(id).checked ? `${project.width} \xD7 ${project.height} px \uAC04\uACA9\uC73C\uB85C \uBB34\uB2AC\uAC00 \uBC18\uBCF5\uB429\uB2C8\uB2E4. \uC804\uCCB4\uB97C \uCC44\uC6B4 \uD0C0\uC77C\uC5D0\uC11C \uC0AC\uC6A9\uD558\uC138\uC694.` : "\uBC18\uBCF5 \uC7AC\uC9C8\uC744 \uAED0\uC2B5\uB2C8\uB2E4.";
+    if (input(id).checked) matchTilePeriodToCanvas();
+    else {
+      delete workingOptions.tileSize;
+      element("tile-material-note").textContent = "\uBC18\uBCF5 \uC7AC\uC9C8\uC744 \uAED0\uC2B5\uB2C8\uB2E4.";
+    }
   } else if (id !== "use-height") workingOptions = { ...workingOptions, [id]: number(id) };
   changed();
 }
@@ -2774,6 +2794,9 @@ function prepareImported(next, replaceHistory = true, preparedRaster) {
   protectedMask = next.protectedMask ? Uint8Array.from(next.protectedMask) : last?.protectedMask ? Uint8Array.from(last.protectedMask) : new Uint8Array(selection.length);
   protectionVersion++;
   if (last) loadSettings(last.material);
+  else if (workingOptions.tileSize) {
+    matchTilePeriodToCanvas();
+  }
   if (replaceHistory) resetHistory();
   revision++;
   committed = raster;

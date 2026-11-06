@@ -247,6 +247,97 @@ try {
       && (await exportProject()).layers.length === 32,
     'A drag rejected at the layer limit clears its transient preview and leaves both visible and saved artwork unchanged');
 
+    phase = 'isolated relighting of imported multicolor artwork';
+    const rw = 8, rh = 6, rn = rw * rh;
+    const albedo = Array.from({ length: rn }, (_, i) => color((i * 37 + 29) % 256, (i * 19 + 83) % 256, (i * 53 + 41) % 256));
+    albedo[9] = color(19, 57, 91, 0); albedo[11] = color(211, 79, 43, 73); albedo[36] = color(47, 173, 215, 128);
+    const relightMask = Array(rn).fill(1); relightMask[22] = 0;
+    const relightSelection = Array.from({ length: rn }, (_, i) => Number(i % rw >= 1 && i % rw <= 6 && Math.floor(i / rw) >= 1 && Math.floor(i / rw) <= 4));
+    const relightProtection = Array(rn).fill(0); relightProtection[18] = 1;
+    const authoredHeight = Array.from({ length: rn }, (_, i) => i % rw * .25 + Math.floor(i / rw) * .125 + (i % rw === 4 ? 2 : 0));
+    const geometry = { material: Array.from({ length: rn }, (_, i) => i % 4 + 1), height: authoredHeight.slice(),
+      normal: Array.from({ length: rn * 3 }, (_, i) => Number(i % 3 === 2)) };
+    const relightInput = documentFixture('Multicolor authored geometry', rw, rh, albedo, { mask: relightMask, channels: geometry, authoredHeight,
+      selection: relightSelection, protectedMask: relightProtection });
+    await upload('relight-albedo.json', relightInput); await change('paint-tool', 'inspect'); await checked('paint-in-selection', true);
+    const relightBefore = await exportPNG(), normalBefore = await exportPNG('save-normal', '-normal-opengl.png'), heightBefore = await exportPNG('save-height', '-height.png');
+    const materialControls = () => evaluate(() => ['material', 'light-angle', 'light-height', 'ambient', 'roughness', 'ambient-occlusion', 'cast-shadow', 'bevel', 'seamless-material']
+      .map(id => { const e = document.getElementById(id); return [id, e.type === 'checkbox' ? e.checked : e.value]; }));
+    const materialBeforeRelight = await materialControls();
+    for (const [id, value] of [['relight-angle', 45], ['relight-elevation', 25], ['relight-ambient', .15], ['relight-roughness', .85],
+      ['relight-ao', .4], ['relight-shadow', .7], ['relight-intensity', .9], ['relight-fill', .15], ['relight-bands', 5], ['relight-strength', .8],
+      ['relight-key-color', '#fff0c0'], ['relight-fill-color', '#7da5ff']]) await change(id, value, 'input');
+    await checked('relight-wrap', true); await checked('relight-palette', false);
+    assert(isDeepStrictEqual(await exportProject(), relightInput) && (await exportPNG()).rgba.equals(unpack(albedo, relightMask))
+      && isDeepStrictEqual(await materialControls(), materialBeforeRelight),
+    'Adjusting isolated relight directions, ambient, roughness, occlusion, shadows and wrapping leaves imported artwork and material controls unchanged before applying');
+    await click('apply-relight'); await ready();
+    const relit = await exportPNG(), relitSaved = await exportProject(), relightLayer = relitSaved.layers[0];
+    assert(relitSaved.layers.length === 1 && relightLayer.kind === 'relight'
+      && isDeepStrictEqual(relitSaved.pixels, albedo) && isDeepStrictEqual(relitSaved.mask, relightMask)
+      && isDeepStrictEqual(relitSaved.channels, geometry) && isDeepStrictEqual(relitSaved.authoredHeight, authoredHeight)
+      && isDeepStrictEqual(relitSaved.selection, relightSelection) && isDeepStrictEqual(relitSaved.protectedMask, relightProtection)
+      && isDeepStrictEqual(relightLayer.selection, relightSelection) && isDeepStrictEqual(relightLayer.protectedMask, relightProtection),
+    'Applying imported-albedo relighting adds only one relight layer and preserves exact source RGB, independent mask, geometry, authored height, selection and protection metadata');
+    const light = relightLayer.lighting, expectedDirection = [Math.cos(Math.PI / 4) * Math.cos(25 * Math.PI / 180), Math.sin(Math.PI / 4) * Math.cos(25 * Math.PI / 180), Math.sin(25 * Math.PI / 180)];
+    assert(light.lights[0].direction.every((v, i) => Math.abs(v - expectedDirection[i]) < 1e-12)
+      && light.ambient === .15 && light.roughness === .85 && light.ambientOcclusion === .4 && light.lights[0].castShadow === .7
+      && light.lights[0].intensity === .9 && light.lights[1].intensity === .15 && light.diffuseBands === 5 && light.strength === .8 && light.wrap,
+    'Saved relight options come from the dedicated controls, including the intended light direction and independent repeating geometry');
+    const unlitRGBA = unpack(albedo, relightMask), editableRelightCell = i => relightSelection[i] && !relightProtection[i] && relightMask[i] && albedo[i] >>> 24;
+    assert(alpha(relit.rgba).equals(alpha(unlitRGBA))
+      && Array.from({ length: rn }, (_, i) => i).every(i => editableRelightCell(i) || relit.rgba.subarray(i * 4, i * 4 + 4).equals(unlitRGBA.subarray(i * 4, i * 4 + 4)))
+      && Array.from({ length: rn }, (_, i) => i).some(i => editableRelightCell(i) && !relit.rgba.subarray(i * 4, i * 4 + 4).equals(unlitRGBA.subarray(i * 4, i * 4 + 4))),
+    'Relighting changes selected visible color while every alpha byte, protected cell, unselected cell and hidden RGB remains exact');
+    assert((await exportPNG('save-normal', '-normal-opengl.png')).rgba.equals(normalBefore.rgba)
+      && (await exportPNG('save-height', '-height.png')).rgba.equals(heightBefore.rgba),
+    'Color-only relighting leaves independently exported normal and height maps unchanged');
+    await click('undo'); await ready();
+    assert((await exportProject()).layers.length === 0 && (await exportPNG()).rgba.equals(relightBefore.rgba),
+      'One undo removes the relight operation and restores the original multicolor albedo without a hidden material replacement');
+    await click('redo'); await ready(); await upload('relight-reopened.json', relitSaved);
+    assert(isDeepStrictEqual(await exportProject(), relitSaved) && (await exportPNG()).rgba.equals(relit.rgba),
+      'Relight layers reopen with exact options, geometry metadata and native PNG output');
+    await checked('paint-in-selection', false);
+
+    phase = 'seamless material controls and document dimensions';
+    const tile8 = Array(64).fill(color(128, 143, 121));
+    await upload('seamless-eight.json', documentFixture('Eight pixel tile', 8, 8, tile8, { selection: Array(64).fill(1) }));
+    await change('material', 'stone'); await change('bevel', 4, 'input'); await checked('seamless-material', true);
+    await click('apply-material'); await ready();
+    const tile8Saved = await exportProject();
+    assert(tile8Saved.layers.length === 1 && tile8Saved.layers[0].kind === 'material'
+      && isDeepStrictEqual(tile8Saved.layers[0].material.tileSize, [8, 8]) && tile8Saved.layers[0].material.bevel === 0,
+    'Enabling seamless material stores the current canvas period and removes the silhouette bevel before committing');
+    const tw = 12, th = 10, tilePixels = Array(tw * th).fill(color(127, 151, 169));
+    await upload('seamless-new-size.json', documentFixture('Different canvas tile', tw, th, tilePixels, { selection: Array(tw * th).fill(1) }));
+    await change('roughness', .45, 'input'); await click('apply-material'); await ready();
+    const tiled = await exportPNG(), tileSaved = await exportProject();
+    assert(tileSaved.layers.length === 1 && tileSaved.layers[0].kind === 'material'
+      && isDeepStrictEqual(tileSaved.layers[0].material.tileSize, [tw, th]) && tileSaved.layers[0].material.bevel === 0
+      && isDeepStrictEqual(tileSaved.pixels, tilePixels) && alpha(tiled.rgba).every(a => a === 255),
+    'Importing a different-size unlayered canvas while seamless mode is enabled updates its period to the new dimensions and preserves full coverage');
+    await checked('tile-preview', true);
+    const tileProof = await readCanvas('.tile-proof canvas');
+    assert(tileProof.width === tw * 3 && tileProof.height === th * 3 && Array.from({ length: 9 }, (_, i) => i).every(i =>
+      crop(tileProof.rgba, tileProof.width, i % 3 * tw, Math.floor(i / 3) * th, tw, th).equals(tiled.rgba)),
+    'The visible 3×3 tile proof contains nine exact native copies of the committed tile');
+    await upload('seamless-reopened.json', tileSaved);
+    assert(isDeepStrictEqual(await exportProject(), tileSaved) && (await exportPNG()).rgba.equals(tiled.rgba)
+      && await evaluate("document.getElementById('seamless-material').checked&&Number(document.getElementById('bevel').value)===0&&document.getElementById('tile-material-note').textContent.includes('12 × 10')"),
+    'A saved seamless material restores its period, zero-bevel controls and exact PNG after reopening');
+    await checked('tile-preview', false);
+    const narrowPixels = Array(8).fill(color(83, 157, 221));
+    await upload('one-cell-axis.json', documentFixture('One cell wide artwork', 1, 8, narrowPixels, { selection: Array(8).fill(1) }));
+    assert((await exportProject()).layers.length === 0 && (await exportPNG()).rgba.equals(unpack(narrowPixels))
+      && await evaluate("!document.getElementById('seamless-material').checked"),
+    'Importing a one-cell-wide canvas exits incompatible seamless mode without invalidating or changing the artwork');
+    await checked('seamless-material', true);
+    const narrowPreview = await exportProject();
+    assert(narrowPreview.layers.length === 1 && narrowPreview.layers[0].kind === 'material' && narrowPreview.layers[0].material.tileSize === undefined
+      && await evaluate("!document.getElementById('seamless-material').checked&&document.getElementById('tile-material-note').textContent.includes('2픽셀')"),
+    'Attempting canvas-sized tiling on a one-cell axis explains the minimum size and never stores an invalid tile period');
+
     phase = 'editable animation cels and history';
     const aw = 12, ah = 10, firstPixels = Array(aw * ah).fill(0);
     for (let y = 2; y <= 4; y++) for (let x = 2; x <= 4; x++) firstPixels[y * aw + x] = color(225, 57, 43);
@@ -392,6 +483,8 @@ try {
     return { status: 'passed', checks, mobile,
       selection: { width: w, height: h, transformedRGBA_SHA256: digest(rotated.rgba), layerCount: rotatedProject.layers.length },
       shade: { width: 6, height: 2, rgbaSHA256: digest(afterShade.rgba), rawAlpha: 128, displayedAlpha: 64 },
+      relight: { width: rw, height: rh, rgbaSHA256: digest(relit.rgba), layers: relitSaved.layers.map(layer => layer.kind), preservedGeometry: true },
+      seamless: { width: tw, height: th, tileSize: tileSaved.layers[0].material.tileSize, rgbaSHA256: digest(tiled.rgba) },
       animation: { width: aw, height: ah, frames: 3, durationsMs: [120, 180, 240], observedPlayback: observed,
         sheet: { width: sheet.png.width, height: sheet.png.height, rgbaSHA256: digest(sheet.png.rgba) }, commonPalette: paletteValues },
       scope: 'Actual bundled DOM controls, physical CDP pointer gestures, real browser playback, file inputs and decoded export bytes. Native pixel/alpha preservation, independent editable cels, common palettes and responsive layout; no aesthetic or hardware GPU performance certification.' };
