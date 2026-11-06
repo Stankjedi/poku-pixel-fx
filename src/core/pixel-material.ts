@@ -3,6 +3,7 @@ import { clamp, fract, noise2, smooth, TAU } from './math.js';
 import { createMaterialRamp2D } from './material-ramp.js';
 import type { MaterialChannels2D } from './material-surface.js';
 import type { EditableSprite2D } from './sprite-edit.js';
+import { bakePixelSurfaceLighting2D } from './pixel-surface-maps.js';
 
 export type PixelMaterialKind2D = 'stone' | 'metal' | 'wood' | 'fabric' | 'crystal';
 
@@ -39,6 +40,14 @@ export interface PixelMaterialOptions2D {
   materialId?: number;
   /** Directional grain rotation in radians; zero runs wood grain and brushing along y. */
   grainAngle?: number;
+  /** Opt-in height-field ambient occlusion strength, 0..1. Default 0 preserves previous output. */
+  ambientOcclusion?: number;
+  /** Integer horizon-search radius in native cells, 1..32. Default: 8. */
+  occlusionRadius?: number;
+  /** Opt-in directional self-shadow strength, 0..1. Default: 0. */
+  castShadow?: number;
+  /** Integer planar shadow-ray distance in native cells, 1..128. Default: 32. */
+  shadowDistance?: number;
 }
 
 export interface PixelMaterialShadeOptions2D {
@@ -66,6 +75,10 @@ export interface ResolvedPixelMaterialOptions2D {
   readonly ambient: number;
   readonly materialId: number;
   readonly grainAngle: number;
+  readonly ambientOcclusion: number;
+  readonly occlusionRadius: number;
+  readonly castShadow: number;
+  readonly shadowDistance: number;
 }
 
 const KIND_RESPONSE = {
@@ -98,6 +111,9 @@ function resolveOptions(input: PixelMaterialOptions2D): ResolvedPixelMaterialOpt
     throw new RangeError('Pixel material light must be a finite nonzero 3-vector');
   const grainAngle = input.grainAngle ?? 0;
   if (!Number.isFinite(grainAngle)) throw new RangeError('Grain angle must be finite');
+  const occlusionRadius = input.occlusionRadius ?? 8, shadowDistance = input.shadowDistance ?? 32;
+  if (!Number.isInteger(occlusionRadius) || !Number.isInteger(shadowDistance))
+    throw new RangeError('Occlusion radius and shadow distance must be native-cell integers');
   return Object.freeze({
     kind, seed: seed >>> 0, materialId,
     palette: Object.freeze(Array.from(palette, color => hex(color) >>> 0)),
@@ -110,6 +126,10 @@ function resolveOptions(input: PixelMaterialOptions2D): ResolvedPixelMaterialOpt
     light: Object.freeze([...light]) as readonly [number, number, number],
     ambient: inRange(input.ambient ?? .2, 0, 1, 'Material ambient'),
     grainAngle,
+    ambientOcclusion: inRange(input.ambientOcclusion ?? 0, 0, 1, 'Material ambient occlusion'),
+    occlusionRadius: inRange(occlusionRadius, 1, 32, 'Material occlusion radius'),
+    castShadow: inRange(input.castShadow ?? 0, 0, 1, 'Material cast shadow'),
+    shadowDistance: inRange(shadowDistance, 1, 128, 'Material shadow distance'),
   });
 }
 
@@ -302,6 +322,11 @@ export function createPixelMaterial2D(input: PixelMaterialOptions2D = {}) {
         // Match float32 quantization of interior samples, including crop boundaries.
         return Math.fround(authored + outsideSample.height * options.relief * options.detail);
       };
+      const visibility = options.ambientOcclusion || options.castShadow
+        ? bakePixelSurfaceLighting2D(w, h, heights, {
+          mask: occupied, light: options.light, ambientOcclusion: options.ambientOcclusion,
+          occlusionRadius: options.occlusionRadius, castShadow: options.castShadow, shadowDistance: options.shadowDistance,
+        }) : undefined;
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         const i = y * w + x;
         if (!editable[i]) continue;
@@ -313,11 +338,21 @@ export function createPixelMaterial2D(input: PixelMaterialOptions2D = {}) {
         field(x + origin[0] + .5, y + origin[1] + .5, sample);
         const edgeWear = distance ? (1 - smooth(.5, Math.max(1.5, options.bevel * .65), distance[i]))
           * smooth(.42, .88, diffuse) * clamp(.6 + sample.tone) : 0;
-        const tone = options.ambient + (1 - options.ambient) * diffuse * .72
+        let tone = options.ambient + (1 - options.ambient) * diffuse * .72
           + options.detail * (sample.tone - .24 * sample.cavity
             + sample.accent * (.05 + response.reflection * .08) * smooth(.5, .9, diffuse)
             + response.wear * edgeWear)
           + reflection * specular;
+        if (visibility) {
+          const ambient = options.ambient * visibility.occlusion[i], direct = visibility.shadow[i];
+          // AO attenuates ambient illumination; cast shadows attenuate direct diffuse/specular.
+          // Material color/structure still reads under the surviving ambient illumination.
+          const structure = options.detail * (sample.tone - .24 * sample.cavity
+            + sample.accent * (.05 + response.reflection * .08) * smooth(.5, .9, diffuse)
+            + response.wear * edgeWear);
+          tone = ambient + (1 - options.ambient) * diffuse * .72 * direct
+            + structure * (ambient + (1 - options.ambient) * direct) + reflection * specular * direct;
+        }
         pixels[i] = ((ramp(tone) & 0xffffff) | (source.pixels[i] & 0xff000000)) >>> 0;
         channels.material[i] = options.materialId; channels.height[i] = heights[i];
         channels.normal[i * 3] = nx; channels.normal[i * 3 + 1] = ny; channels.normal[i * 3 + 2] = nz;

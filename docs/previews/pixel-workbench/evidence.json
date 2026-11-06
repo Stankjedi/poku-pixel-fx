@@ -1,0 +1,375 @@
+{
+  "schema": "poku.pixel-workbench-evidence/v1",
+  "nativeSize": [
+    192,
+    112
+  ],
+  "seed": 41,
+  "engineVersion": "0.5.0",
+  "nodeVersion": "v24.22.1",
+  "revisionAtGeneration": "8d13de9c3c3ae1f13863266a3a4119a4edbe621a",
+  "scope": "Deterministic standalone authoring studies; no existing effect is edited or presented as a before/after result.",
+  "interpretation": "Palette reduction is a color-budget tradeoff. Brush detail is explicitly authored. Numeric preservation checks do not certify artistic quality.",
+  "resampling": {
+    "native": 1,
+    "enlarged": 3,
+    "method": "exact nearest-neighbor pixel repetition; no antialiasing or blur"
+  },
+  "sourceFiles": [
+    {
+      "path": "tools/preview-pixel-workbench.mjs",
+      "sha256": "ad071196b8e8f775c8930a61fc1d86381f8cc08ed78a74edea9fdfebe51fce61"
+    },
+    {
+      "path": "src/core/pixel-material.ts",
+      "sha256": "6f2b6132f829f0b4a25388a0f4d90e89bab0edfea3f1b95adca2139812c21f31"
+    },
+    {
+      "path": "src/core/pixel-surface-maps.ts",
+      "sha256": "faeb1c37e045dc1134964cb266ef2d644503de8213f2643947e18e8201310750"
+    },
+    {
+      "path": "src/core/pixel-palette.ts",
+      "sha256": "d86d99fdbf93d0c3e6cdb2feb001c244d7849e4f426de0f8bd468d534591b755"
+    },
+    {
+      "path": "src/core/pixel-brush.ts",
+      "sha256": "ff943312708c26f7f29ac5725fc23edcf8ba5a560b818fdd471d90cb39446c96"
+    },
+    {
+      "path": "src/examples/pixel-art-study.ts",
+      "sha256": "4bb1bd8ad3ef671f3fa21a37fa3eb2796058e982af4e8a465b700db587de3708"
+    },
+    {
+      "path": "build/core/pixel-material.js",
+      "sha256": "10cc495b8d067ecca58a43e36874da52c103d7242447dd5d2bfb1bb70c1d8c33"
+    },
+    {
+      "path": "build/core/pixel-surface-maps.js",
+      "sha256": "32fb78bed98e8b78448097b4cac9b36cd52d59fc267654fe9623d748630c59b0"
+    },
+    {
+      "path": "build/core/pixel-palette.js",
+      "sha256": "e68b39763495625386796c16e66c562dc94c9918ff4e05267ec969965efddff0"
+    },
+    {
+      "path": "build/core/pixel-brush.js",
+      "sha256": "c4e4bbc4e1b3c0cc161dff33f33fdeb1d7d404929102f15336d78d056955d989"
+    },
+    {
+      "path": "build/examples/pixel-art-study.js",
+      "sha256": "6b611f2554dfc534fced2188caee2aaaf56a499181f38b535861dd888fb496c0"
+    },
+    {
+      "path": "build-tools/tools/lib/png.mjs",
+      "sha256": "e5d1887d0ca54a587ea7b3832b71039f41db9c740293df63b60e121e0ed2ab71"
+    }
+  ],
+  "studies": {
+    "surface": {
+      "source": "createPixelArtStudy2D(boulder, 41, true), with the explicit oval recess defined in this generator",
+      "sourceRGBA_SHA256": "737d1bcc497782013ea256ea1dccab57cbeeb8a486fe24b6f967f91028af7be4",
+      "authoredHeightSHA256": "85dc10b01a3db53e7401a23efb3aa1d857e11b04f83830a3055351098fbfa403",
+      "before": {
+        "kind": "stone",
+        "seed": 41,
+        "materialId": 1,
+        "palette": [
+          4280621586,
+          4281739548,
+          4282989352,
+          4284042804,
+          4285161794,
+          4286281556,
+          4287335529,
+          4288323714,
+          4289181085,
+          4289972409,
+          4290893779,
+          4291815150
+        ],
+        "scale": 16,
+        "detail": 0.55,
+        "relief": 1.6,
+        "bevel": 4,
+        "roughness": 0.76,
+        "light": [
+          -0.8,
+          -0.45,
+          0.55
+        ],
+        "ambient": 0.3,
+        "grainAngle": 0,
+        "ambientOcclusion": 0,
+        "occlusionRadius": 8,
+        "castShadow": 0,
+        "shadowDistance": 32
+      },
+      "after": {
+        "kind": "stone",
+        "seed": 41,
+        "materialId": 1,
+        "palette": [
+          4280621586,
+          4281739548,
+          4282989352,
+          4284042804,
+          4285161794,
+          4286281556,
+          4287335529,
+          4288323714,
+          4289181085,
+          4289972409,
+          4290893779,
+          4291815150
+        ],
+        "scale": 16,
+        "detail": 0.55,
+        "relief": 1.6,
+        "bevel": 4,
+        "roughness": 0.76,
+        "light": [
+          -0.8,
+          -0.45,
+          0.55
+        ],
+        "ambient": 0.3,
+        "grainAngle": 0,
+        "ambientOcclusion": 0.85,
+        "occlusionRadius": 12,
+        "castShadow": 1,
+        "shadowDistance": 48
+      },
+      "changedColorCells": 1223,
+      "sameAlpha": true,
+      "sameSilhouette": true,
+      "sameHeights": true,
+      "sameNormals": true,
+      "palette": [
+        "#121a25",
+        "#1c2936",
+        "#283b49",
+        "#344e59",
+        "#42616a",
+        "#54777b",
+        "#698c8b",
+        "#82a09a",
+        "#9db5a7",
+        "#b9c8b3",
+        "#d3d7c1",
+        "#eee6cf"
+      ],
+      "heightMapRange": [
+        0,
+        20
+      ],
+      "normalConvention": "opengl"
+    },
+    "palette": {
+      "source": "Standalone cloth study with a 32-step Oklch material ramp and explicitly authored embroidery",
+      "inputColors": 30,
+      "outputColors": 12,
+      "requestedBudget": 12,
+      "dither": "none",
+      "locked": [
+        "#c89348",
+        "#ffe1a0",
+        "#86f6de"
+      ],
+      "protectedCells": 660,
+      "protectedPixelsUnchanged": true,
+      "sameAlpha": true,
+      "sameSilhouette": true,
+      "palette": [
+        "#c89348",
+        "#ffe1a0",
+        "#86f6de",
+        "#1e3552",
+        "#284766",
+        "#2f5573",
+        "#37627e",
+        "#3e6c85",
+        "#45758c",
+        "#4d7f92",
+        "#5e919e",
+        "#7aacaf"
+      ]
+    },
+    "brush": {
+      "source": "One native elliptical metal blank; right image adds the exact stroke/shape instructions in this generator",
+      "operations": [
+        {
+          "description": "Mirrored branch 1, 3-cell underpaint",
+          "color": "#805e3b",
+          "writtenCells": 570
+        },
+        {
+          "description": "Mirrored branch 1, cleaned 1-cell highlight",
+          "color": "#f0c979",
+          "writtenCells": 150
+        },
+        {
+          "description": "Mirrored branch 2, 3-cell underpaint",
+          "color": "#805e3b",
+          "writtenCells": 304
+        },
+        {
+          "description": "Mirrored branch 2, cleaned 1-cell highlight",
+          "color": "#f0c979",
+          "writtenCells": 72
+        },
+        {
+          "description": "Mirrored branch 3, 3-cell underpaint",
+          "color": "#805e3b",
+          "writtenCells": 260
+        },
+        {
+          "description": "Mirrored branch 3, cleaned 1-cell highlight",
+          "color": "#f0c979",
+          "writtenCells": 60
+        },
+        {
+          "description": "Mirrored branch 4, 3-cell underpaint",
+          "color": "#805e3b",
+          "writtenCells": 216
+        },
+        {
+          "description": "Mirrored branch 4, cleaned 1-cell highlight",
+          "color": "#f0c979",
+          "writtenCells": 54
+        },
+        {
+          "description": "Central gem surround",
+          "color": "#805e3b",
+          "writtenCells": 860
+        },
+        {
+          "description": "Central gem body",
+          "color": "#3c9b9d",
+          "writtenCells": 568
+        },
+        {
+          "description": "Central gem highlight",
+          "color": "#9be6ce",
+          "writtenCells": 200
+        },
+        {
+          "description": "One-cell gem rim",
+          "color": "#f0c979",
+          "writtenCells": 96
+        },
+        {
+          "description": "Mirrored central flourish",
+          "color": "#f0c979",
+          "writtenCells": 42
+        }
+      ],
+      "pixelPerfect": "Enabled for 1-cell curves",
+      "symmetry": "x about column 95.5",
+      "editedMaskIsSymmetric": true,
+      "changedColorCells": 2088,
+      "sameAlpha": true,
+      "sameSilhouette": true
+    }
+  },
+  "files": [
+    {
+      "name": "surface-before-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "16b8e70e00ab387145516c376b9ec381096bab1cf3a77d057214841f4267cc60",
+      "pngSHA256": "a0e219208ad68fbd3db2ea6e1a05ecbeb268d16eb7efdf5a70270b5ef5b28154"
+    },
+    {
+      "name": "surface-after-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "e187a39e85ebfa64bb4eac3bb57e9a4d8fff073f28a659a817468da8bc21eb8d",
+      "pngSHA256": "989e177fad1828c4d21e29da87dee2d17f05d2ce3af9850325b5d2c9ee9a2074"
+    },
+    {
+      "name": "palette-before-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "098436f6393f2f9b1ba6cd7a28b0463161fe5c643556dbde5b877de9802358cb",
+      "pngSHA256": "dd1d871ff5532e87c709bf632acb7dcd4ef865bffd88b6249797d7efafa56145"
+    },
+    {
+      "name": "palette-after-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "5d57dfa229a9444cb68d83c128565c24870a504ec2206cb6b73a49d6e5984901",
+      "pngSHA256": "8d205caad6d18c7c8f2f999f0f4a428524a72921cd337ef076a30fa0e139311a"
+    },
+    {
+      "name": "brush-before-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "900016bd18b17308fca6186771bc992dcedef8aadf0136175a91e9d79b937deb",
+      "pngSHA256": "08f8aae42c3c3bd53d18137de4745c6eee9df056c3fc3bf27c92a0c7374e68cf"
+    },
+    {
+      "name": "brush-after-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "0a131922a86d064ee2e663ea88729f454a4a3455c672b44e335292c38b6f01d4",
+      "pngSHA256": "ea1c2f0dad1b021e91eee871658b76735fb6e7a4f798a944fac600809d001300"
+    },
+    {
+      "name": "surface-normal-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "0b35667d7b5afea3f821cd2f62f806e69802fd7cf95dd8906b3bdd0fc1a050f8",
+      "pngSHA256": "a0c35c7abae27d741a2fb1181122221df90abc51a6ef40df4634b412c2f08147"
+    },
+    {
+      "name": "surface-height-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "14b443646b9dcd179fce5b9f525ca0c6747a6d0d3a36a87a4e5c72148c4ab23d",
+      "pngSHA256": "e955605f55d116ac229f57c3697bac2795179bb1711f9f86ce78e857e4f249f6"
+    },
+    {
+      "name": "surface-occlusion-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "f37b7d5c374c3e1baf0957be9dedd1989e9f716af8e35dec58b8a273ab0d17e9",
+      "pngSHA256": "46906424dfb5653fd3b8f1189392100f12b340976605c3d939a3b658685ad60e"
+    },
+    {
+      "name": "surface-shadow-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "ef21c7f1cb7e29cc0dde6639057509679b691b252dbaf733ce1323304e855d70",
+      "pngSHA256": "8e67002f12ce45b5572379e3eade860ce6b411fa31bbcecf5069ab76ad79e030"
+    },
+    {
+      "name": "comparison-native.png",
+      "width": 444,
+      "height": 702,
+      "rgbaSHA256": "8bd6b43a11e34ef04a72aea07e1452a0cbee997993156572161231b18a1413a7",
+      "pngSHA256": "d7466a12af56f0db45187d46c032aa7a11bddc09496a31161e1d70dbef21edd8"
+    },
+    {
+      "name": "comparison-3x.png",
+      "width": 1224,
+      "height": 1464,
+      "rgbaSHA256": "27b9a6e605600e26905b4cbd998b3b8011f79bc4d069256923e2f757a4a59d80",
+      "pngSHA256": "029a1eaf34d132605d51263e9e98e193afd9949c6e9b00d930eed7b2497d97f6"
+    },
+    {
+      "name": "surface-maps-native.png",
+      "width": 444,
+      "height": 392,
+      "rgbaSHA256": "60b14754d8863fe59dc7ccd09f27eceee74bec37a212ab3e8fbe3a5e41821ee4",
+      "pngSHA256": "6bd9808a1dba4c171c4d380cf945c11f8f9c4cbf084ec636eaedefad5e7ee237"
+    },
+    {
+      "name": "surface-maps-3x.png",
+      "width": 1212,
+      "height": 856,
+      "rgbaSHA256": "e0e0b89642fd17aa02f2a947f87a66b5553d313bbdb80e6e794d3b3452bb6c3a",
+      "pngSHA256": "ea1385c9d10414a3facc9b3a0b1ab4455807559d1ac92bcbb869a4ce6ae222f7"
+    }
+  ]
+}

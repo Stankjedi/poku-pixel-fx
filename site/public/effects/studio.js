@@ -2,7 +2,7 @@ import {
   createProjectRuntime,
   createSequenceSpec,
   projectCinematicOptions
-} from "./chunks/chunk-4ESGOXNR.js";
+} from "./chunks/chunk-HJSHOSDI.js";
 import {
   RECIPE_KINDS,
   RECIPE_LAYERS,
@@ -14,8 +14,8 @@ import {
   catalogEntries,
   loadCatalogEffect,
   searchEffects
-} from "./chunks/chunk-RHXKHBDF.js";
-import "./chunks/chunk-6HAS6H5C.js";
+} from "./chunks/chunk-4FYKTDHS.js";
+import "./chunks/chunk-BTOTHK6M.js";
 import {
   cloneJSON,
   createProject,
@@ -44,24 +44,26 @@ import {
   resolveAtlasExportSettings,
   sampleCharacterSocketTrack2D,
   setCharacterSocketKey2D
-} from "./chunks/chunk-ROMX66BI.js";
+} from "./chunks/chunk-VBA4AN6M.js";
 import {
   createTimingCurve
 } from "./chunks/chunk-LCIPQSGQ.js";
 import {
   PIXEL_PALETTE_PRESETS,
-  createPixelStyleProfile2D,
-  diagnosePixelMotion2D,
-  diagnosePixelSprite2D,
-  invertPixelTransform2D,
-  pixelTransform2D,
-  transformPixelPoint2D
-} from "./chunks/chunk-3L2ANF6Q.js";
+  createPixelStyleProfile2D
+} from "./chunks/chunk-MIW2CWC4.js";
 import "./chunks/chunk-JQMAFXP4.js";
 import {
   hex,
   toHex
 } from "./chunks/chunk-MBWWV6CB.js";
+import {
+  diagnosePixelMotion2D,
+  diagnosePixelSprite2D,
+  invertPixelTransform2D,
+  pixelTransform2D,
+  transformPixelPoint2D
+} from "./chunks/chunk-G6VBW32E.js";
 import "./chunks/chunk-WSFCRVEQ.js";
 
 // src/authoring/history.ts

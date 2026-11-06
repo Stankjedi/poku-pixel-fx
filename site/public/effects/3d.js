@@ -1,7 +1,7 @@
 import {
   finishProjectRGBA,
   postprocessProjectFrame
-} from "./chunks/chunk-6HAS6H5C.js";
+} from "./chunks/chunk-BTOTHK6M.js";
 import {
   createProject,
   parseProject,
@@ -18,12 +18,13 @@ import {
 import {
   blendOver,
   enableHDRLight
-} from "./chunks/chunk-3L2ANF6Q.js";
+} from "./chunks/chunk-MIW2CWC4.js";
 import {
   CinematicCompositor,
   SRGB_TO_LINEAR,
   channelToLinear
 } from "./chunks/chunk-JQMAFXP4.js";
+import "./chunks/chunk-G6VBW32E.js";
 import {
   __export
 } from "./chunks/chunk-WSFCRVEQ.js";

@@ -10,13 +10,13 @@ import {
   integerViewport
 } from "./chunks/chunk-I4QYMUT2.js";
 import {
-  encodeRGBAPNG
-} from "./chunks/chunk-OHTBDYQJ.js";
-import {
   compileDrawScene,
   parseDrawScene,
   serializeDrawScene
 } from "./chunks/chunk-WACKDVI2.js";
+import {
+  encodeRGBAPNG
+} from "./chunks/chunk-OHTBDYQJ.js";
 import "./chunks/chunk-JQMAFXP4.js";
 import "./chunks/chunk-WSFCRVEQ.js";
 
