@@ -4,6 +4,9 @@ import { createPixelMaterial2D } from '../core/pixel-material.js';
 import { createPixelPaletteMapper2D } from '../core/pixel-palette.js';
 import { transformPixelSelection2D, validatePixelSelectionTransformOptions2D, type PixelSelectionTransformOptions2D } from '../core/pixel-transform.js';
 import { createPixelRelighter2D, type PixelRelightOptions2D } from '../core/pixel-relight.js';
+import { paintPixelMask2D } from '../core/pixel-brush.js';
+import { rasterizePixelPath2D, validatePixelArtPath2D, type PixelArtPathNode2D, type PixelArtPathOptions2D } from '../core/pixel-path.js';
+import { applyPixelHeightDeltas2D, refreshPixelHeightNormals2D } from '../core/pixel-sculpt.js';
 import { createPixelArtProject2D, validatePixelArtProject2D, pixelArtLayerLimit2D, type PixelArtLayer2D, type PixelArtProject2D } from './pixel-art-project.js';
 
 export interface PixelArtLayerIdentity2D {
@@ -13,7 +16,11 @@ export interface PixelArtLayerIdentity2D {
   /** Editing lock, independent of visibility. Locked layers still render. */
   locked?: boolean;
 }
-export interface PixelArtMaterialLayer2D extends PixelArtLayerIdentity2D, PixelArtLayer2D { kind: 'material' }
+export interface PixelArtMaterialLayer2D extends PixelArtLayerIdentity2D, PixelArtLayer2D {
+  kind: 'material';
+  /** Opt-in live form geometry. Older layers keep their explicit height snapshot. */
+  heightSource?: 'authored';
+}
 /** Sparse exact cell replacements. A zero-alpha cell deliberately erases lower artwork.
  * Consecutive strokes edit one layer instead of consuming a layer per pointer event. */
 export interface PixelArtPaintLayer2D extends PixelArtLayerIdentity2D {
@@ -46,7 +53,26 @@ export interface PixelArtRelightLayer2D extends PixelArtLayerIdentity2D {
   selection?: number[];
   protectedMask?: number[];
 }
-export type PixelArtDocumentLayer2D = PixelArtMaterialLayer2D | PixelArtPaintLayer2D | PixelArtPaletteLayer2D | PixelArtTransformLayer2D | PixelArtRelightLayer2D;
+/** Explicit native-height offsets; color and coverage are never inferred or modified. */
+export interface PixelArtHeightLayer2D extends PixelArtLayerIdentity2D {
+  kind: 'height';
+  indices: number[];
+  deltas: number[];
+  strength?: number;
+  wrap?: boolean;
+  protectedMask?: number[];
+}
+/** Editable cubic construction, rasterized to binary native cells before painting. */
+export interface PixelArtPathLayer2D extends PixelArtLayerIdentity2D {
+  kind: 'path';
+  nodes: PixelArtPathNode2D[];
+  options: PixelArtPathOptions2D;
+  color: number;
+  selection?: number[];
+  protectedMask?: number[];
+  alphaLock?: boolean;
+}
+export type PixelArtDocumentLayer2D = PixelArtMaterialLayer2D | PixelArtPaintLayer2D | PixelArtPaletteLayer2D | PixelArtTransformLayer2D | PixelArtRelightLayer2D | PixelArtHeightLayer2D | PixelArtPathLayer2D;
 export interface PixelArtDocument2D {
   schema: 'poku-pixel-art/v2';
   name: string;
@@ -92,6 +118,15 @@ function optionalMasks(layer: { selection?: unknown; protectedMask?: unknown }, 
   return { ...(layer.selection !== undefined ? { selection: binary(layer.selection, n, 'Selection') } : {}),
     ...(layer.protectedMask !== undefined ? { protectedMask: binary(layer.protectedMask, n, 'Protection') } : {}) };
 }
+function sparseIndices(input: unknown, n: number, label: string): number[] {
+  if (!Array.isArray(input) || input.length > n) throw new RangeError(`${label} indices must fit the raster`);
+  let previous = -1;
+  for (const i of input) {
+    if (!Number.isInteger(i) || i <= previous || i >= n) throw new RangeError(`${label} indices must be unique, sorted and inside the raster`);
+    previous = i;
+  }
+  return input.slice();
+}
 
 /** Upgrade is explicit and leaves the existing v1 API and wire format unchanged. */
 export function upgradePixelArtProject2D(project: PixelArtProject2D): PixelArtDocument2D {
@@ -114,13 +149,25 @@ export function validatePixelArtDocument2D(input: unknown): PixelArtDocument2D {
     if (ids.has(common.id)) throw new RangeError('Layer IDs must be unique');
     ids.add(common.id);
     if (layer.kind === 'paint') {
-      if (!Array.isArray(layer.indices) || layer.indices.length > n) throw new RangeError('Paint indices must fit the raster');
-      let previous = -1;
-      for (const i of layer.indices) { if (!Number.isInteger(i) || i <= previous || i >= n) throw new RangeError('Paint indices must be unique, sorted and inside the raster'); previous = i; }
+      const indices = sparseIndices(layer.indices, n, 'Paint');
       if (layer.opacity !== undefined && (!Number.isFinite(layer.opacity) || layer.opacity < 0 || layer.opacity > 1)) throw new RangeError('Layer opacity must be within 0..1');
-      return { ...common, kind: 'paint', indices: layer.indices.slice(), pixels: values(layer.pixels, layer.indices.length, 'Paint pixels', packed), ...(layer.opacity !== undefined ? { opacity: layer.opacity } : {}) };
+      return { ...common, kind: 'paint', indices, pixels: values(layer.pixels, indices.length, 'Paint pixels', packed), ...(layer.opacity !== undefined ? { opacity: layer.opacity } : {}) };
+    }
+    if (layer.kind === 'height') {
+      const indices = sparseIndices(layer.indices, n, 'Height');
+      if (layer.strength !== undefined && (!Number.isFinite(layer.strength) || layer.strength < 0 || layer.strength > 4)) throw new RangeError('Height layer strength must be within 0..4');
+      if (layer.wrap !== undefined && typeof layer.wrap !== 'boolean') throw new RangeError('Height wrap must be boolean');
+      return { ...common, kind: 'height', indices, deltas: values(layer.deltas, indices.length, 'Height offsets', float),
+        ...(layer.strength !== undefined ? { strength: layer.strength } : {}), ...(layer.wrap !== undefined ? { wrap: layer.wrap } : {}),
+        ...(layer.protectedMask !== undefined ? { protectedMask: binary(layer.protectedMask, n, 'Height protection') } : {}) };
     }
     const masks = optionalMasks(layer, n);
+    if (layer.kind === 'path') {
+      const path = validatePixelArtPath2D(layer.nodes, layer.options);
+      if (!Number.isInteger(layer.color) || layer.color < -0x80000000 || layer.color > 0xffffffff) throw new RangeError('Path color must be packed RGBA');
+      if (layer.alphaLock !== undefined && typeof layer.alphaLock !== 'boolean') throw new RangeError('Path alpha lock must be boolean');
+      return { ...common, kind: 'path', ...path, color: layer.color >>> 0, ...masks, ...(layer.alphaLock !== undefined ? { alphaLock: layer.alphaLock } : {}) };
+    }
     if (layer.kind === 'transform') {
       const t = layer.transform;
       if (!t || typeof t !== 'object' || !Array.isArray(layer.selection)) throw new RangeError('Transform layers need a selection and grid transform');
@@ -137,7 +184,9 @@ export function validatePixelArtDocument2D(input: unknown): PixelArtDocument2D {
       return { ...common, kind: 'palette', palette: [...options.palette], dither: options.dither, strength: options.strength, ...masks, ...(objectOrigin ? { origin: objectOrigin } : {}) };
     }
     if (layer.kind !== 'material' || !layer.material || typeof layer.material !== 'object') throw new RangeError('Unknown pixel art layer kind');
+    if (layer.heightSource !== undefined && layer.heightSource !== 'authored') throw new RangeError('Unknown material height source');
     return { ...common, kind: 'material', material: structuredClone(createPixelMaterial2D(layer.material).options), ...masks,
+      ...(layer.heightSource ? { heightSource: layer.heightSource } : {}),
       ...(objectOrigin ? { origin: objectOrigin } : {}), ...(layer.height !== undefined ? { height: values(layer.height, n, 'Authored height', float) } : {}) };
   });
   let channels: PixelArtDocument2D['channels'];
@@ -193,21 +242,60 @@ function paintRaster(out: PixelArtDocumentRaster2D, layer: PixelArtPaintLayer2D)
   return { ...out, pixels, mask, ...(channels ? { channels } : {}) };
 }
 
+function pathRaster(out: PixelArtDocumentRaster2D, layer: PixelArtPathLayer2D): PixelArtDocumentRaster2D {
+  const coverage = rasterizePixelPath2D(out.w, out.h, layer.nodes, layer.options);
+  const painted = paintPixelMask2D(out, coverage, layer.color, { mode: 'replace', selection: layer.selection,
+    protectedMask: layer.protectedMask, alphaLock: layer.alphaLock });
+  const indices: number[] = [], pixels: number[] = [];
+  for (let i = 0; i < coverage.length; i++) {
+    if (painted.pixels[i] !== out.pixels[i] || painted.mask.data[i] !== out.mask.data[i]) { indices.push(i); pixels.push(painted.pixels[i]); }
+  }
+  return indices.length ? paintRaster(out, { kind: 'paint', id: layer.id, name: layer.name, indices, pixels }) : out;
+}
+
+/** Subsequent silhouette edits reconnect only the affected sculpt normals. Protection
+ * belongs to this operation: earlier height masks do not become permanent normal locks
+ * or acquire stale coordinates after a transform. Sparse paint already records its exact
+ * permitted writes; editable paths retain their own explicit protection snapshot. */
+function refreshPaintedSurface(before: PixelArtDocumentRaster2D, after: PixelArtDocumentRaster2D,
+  wrap: boolean, protectedMask?: ArrayLike<number>): PixelArtDocumentRaster2D {
+  if (before === after || !after.channels) return after;
+  let changed: Uint8Array | undefined;
+  for (let i = 0; i < after.pixels.length; i++) {
+    const wasOccupied = !!before.mask.data[i] && !!(before.pixels[i] >>> 24);
+    const isOccupied = !!after.mask.data[i] && !!(after.pixels[i] >>> 24);
+    if (wasOccupied !== isOccupied) { changed ??= new Uint8Array(after.pixels.length); changed[i] = 1; }
+  }
+  return changed ? refreshPixelHeightNormals2D({ ...after, channels: after.channels }, changed, { wrap, protectedMask }) : after;
+}
+
+/** Replay geometry alone. Material relief stays separate from hand-authored form, so
+ * applying a later material never adds an earlier material's relief a second time. */
+function formRaster(p: PixelArtDocument2D): PixelArtDocumentRaster2D {
+  const out = sourceRaster(p), n = p.width * p.height, normal = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) normal[i * 3 + 2] = 1;
+  return { ...out, channels: { w: p.width, h: p.height, material: new Uint16Array(n),
+    height: p.authoredHeight ? Float32Array.from(p.authoredHeight) : new Float32Array(n), normal } };
+}
+function replayFormLayer(out: PixelArtDocumentRaster2D, layer: PixelArtDocumentLayer2D): PixelArtDocumentRaster2D {
+  if (layer.kind === 'transform') return transformPixelSelection2D(out, layer.selection, { ...layer.transform, protectedMask: layer.protectedMask }).sprite;
+  if (layer.kind === 'paint') return paintRaster(out, layer);
+  if (layer.kind === 'path') return pathRaster(out, layer);
+  if (layer.kind === 'height') return applyPixelHeightDeltas2D(out, layer.indices, layer.deltas, layer);
+  return out;
+}
+
 /** Resolve the editable form height in the currently visible geometry. authoredHeight
  * remains the immutable original shape: visible transforms and paint occupancy replay in
  * layer order, while material relief, palette and lighting do not alter this working map.
  * No material or lighting pass is rendered. Missing authored height stays undefined. */
 export function renderPixelArtAuthoredHeight2D(document: PixelArtDocument2D): Float32Array | undefined {
   const p = validatePixelArtDocument2D(document);
-  if (!p.authoredHeight) return undefined;
-  let out = sourceRaster(p);
-  const n = p.width * p.height;
-  out.channels = { w: p.width, h: p.height, material: out.channels?.material ?? new Uint16Array(n),
-    height: Float32Array.from(p.authoredHeight), normal: out.channels?.normal ?? new Float32Array(n * 3) };
+  if (!p.authoredHeight && !p.layers.some(layer => layer.kind === 'height' && layer.visible !== false)) return undefined;
+  let out = formRaster(p);
   for (const layer of p.layers) {
     if (layer.visible === false) continue;
-    if (layer.kind === 'transform') out = transformPixelSelection2D(out, layer.selection, { ...layer.transform, protectedMask: layer.protectedMask }).sprite;
-    else if (layer.kind === 'paint') out = paintRaster(out, layer);
+    out = replayFormLayer(out, layer);
   }
   return out.channels!.height;
 }
@@ -216,13 +304,36 @@ export function renderPixelArtAuthoredHeight2D(document: PixelArtDocument2D): Fl
 export function renderPixelArtDocument2D(document: PixelArtDocument2D): PixelArtDocumentRaster2D {
   const p = validatePixelArtDocument2D(document);
   let out = sourceRaster(p);
+  // Only the new height layer needs this parallel form replay. Older documents keep
+  // their exact rendering path, including their saved per-material height snapshots.
+  let form = p.layers.some(layer => layer.visible !== false && (layer.kind === 'height' || layer.kind === 'material' && layer.heightSource === 'authored')) ? formRaster(p) : undefined;
+  let sculptedSurface = false, surfaceWrap = false;
   for (const layer of p.layers) {
     if (layer.visible === false) continue;
-    if (layer.kind === 'material') { out = createPixelMaterial2D(layer.material).shade(out, layer); continue; }
+    if (layer.kind === 'height') {
+      out = applyPixelHeightDeltas2D(out, layer.indices, layer.deltas, { ...layer, height: form?.channels?.height });
+      if (form) form = replayFormLayer(form, layer);
+      sculptedSurface = true; surfaceWrap = layer.wrap ?? false;
+      continue;
+    }
+    if (form) form = replayFormLayer(form, layer);
+    if (layer.kind === 'material') {
+      const material = createPixelMaterial2D(layer.material);
+      out = material.shade(out, layer.heightSource === 'authored' ? { ...layer, height: form?.channels?.height } : layer);
+      if (sculptedSurface) surfaceWrap = !!material.options.tileSize && material.options.tileSize[0] === p.width
+        && material.options.tileSize[1] === p.height && !material.options.bevel;
+      continue;
+    }
     if (layer.kind === 'palette') { out = createPixelPaletteMapper2D(layer.palette, layer).remap(out, layer); continue; }
     if (layer.kind === 'transform') { out = transformPixelSelection2D(out, layer.selection, { ...layer.transform, protectedMask: layer.protectedMask }).sprite; continue; }
     if (layer.kind === 'relight') { out = createPixelRelighter2D(layer.lighting).shade(out, layer); continue; }
-    out = paintRaster(out, layer);
+    if (layer.kind === 'path') {
+      const before = out; out = pathRaster(out, layer);
+      if (sculptedSurface) out = refreshPaintedSurface(before, out, surfaceWrap, layer.protectedMask);
+      continue;
+    }
+    const before = out; out = paintRaster(out, layer);
+    if (sculptedSurface) out = refreshPaintedSurface(before, out, surfaceWrap);
   }
   return out;
 }
@@ -245,6 +356,96 @@ export function writePixelArtPaintLayer2D(document: PixelArtDocument2D, source: 
   if (!existing && document.layers.length >= pixelArtLayerLimit2D(document.width, document.height)) throw new RangeError('Pixel art layer budget exceeded');
   const id = existing?.id ?? nextPixelArtLayerId2D(document, 'paint'), indices = [...changes.keys()].sort((a, b) => a - b);
   const layer: PixelArtPaintLayer2D = { ...(existing ?? { id, name: `Paint ${document.layers.length + 1}` }), kind: 'paint', indices, pixels: indices.map(i => changes.get(i)!) };
+  const layers = document.layers.slice();
+  if (index < 0) layers.push(layer); else layers[index] = layer;
+  return { ...document, layers, activeLayerId: id };
+}
+
+/** Coalesce complete sculpt strokes into one editable additive-height layer. Deltas
+ * come from a pre-stroke snapshot, so revisiting a cell never depends on event count. */
+export function writePixelArtHeightLayer2D(document: PixelArtDocument2D, deltas: ArrayLike<number>, touched: ArrayLike<number>, layerId?: string,
+  options: { wrap?: boolean; protectedMask?: ArrayLike<number> } = {}): PixelArtDocument2D {
+  const n = cells(document.width, document.height);
+  if (deltas.length !== n || touched.length !== n) throw new RangeError('Sculpt offsets and stroke mask must match the document');
+  if (options.wrap !== undefined && typeof options.wrap !== 'boolean') throw new RangeError('Height wrap must be boolean');
+  if (options.protectedMask && (options.protectedMask.length !== n || !Array.from(options.protectedMask).every(v => v === 0 || v === 1))) throw new RangeError('Height protection must match the document');
+  const index = layerId === undefined ? -1 : document.layers.findIndex(layer => layer.id === layerId);
+  if (layerId !== undefined && index < 0) throw new RangeError('Height layer does not exist');
+  const existing = index < 0 ? undefined : document.layers[index];
+  if (existing && (existing.kind !== 'height' || existing.locked || existing.visible === false)) throw new RangeError('Choose an unlocked visible height layer');
+  const current = existing as PixelArtHeightLayer2D | undefined, strength = current?.strength ?? 1;
+  if (current && index !== document.layers.length - 1) throw new RangeError('Choose the top height layer or create a new height layer for this stroke');
+  if (!strength) throw new RangeError('Set the height layer strength above zero before sculpting');
+  const changes = new Map<number, number>();
+  current?.indices.forEach((i, j) => changes.set(i, current.deltas[j]));
+  const strokeIndices: number[] = [], strokeDeltas: number[] = [];
+  let changed = false, separate = false;
+  for (let i = 0; i < n; i++) {
+    if (!Number.isFinite(touched[i]) || !float(deltas[i])) throw new RangeError('Sculpt changes must contain finite native values');
+    const delta = Math.fround(deltas[i]);
+    if (!touched[i] || !delta || options.protectedMask?.[i] || current?.protectedMask?.[i]) continue;
+    strokeIndices.push(i); strokeDeltas.push(delta);
+    const value = (changes.get(i) ?? 0) + delta / strength;
+    if (!float(value)) separate = true;
+    else if (value) changes.set(i, value); else changes.delete(i);
+    changed = true;
+  }
+  if (!changed) return document;
+  const wrap = options.wrap ?? current?.wrap ?? false;
+  const protection = options.protectedMask && current?.protectedMask
+    ? Uint8Array.from(options.protectedMask, (value, i) => Number(!!value || !!current.protectedMask![i]))
+    : options.protectedMask ?? current?.protectedMask;
+  const appendStroke = () => writePixelArtHeightLayer2D(document, deltas, touched, undefined,
+    { wrap, ...(protection ? { protectedMask: protection } : {}) });
+  if (separate) {
+    if (current) return appendStroke();
+    throw new RangeError('Accumulated height exceeds Float32 geometry range');
+  }
+  const indices = [...changes.keys()].sort((a, b) => a - b), accumulated = indices.map(i => changes.get(i)!);
+  if (current) {
+    const { activeLayerId: _active, ...base } = document;
+    const lowerDocument = { ...base, layers: document.layers.slice(0, index) };
+    const lower = renderPixelArtDocument2D(lowerDocument), form = renderPixelArtAuthoredHeight2D(lowerDocument);
+    const before = applyPixelHeightDeltas2D(lower, current.indices, current.deltas, { ...current, height: form });
+    const expected = applyPixelHeightDeltas2D(before, strokeIndices, strokeDeltas, { wrap, protectedMask: protection });
+    let combined: ReturnType<typeof applyPixelHeightDeltas2D>;
+    try { combined = applyPixelHeightDeltas2D(lower, indices, accumulated, { ...current, wrap, height: form }); }
+    catch (error) { if (error instanceof RangeError) return appendStroke(); throw error; }
+    let exact = true;
+    for (let i = 0; i < n; i++) {
+      if (combined.channels.height[i] !== expected.channels.height[i]) { exact = false; break; }
+      const j = i * 3;
+      if (combined.channels.normal[j] !== expected.channels.normal[j] || combined.channels.normal[j + 1] !== expected.channels.normal[j + 1]
+        || combined.channels.normal[j + 2] !== expected.channels.normal[j + 2]) { exact = false; break; }
+    }
+    // The same offsets also replay over the relief-free authored form. Preserve that
+    // result for later live-bound materials, even when the visible surface rounded away
+    // a difference on top of a much larger procedural or baked height.
+    if (exact) {
+      const expectedForm = renderPixelArtAuthoredHeight2D(document)!;
+      for (let j = 0; j < strokeIndices.length; j++) {
+        const i = strokeIndices[j];
+        if (before.mask.data[i] && before.pixels[i] >>> 24) {
+          expectedForm[i] = Math.fround(expectedForm[i] + strokeDeltas[j]);
+          if (!float(expectedForm[i])) throw new RangeError('Accumulated authored height exceeds Float32 geometry range');
+        }
+      }
+      for (let i = 0; i < n; i++) {
+        const combinedForm = lower.mask.data[i] && lower.pixels[i] >>> 24 && !current.protectedMask?.[i]
+          ? Math.fround((form?.[i] ?? 0) + Math.fround(changes.get(i) ?? 0) * strength) : form?.[i] ?? 0;
+        if (combinedForm !== expectedForm[i]) { exact = false; break; }
+      }
+    }
+    // Two float32 offsets can represent a cancellation that a single offset cannot.
+    // Normal provenance and authored form can differ after a net-zero edit, too. Keep
+    // the second operation separate whenever coalescing would change the preview.
+    if (!exact) return appendStroke();
+  }
+  if (!current && document.layers.length >= pixelArtLayerLimit2D(document.width, document.height)) throw new RangeError('Pixel art layer budget exceeded');
+  const id = current?.id ?? nextPixelArtLayerId2D(document, 'height');
+  const layer: PixelArtHeightLayer2D = { ...(current ?? { id, name: `Height ${document.layers.length + 1}` }), kind: 'height', indices,
+    deltas: accumulated, wrap,
+    ...(!current && options.protectedMask ? { protectedMask: Array.from(options.protectedMask) } : {}) };
   const layers = document.layers.slice();
   if (index < 0) layers.push(layer); else layers[index] = layer;
   return { ...document, layers, activeLayerId: id };
