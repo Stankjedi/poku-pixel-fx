@@ -250,10 +250,12 @@ function addDownload(blob: Blob, filename: string) {
   const url=URL.createObjectURL(blob),a=document.createElement('a');urls.push(url);a.href=url;a.download=filename;a.textContent=filename;
   element('downloads').prepend(a);a.click();
   while(urls.length>8){URL.revokeObjectURL(urls.shift()!);element('downloads').lastElementChild?.remove();}
+  status(`저장 준비 완료 · ${filename}`);
 }
 function filename() {return (project.name.replace(/[^a-z0-9가-힣_-]+/gi,'-').replace(/^-|-$/g,'')||'poku-pixel-art').slice(0,80);}
 function savePNG() {
   if(!update())return;const rgba=new Uint8Array(rendered.w*rendered.h*4),name=filename()+'.png';
+  status('네이티브 PNG 인코딩 중…');
   for(let i=0;i<rendered.pixels.length;i++){const c=rendered.pixels[i];rgba.set([c&255,(c>>>8)&255,(c>>>16)&255,rendered.mask.data[i]?c>>>24:0],i*4);}
   void encodeRGBAPNG(rendered.w,rendered.h,rgba).then(blob=>addDownload(blob,name)).catch(error=>status(String(error),true));
 }

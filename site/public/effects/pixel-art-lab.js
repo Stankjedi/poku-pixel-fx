@@ -2682,6 +2682,7 @@ function addDownload(blob, filename2) {
     URL.revokeObjectURL(urls.shift());
     element("downloads").lastElementChild?.remove();
   }
+  status(`\uC800\uC7A5 \uC900\uBE44 \uC644\uB8CC \xB7 ${filename2}`);
 }
 function filename() {
   return (project.name.replace(/[^a-z0-9가-힣_-]+/gi, "-").replace(/^-|-$/g, "") || "poku-pixel-art").slice(0, 80);
@@ -2689,6 +2690,7 @@ function filename() {
 function savePNG() {
   if (!update()) return;
   const rgba = new Uint8Array(rendered.w * rendered.h * 4), name2 = filename() + ".png";
+  status("\uB124\uC774\uD2F0\uBE0C PNG \uC778\uCF54\uB529 \uC911\u2026");
   for (let i = 0; i < rendered.pixels.length; i++) {
     const c = rendered.pixels[i];
     rgba.set([c & 255, c >>> 8 & 255, c >>> 16 & 255, rendered.mask.data[i] ? c >>> 24 : 0], i * 4);

@@ -65,9 +65,22 @@ try {
       return { name: raw.name, bytes: Buffer.from(raw.base64, 'base64') };
     };
     const exportFile = async (control, suffix) => {
-      const before = await evaluate(`${link(suffix)}?.href??''`); await click(control);
-      await waitFor(`(()=>{const a=${link(suffix)},s=document.getElementById('status');if(s?.classList.contains('error'))throw new Error(s.textContent);return a&&a.href!==${JSON.stringify(before)};})()`);
-      return readDownload(suffix);
+      const before = await evaluate(`(()=>{const s=document.getElementById('status'),watch={errors:[]};
+        watch.observer=new MutationObserver(()=>{if(s.classList.contains('error'))watch.errors.push(s.textContent);});
+        watch.observer.observe(s,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class']});
+        window.__proDownloadWatch=watch;return ${link(suffix)}?.href??'';})()`);
+      try {
+        await click(control);
+        // A deliberately rejected edit can leave its status visible when an async
+        // export begins. Observe new emissions, including the same error text, and
+        // require the completed download to have a successful visible status.
+        await waitFor(`(()=>{const a=${link(suffix)},s=document.getElementById('status'),errors=window.__proDownloadWatch.errors;
+          if(errors.length)throw new Error(errors[0]);if(!a||a.href===${JSON.stringify(before)})return false;
+          if(s?.classList.contains('error'))throw new Error(s.textContent);return true;})()`);
+        return await readDownload(suffix);
+      } finally {
+        await evaluate('window.__proDownloadWatch?.observer.disconnect();delete window.__proDownloadWatch;');
+      }
     };
     const exportPNG = async (control = 'save-png', suffix = '.png') => {
       const file = await exportFile(control, suffix), decoded = decodePNG(file.bytes);
@@ -314,10 +327,13 @@ try {
       window.__proPlaybackObserver.observe(document.getElementById('animation-playhead'), { childList: true, characterData: true, subtree: true });
     });
     await click('play-animation');
-    await waitFor('window.__proPlayback.length>=5', 5000);
+    const playbackSequence = [1, 2, 3, 2, 1];
+    // Playback follows wall-clock time, so a delayed initial RAF may begin mid-cel.
+    // Require a complete visible cycle rather than assuming the first callback is on time.
+    await waitFor(`window.__proPlayback.some((_,start)=>${JSON.stringify(playbackSequence)}.every((value,i)=>window.__proPlayback[start+i]===value))`, 5000);
     const observed = await evaluate(() => { window.__proPlaybackObserver.disconnect(); return window.__proPlayback.slice(); });
     await click('play-animation'); await ready();
-    assert(isDeepStrictEqual(observed.slice(0, 5), [1, 2, 3, 2, 1]),
+    assert(observed.some((_, start) => isDeepStrictEqual(observed.slice(start, start + playbackSequence.length), playbackSequence)),
       'Real requestAnimationFrame playback visits forward, return and wrap cels in the visible ping-pong order');
     const shortFrames = [color(241, 31, 17), color(27, 229, 77), color(51, 83, 239)];
     const shortAnimation = { schema: 'poku-pixel-art/v3', name: 'Short non-loop terminal cel', width: 2, height: 2, activeFrameId: 'short-1', loop: false, direction: 'forward',

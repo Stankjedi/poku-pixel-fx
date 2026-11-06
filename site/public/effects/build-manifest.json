@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "source": "poku-pixel-fx",
-  "sourceHash": "14635ba4103a247337dabb8c2337d986202df636dade8df192e7bbf1ec74858a",
+  "sourceHash": "4f58d5d37386828c90a4a25d3badba2eeda69704bfd5245fcdfb385011bcb4dc",
   "files": {
     "index.html": "26fb5121c5e331f1ca7f681b08ebfd6df0932358c2bd23d3d680118340081165",
     "app.js": "189c4c7d715715f3ee8d1cce1442a83de6b746722eb3bc7d2d921036662ccc6c",
@@ -14,7 +14,7 @@
     "gpu-lab.js": "ff32996e75ce21ad8523e9b29de2216909bbdde78a538097170766b0fff1dcea",
     "gpu-lab-worker.js": "c6d85e5af399728d1b2725905ad52b4b879e08d2f848103ec192026ec9f0a33b",
     "gpu-lab.html": "8e7cc154f2c3b52bf54cb6ac583443ad2a5b6e3e572845db61b28b7453523293",
-    "pixel-art-lab.js": "2258f66245e25b17042245fe004e2b1d0ab075c3dd1cc8bfc97080e49a4fff68",
+    "pixel-art-lab.js": "4d6a8c32716dc23635c64f9af20c38d901383166e58105e91ad7d00cec753675",
     "pixel-art-lab.html": "2e1f22d7977775fe5aa9dc721dcbf988b88580c6141bcd6f4a5c0202d55ef101",
     "pixel-art-lab.css": "eb8532e2f2e0198e0f611dec2ec7979ea908d90717c8ee2563617ff1721cb53f",
     "style.css": "5988306c3f46a7a7a496a51717f4045769f74b900a78031275113d836c603877",
