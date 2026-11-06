@@ -34,6 +34,7 @@ export interface PixelArtPaletteLayer2D extends PixelArtLayerIdentity2D {
   kind: 'palette';
   palette: (string | number)[];
   dither?: 'none' | 'bayer4' | 'bayer8';
+  /** Ordered-dither amount. Zero still maps to the nearest palette color. */
   strength?: number;
   origin?: [number, number];
   selection?: number[];
@@ -87,6 +88,8 @@ export interface PixelArtDocument2D {
   protectedMask?: number[];
   authoredHeight?: number[];
   activeLayerId?: string;
+  /** Editor swatches, independent of rendered palette-adjustment layers. */
+  workingPalette?: number[];
 }
 export type PixelArtDocumentRaster2D = EditableSprite2D & { channels?: MaterialChannels2D };
 
@@ -105,6 +108,15 @@ function binary(input: unknown, n: number, label: string): number[] | undefined 
 }
 const packed = (v: number) => Number.isInteger(v) && v >= 0 && v <= 0xffffffff;
 const float = (v: number) => Number.isFinite(v) && Number.isFinite(Math.fround(v));
+/** Preserve ordered editor swatches, accepting packed engine colors and normalizing
+ * signed JavaScript bitwise colors to the same unsigned bytes used in saved documents. */
+export function validatePixelArtWorkingPalette2D(input: unknown): number[] | undefined {
+  if (input === undefined) return undefined;
+  if (!Array.isArray(input) || input.length < 1 || input.length > 256
+    || !Array.from(input).every(v => Number.isInteger(v) && v >= -0x80000000 && v <= 0xffffffff))
+    throw new RangeError('Working palette needs 1..256 packed RGBA colors');
+  return input.map(value => value >>> 0);
+}
 function origin(input: unknown): [number, number] | undefined {
   if (input === undefined) return undefined;
   if (!Array.isArray(input) || input.length !== 2 || !Array.from(input).every(v => Number.isFinite(v) && Math.abs(v) <= 1e9)) throw new RangeError('Origin needs two finite coordinates within ±1e9');
@@ -196,7 +208,9 @@ export function validatePixelArtDocument2D(input: unknown): PixelArtDocument2D {
       height: values(p.channels.height, n, 'Source height', float), normal: values(p.channels.normal, n * 3, 'Source normals', float) };
   }
   if (p.activeLayerId !== undefined && !ids.has(p.activeLayerId)) throw new RangeError('Active layer must exist in the document');
+  const workingPalette = validatePixelArtWorkingPalette2D(p.workingPalette);
   return { schema: 'poku-pixel-art/v2', name: p.name, width: p.width, height: p.height, pixels, ...(sourceMask ? { mask: sourceMask } : {}), layers,
+    ...(workingPalette ? { workingPalette } : {}),
     ...(channels ? { channels } : {}), ...optionalMasks(p, n), ...(p.authoredHeight !== undefined ? { authoredHeight: values(p.authoredHeight, n, 'Document height', float) } : {}),
     ...(p.activeLayerId !== undefined ? { activeLayerId: p.activeLayerId } : {}) };
 }
@@ -459,7 +473,8 @@ export function nextPixelArtLayerId2D(document: PixelArtDocument2D, prefix: stri
 export function flattenPixelArtDocument2D(document: PixelArtDocument2D): PixelArtDocument2D {
   const p = validatePixelArtDocument2D(document), out = createPixelArtDocument2D(renderPixelArtDocument2D(p), p.name);
   const authoredHeight = renderPixelArtAuthoredHeight2D(p);
-  return { ...out, ...optionalMasks(p, p.width * p.height), ...(authoredHeight ? { authoredHeight: Array.from(authoredHeight) } : {}) };
+  return { ...out, ...optionalMasks(p, p.width * p.height), ...(authoredHeight ? { authoredHeight: Array.from(authoredHeight) } : {}),
+    ...(p.workingPalette ? { workingPalette: p.workingPalette.slice() } : {}) };
 }
 
 function checkBytes(json: string): void {

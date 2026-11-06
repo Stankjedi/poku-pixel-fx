@@ -1,7 +1,7 @@
 import type { EditableSprite2D } from '../core/sprite-edit.js';
 import type { SpriteClipData2D, SpriteClipFrame2D } from '../core/sprite-clip.js';
 import { pixelArtLayerLimit2D, type PixelArtProject2D } from './pixel-art-project.js';
-import { createBlankPixelArtDocument2D, renderPixelArtDocument2D, validatePixelArtDocument2D,
+import { createBlankPixelArtDocument2D, renderPixelArtDocument2D, validatePixelArtDocument2D, validatePixelArtWorkingPalette2D,
   type PixelArtDocument2D, type PixelArtDocumentRaster2D } from './pixel-art-document.js';
 
 export type PixelArtAnimationDirection2D = 'forward' | 'reverse' | 'pingpong';
@@ -25,6 +25,8 @@ export interface PixelArtAnimation2D {
   activeFrameId: string;
   loop: boolean;
   direction: PixelArtAnimationDirection2D;
+  /** Shared editor swatches; does not remap any frame unless a palette layer is applied. */
+  workingPalette?: number[];
 }
 
 export interface PixelArtAnimationOptions2D {
@@ -97,7 +99,7 @@ function checkAnimation(animation: PixelArtAnimation2D): void {
   if (!Array.isArray(animation.frames) || animation.frames.length < 1 || animation.frames.length > limit) throw new RangeError(`Pixel art animation frame budget exceeded (maximum ${limit} at this size)`);
   if (typeof animation.loop !== 'boolean' || !directions.includes(animation.direction)) throw new RangeError('Animation needs a boolean loop flag and a supported direction');
   const ids = new Set<string>();
-  let stored = 0, render = 0;
+  let stored = validatePixelArtWorkingPalette2D(animation.workingPalette)?.length ?? 0, render = 0;
   for (const frame of animation.frames) {
     if (!object(frame) || !validName(frame.id) || !validName(frame.name) || ids.has(frame.id) || !validDuration(frame.durationMs)) throw new RangeError('Frames need unique IDs, valid names and positive finite durations');
     ids.add(frame.id);
@@ -129,13 +131,15 @@ export function validatePixelArtAnimation2D(input: unknown): PixelArtAnimation2D
   const p = input as unknown as PixelArtAnimation2D;
   checkAnimation(p);
   return { schema: 'poku-pixel-art/v3', name: p.name, width: p.width, height: p.height, activeFrameId: p.activeFrameId, loop: p.loop, direction: p.direction,
+    ...(p.workingPalette ? { workingPalette: validatePixelArtWorkingPalette2D(p.workingPalette) } : {}),
     frames: p.frames.map(frame => ({ id: frame.id, name: frame.name, durationMs: frame.durationMs, document: validatePixelArtDocument2D(frame.document) })) };
 }
 
 export function createPixelArtAnimation2D(document: PixelArtDocument2D | PixelArtProject2D, options: PixelArtAnimationOptions2D = {}): PixelArtAnimation2D {
   const settings = checkedOptions(options), cel = validatePixelArtDocument2D(document);
   const animation: PixelArtAnimation2D = { schema: 'poku-pixel-art/v3', name: options.name ?? cel.name, width: cel.width, height: cel.height,
-    frames: [{ id: 'frame-1', name: 'Frame 1', durationMs: settings.durationMs, document: cel }], activeFrameId: 'frame-1', loop: settings.loop, direction: settings.direction };
+    frames: [{ id: 'frame-1', name: 'Frame 1', durationMs: settings.durationMs, document: cel }], activeFrameId: 'frame-1', loop: settings.loop, direction: settings.direction,
+    ...(cel.workingPalette ? { workingPalette: cel.workingPalette.slice() } : {}) };
   checkAnimation(animation); return animation;
 }
 

@@ -162,6 +162,18 @@ jobs:
           PIXEL_ART_CRAFT_REPORT_PATH: pixel-art-craft-browser-result.json
           PIXEL_ART_CRAFT_SCREENSHOT_PATH: pixel-art-craft-browser.png
         run: node tools/pixel-art-craft-browser-harness.mjs
+      - name: Exercise captured pixel clusters, clone snapshots and direct tile painting
+        env:
+          PIXEL_ART_BRUSHES_REQUIRED: "1"
+          PIXEL_ART_BRUSHES_REPORT_PATH: pixel-art-brushes-browser-result.json
+          PIXEL_ART_BRUSHES_SCREENSHOT_PATH: pixel-art-brushes-browser.png
+        run: node tools/pixel-art-brushes-browser-harness.mjs
+      - name: Exercise durable workspace recovery and shared palette persistence
+        env:
+          PIXEL_ART_RECOVERY_REQUIRED: "1"
+          PIXEL_ART_RECOVERY_REPORT_PATH: pixel-art-recovery-browser-result.json
+          PIXEL_ART_RECOVERY_SCREENSHOT_PATH: pixel-art-recovery-browser.png
+        run: node tools/pixel-art-recovery-browser-harness.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -180,6 +192,10 @@ jobs:
             pixel-art-pro-browser.png
             pixel-art-craft-browser-result.json
             pixel-art-craft-browser.png
+            pixel-art-brushes-browser-result.json
+            pixel-art-brushes-browser.png
+            pixel-art-recovery-browser-result.json
+            pixel-art-recovery-browser.png
 
   native-wgpu:
     runs-on: ubuntu-latest

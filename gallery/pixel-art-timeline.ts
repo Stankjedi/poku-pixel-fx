@@ -16,6 +16,8 @@ interface TimelineHost {
   finishStroke(): void;
   palette(): readonly number[];
   setPalette(colors: number[]): void;
+  workingPalette(): number[] | undefined;
+  restorePalette(colors?: readonly number[]): void;
   refresh(): void;
   status(message: string, error?: boolean): void;
   download(blob: Blob, filename: string): void;
@@ -248,6 +250,7 @@ export function installPixelArtTimeline(host: TimelineHost) {
   }
   return {
     get enabled() { return !!state; },
+    get frameCount() { return state?.frames.length ?? 1; },
     sync, stop,
     commitFrame(document: PixelArtDocument2D) { if (state) commit(replacePixelArtAnimationFrame2D(state, document)); },
     newDocument(document: PixelArtDocument2D) { if (state) commit(createPixelArtAnimation2D(document), true); },
@@ -256,10 +259,15 @@ export function installPixelArtTimeline(host: TimelineHost) {
       const next = parsePixelArtAnimation2D(json);
       if(next.width>4096||next.height>4096)throw new RangeError('브라우저 작업실에서는 가로·세로 4096픽셀 이하의 프로젝트를 사용해 주세요.');
       const raster = renderPixelArtDocument2D(active(next).document), nextHistory = new PixelArtAnimationHistory2D(next);
+      host.restorePalette(next.workingPalette ?? active(next).document.workingPalette);
       stop(); playbackFrames=undefined;state = next; history = nextHistory;
       cache.clear(); cacheBytes = 0; for (const frame of state.frames) dirtyThumbnails.add(frame.id); showActive(raster);
     },
-    serialize() { return state ? serializePixelArtAnimation2D(replacePixelArtAnimationFrame2D(state, host.outputDocument())) : undefined; },
+    serialize() {
+      if (!state) return undefined;
+      const next = replacePixelArtAnimationFrame2D(state, host.outputDocument()), workingPalette = host.workingPalette();
+      return serializePixelArtAnimation2D({ ...next, workingPalette });
+    },
     undo() { if (history) { stop(); playbackFrames=undefined;state = history.undo(); for (const frame of state.frames) dirtyThumbnails.add(frame.id); showActive(); } },
     redo() { if (history) { stop(); playbackFrames=undefined;state = history.redo(); for (const frame of state.frames) dirtyThumbnails.add(frame.id); showActive(); } },
   };

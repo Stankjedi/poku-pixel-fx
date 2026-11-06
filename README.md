@@ -4,6 +4,16 @@
 
 > **Origin:** POKU Pixel FX is a Korean-localized, TypeScript-based open-source fork/derivative of [PixelFX by Patch](https://github.com/patch-gg/pixelfx). This repository is maintained separately and is not linked as a GitHub network fork. The upstream MIT license credits Patch and Hugo Duprez; see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for copyright and third-party notices.
 
+## Pixel Art Lab · 직접 만든 붓, 타일 편집과 작업 복구
+
+선택한 여러 색의 픽셀 묶음을 붓으로 저장하고, 정확한 알파·기준점·정수 회전과 반전을 유지하며 다시 그립니다.
+복제 붓은 획을 시작할 때의 원화를 고정해서 읽습니다. 3×3 반복 화면에서 타일 이음새를 직접 가로질러
+연필·명암·군집·복제 작업을 할 수 있습니다. 작업 팔레트는 프로젝트에 함께 저장되고,
+브라우저 복구본으로 새로고침 후에도 이어서 편집할 수 있습니다.
+
+[군집·복제·타일 도구 사용법](docs/PIXEL_ART_BRUSHES.md) · [정확한 붓 API](docs/PIXEL_CLUSTER_BRUSH.md) ·
+[작업 팔레트와 복구](docs/PIXEL_ART_RECOVERY.md)
+
 ## Pixel Art Lab · 높이 조각과 편집 가능한 곡선
 
 가져온 PNG의 색을 그대로 두고 높이를 올리거나 깎고, 맞추고, 정리할 수 있습니다.

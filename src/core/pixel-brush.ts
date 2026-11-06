@@ -13,6 +13,9 @@ export interface PixelBrushOptions2D {
   /** Remove the redundant middle cell of consecutive one-cell right-angle turns. Size 1 only. */
   pixelPerfect?: boolean;
   symmetry?: PixelBrushSymmetry2D;
+  /** Continue the unwrapped stroke across opposite canvas edges. Default: false.
+   * Interpolation precedes wrapping, so crossing x=w does not draw across the canvas center. */
+  wrap?: boolean;
 }
 export type PixelShapeKind2D = 'line' | 'rectangle' | 'ellipse';
 export interface PixelShapeOptions2D extends PixelBrushOptions2D {
@@ -49,6 +52,8 @@ const MAX_COORDINATE = 1_048_576;
 const MAX_POINTS = 65_536;
 const MAX_SAMPLES = 4_194_304;
 const MAX_STAMP_SPANS = 8_388_608;
+const MAX_WRAPPED_SAMPLES = 262_144;
+const MAX_WRAPPED_CELL_VISITS = 16_777_216;
 
 function rasterSize(w: number, h: number): number {
   if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1 || w > MAX_DIMENSION || h > MAX_DIMENSION)
@@ -78,7 +83,8 @@ function brushOptions(input: PixelBrushOptions2D): Required<PixelBrushOptions2D>
   if (!Number.isInteger(size) || size < 1 || size > 256) throw new RangeError('Pixel brush size must be an integer within 1..256');
   if (tip !== 'round' && tip !== 'square') throw new RangeError('Unknown pixel brush tip');
   if (!['none', 'x', 'y', 'xy'].includes(symmetry)) throw new RangeError('Unknown pixel brush symmetry');
-  return { size, tip, symmetry, pixelPerfect: input.pixelPerfect ?? false };
+  if (input.wrap !== undefined && typeof input.wrap !== 'boolean') throw new RangeError('Pixel brush wrap must be boolean');
+  return { size, tip, symmetry, pixelPerfect: input.pixelPerfect ?? false, wrap: input.wrap ?? false };
 }
 function reflectMask(mask: Uint8Array, w: number, h: number, symmetry: PixelBrushSymmetry2D): Uint8Array {
   if (symmetry === 'x' || symmetry === 'xy') for (let y = 0; y < h; y++) for (let x = 0; x < w / 2; x++) {
@@ -106,6 +112,11 @@ function reflectMask(mask: Uint8Array, w: number, h: number, symmetry: PixelBrus
  * Pixel-perfect cleanup operates on this stroke only, never on source artwork. For interactive
  * previews, reapply the whole current mask to the saved pre-stroke raster. Applying every
  * interim preview cumulatively would leave behind corners that are later removed.
+ *
+ * Opt-in wrap rasterizes the original unwrapped segments before folding their complete tips
+ * into the canvas. Keep pointer coordinates continuous past the edge; do not pre-modulo them.
+ * Wrapped strokes have budgets of 262144 interpolated cells and 16777216 stamp-cell visits
+ * in addition to the span budget.
  */
 export function rasterizePixelBrush2D(
   w: number, h: number, points: readonly PixelBrushPoint2D[], input: PixelBrushOptions2D = {},
@@ -120,7 +131,7 @@ export function rasterizePixelBrush2D(
   });
   const mask = new Uint8Array(count);
   if (!native.length) return mask;
-  let samples = 0, spans = 0;
+  let samples = 0, spans = 0, wrappedCellVisits = 0;
   const tips = new Map<number, readonly [number, number, number][]>();
   const stamp = (x: number, y: number, pressure: number) => {
     if (!(pressure > 0)) return;
@@ -137,6 +148,19 @@ export function rasterizePixelBrush2D(
       tips.set(size, rows = values);
     }
     for (const [dy, left, right] of rows) {
+      if (options.wrap) {
+        const yy = ((y + dy) % h + h) % h, length = right - left + 1;
+        if (++spans > MAX_STAMP_SPANS) throw new RangeError('Pixel stroke exceeds its 8388608 clipped brush-span budget');
+        wrappedCellVisits += Math.min(length, w);
+        if (wrappedCellVisits > MAX_WRAPPED_CELL_VISITS) throw new RangeError('Wrapped pixel stroke exceeds its 16777216 stamp-cell budget');
+        if (length >= w) mask.fill(1, yy * w, (yy + 1) * w);
+        else {
+          const x0 = ((x + left) % w + w) % w, end = x0 + length;
+          mask.fill(1, yy * w + x0, yy * w + Math.min(w, end));
+          if (end > w) mask.fill(1, yy * w, yy * w + end - w);
+        }
+        continue;
+      }
       const yy = y + dy;
       if (yy < 0 || yy >= h) continue;
       const x0 = Math.max(0, x + left), x1 = Math.min(w, x + right + 1);
@@ -150,6 +174,7 @@ export function rasterizePixelBrush2D(
   let runStart = 0;
   const sample = (x: number, y: number, pressure: number) => {
     if (++samples > MAX_SAMPLES) throw new RangeError('Pixel stroke exceeds its 4194304 interpolated-cell budget');
+    if (options.wrap && samples > MAX_WRAPPED_SAMPLES) throw new RangeError('Wrapped pixel stroke exceeds its 262144 interpolated-cell budget');
     if (!clean) { stamp(x, y, pressure); return; }
     if (!(pressure > 0)) { runStart = trace.length; return; }
     const b = trace[trace.length - 1], a = trace.length - runStart > 1 ? trace[trace.length - 2] : undefined;
@@ -168,13 +193,16 @@ export function rasterizePixelBrush2D(
     const minorDelta = (xMajor ? end.y : end.x) - minor, sign = Math.sign(minorDelta);
     const pad = Math.ceil(options.size / 2) + 1;
     // Clip iteration, not geometry. This retains ties/stair steps from the uncut segment.
-    const first = Math.max(0, -pad - major), last = Math.min(steps, (xMajor ? w : h) - 1 + pad - major);
+    const first = options.wrap ? 0 : Math.max(0, -pad - major);
+    const last = options.wrap ? steps : Math.min(steps, (xMajor ? w : h) - 1 + pad - major);
     if (first > last) { runStart = trace.length; return; }
+    if (options.wrap && samples + last - first + 1 > MAX_WRAPPED_SAMPLES)
+      throw new RangeError('Wrapped pixel stroke exceeds its 262144 interpolated-cell budget');
     const begin = increasing ? first : last, finish = increasing ? last : first, direction = increasing ? 1 : -1;
     for (let k = begin; increasing ? k <= finish : k >= finish; k += direction) {
       const q = minor + sign * Math.floor((Math.abs(minorDelta) * k + steps / 2) / steps);
       const x = xMajor ? major + k : q, y = xMajor ? q : major + k;
-      if (x < -pad || y < -pad || x >= w + pad || y >= h + pad) { runStart = trace.length; continue; }
+      if (!options.wrap && (x < -pad || y < -pad || x >= w + pad || y >= h + pad)) { runStart = trace.length; continue; }
       const t = increasing ? k / steps : 1 - k / steps;
       sample(x, y, a.pressure + (b.pressure - a.pressure) * t);
     }
@@ -196,6 +224,7 @@ export function rasterizePixelShape2D(
   if (!from || !to || from.length !== 2 || to.length !== 2) throw new RangeError('Pixel shapes require two coordinate pairs');
   const ax = coordinate(from[0]), ay = coordinate(from[1]), bx = coordinate(to[0]), by = coordinate(to[1]);
   if (kind === 'line') return rasterizePixelBrush2D(w, h, [{ x: ax, y: ay }, { x: bx, y: by }], options);
+  if (options.wrap) throw new RangeError('Wrapped shapes support line strokes; use a wrapped brush for freehand tile edges');
   const x0 = Math.min(ax, bx), x1 = Math.max(ax, bx), y0 = Math.min(ay, by), y1 = Math.max(ay, by);
   const left = Math.max(0, x0), right = Math.min(w - 1, x1), top = Math.max(0, y0), bottom = Math.min(h - 1, y1);
   const mask = new Uint8Array(count), filled = input.filled ?? false;

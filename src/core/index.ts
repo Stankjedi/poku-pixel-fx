@@ -96,6 +96,7 @@ export * from './pixel-transform.js';
 export * from './pixel-relight.js';
 export * from './pixel-sculpt.js';
 export * from './pixel-path.js';
+export * from './pixel-cluster-brush.js';
 export * from './character-animation.js';
 export * from './character-identity.js';
 export * from './creature-asset.js';

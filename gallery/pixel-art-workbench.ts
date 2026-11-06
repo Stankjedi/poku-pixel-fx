@@ -7,6 +7,7 @@ import { exportPixelSurfaceMaps2D } from '../src/core/pixel-surface-maps.js';
 import { installPixelArtSelection, selectionDrawingTools } from './pixel-art-selection.js';
 import { installPixelArtCraft, craftDrawingTools } from './pixel-art-craft.js';
 import { installPixelArtAdjustments } from './pixel-art-adjustments.js';
+import { installPixelArtBrushes, pixelArtClusterTools, pixelArtWrappedPaintTools, pixelArtSurfacePoint, type PixelArtBrushSurface } from './pixel-art-brushes.js';
 import { encodeRGBAPNG } from './png.js';
 import { pixelArtLayerLimit2D } from '../src/authoring/pixel-art-project.js';
 import { createBlankPixelArtDocument2D, flattenPixelArtDocument2D, renderPixelArtDocument2D, writePixelArtPaintLayer2D, nextPixelArtLayerId2D,
@@ -21,6 +22,7 @@ export interface PixelArtWorkbenchHost {
   protection(): Uint8Array;
   palette(): readonly number[];
   setPalette(colors: readonly number[]): void;
+  paletteChanged?(): void;
   setSelection(mask: Uint8Array): void;
   commit(document: PixelArtDocument2D): void;
   load(document: PixelArtDocument2D): void;
@@ -48,21 +50,21 @@ const cssColor = (c: number) => '#' + [c & 255, c >>> 8 & 255, c >>> 16 & 255].m
 /** Real canvas editing, not a display filter. The host owns material previews and document history. */
 export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
   const result = el('result') as HTMLCanvasElement;
+  const tileHost = document.createElement('section'), tileLabel = document.createElement('div'), tileInfo = document.createElement('span'), tileCanvas = document.createElement('canvas');
+  const mainSurface: PixelArtBrushSurface = { canvas: result }, tileSurface: PixelArtBrushSurface = { canvas: tileCanvas, tile: true };
   const attempt = (fn: () => void) => { try { fn(); } catch (error) { host.status(error instanceof Error ? error.message : String(error), true); } };
   let rowsKey = '', authoredPalette: number[] | undefined, strokeFrame:number|undefined, stroke: {
-    pointer: number; points: PixelBrushPoint2D[]; tool: string; document: PixelArtDocument2D;
+    pointer: number; surface: PixelArtBrushSurface; owner: PixelArtDocument2D; points: PixelBrushPoint2D[]; tool: string; document: PixelArtDocument2D; options: PixelBrushOptions2D;
     source: EditableSprite2D; merged:EditableSprite2D; layerId?: string; candidate?: PixelArtDocument2D;
   } | undefined;
   let craft: ReturnType<typeof installPixelArtCraft> | undefined;
   let adjustments: ReturnType<typeof installPixelArtAdjustments> | undefined;
-  const point = (event: PointerEvent): PixelBrushPoint2D => {
-    const r = result.getBoundingClientRect();
-    return { x: Math.floor((event.clientX - r.left) * result.width / r.width), y: Math.floor((event.clientY - r.top) * result.height / r.height),
-      ...(event.pointerType === 'pen' && field('pen-pressure').checked ? { pressure: event.pressure } : {}) };
-  };
+  let brushes: ReturnType<typeof installPixelArtBrushes> | undefined;
+  const point = (event: PointerEvent, surface = mainSurface) => pixelArtSurfacePoint(event, surface, result.width, result.height);
   function brushOptions(): PixelBrushOptions2D {
     return { size: integer('paint-size', 1, 64), tip: choice('paint-tip').value as 'round' | 'square', pixelPerfect: field('pixel-perfect').checked,
-      symmetry: choice('paint-symmetry').value as PixelBrushOptions2D['symmetry'] };
+      symmetry: choice('paint-symmetry').value as PixelBrushOptions2D['symmetry'],
+      wrap: field('paint-wrap').checked && pixelArtWrappedPaintTools.has(choice('paint-tool').value) };
   }
   function activePaint(document: PixelArtDocument2D): string | undefined {
     const layer = document.layers.find(layer => layer.id === document.activeLayerId) ?? document.layers.at(-1);
@@ -95,7 +97,7 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
   }
   function previewStroke() {
     if (!stroke) return;
-    const { document: doc, points, tool, source, merged, layerId } = stroke, options = brushOptions();
+    const { document: doc, points, tool, source, merged, layerId, options } = stroke;
     const mask = ['line', 'rectangle', 'ellipse'].includes(tool)
       ? rasterizePixelShape2D(doc.width, doc.height, tool as PixelShapeKind2D, [points[0].x,points[0].y], [points.at(-1)!.x,points.at(-1)!.y], { ...options, filled: field('paint-filled').checked })
       : rasterizePixelBrush2D(doc.width, doc.height, points, options);
@@ -104,65 +106,84 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     stroke.candidate = next;
     host.preview(!layerId ? output : renderPixelArtDocument2D(next));
   }
-  result.addEventListener('pointerdown', event => attempt(() => {
-    const tool = choice('paint-tool').value;
-    if (event.button !== 0 || tool === 'inspect' || selectionDrawingTools.has(tool) || craftDrawingTools.has(tool)) return;
-    adjustments?.finish();
-    event.preventDefault();
-    const p = point(event), source = host.output(), doc = host.outputDocument();
-    if (p.x < 0 || p.y < 0 || p.x >= source.w || p.y >= source.h) return;
-    if (tool === 'picker') {
-      const i = p.y * source.w + p.x;
-      if (source.mask.data[i] && source.pixels[i] >>> 24) field('paint-color').value = cssColor(source.pixels[i]);
-      return;
-    }
-    const layerId = activePaint(doc);
-    if (!layerId && doc.layers.length >= pixelArtLayerLimit2D(doc.width, doc.height)) throw new RangeError('레이어 한도입니다. 그림 레이어를 선택하거나 현재 모습을 구운 뒤 그려 주세요.');
-    if (tool === 'fill') {
-      const mask = selectPixelRegion2D(source, p, { tolerance: integer('tolerance', 0, 100), includeTransparent: true,
-        selection: field('paint-in-selection').checked ? host.selection() : undefined });
-      const { output, touched } = painted(paintLayerSource(doc,layerId,source), mask, false);
-      const next = writePixelArtPaintLayer2D(doc, output, touched, layerId);
-      if (next !== doc) host.commit(next);
-      return;
-    }
-    stroke = { pointer: event.pointerId, points: [p], tool, document: doc, source:paintLayerSource(doc,layerId,source), merged:source, layerId };
-    result.setPointerCapture(event.pointerId); previewStroke();
-  }));
-  result.addEventListener('pointermove', event => attempt(() => {
-    const p = point(event);
-    el('cursor-cell').textContent = p.x >= 0 && p.y >= 0 && p.x < result.width && p.y < result.height ? `x ${p.x} · y ${p.y}` : '';
-    if (!stroke || stroke.pointer !== event.pointerId) return;
-    for (const sample of event.getCoalescedEvents?.().length ? event.getCoalescedEvents() : [event]) {
-      const next = point(sample), last = stroke.points.at(-1)!;
-      if (last.x !== next.x || last.y !== next.y || last.pressure !== next.pressure) stroke.points.push(next);
-    }
-    if(strokeFrame===undefined)strokeFrame=requestAnimationFrame(()=>{strokeFrame=undefined;attempt(previewStroke);});
-  }));
   function finishStroke() {
     if(!stroke)return;
     if(strokeFrame!==undefined){cancelAnimationFrame(strokeFrame);strokeFrame=undefined;}
-    previewStroke();
-    const completed=stroke;stroke=undefined;
-    if(result.hasPointerCapture(completed.pointer))result.releasePointerCapture(completed.pointer);
-    if(completed.candidate&&completed.candidate!==completed.document)host.commit(completed.candidate);
-    else host.preview(undefined);
+    try {
+      previewStroke();
+      const completed=stroke;stroke=undefined;
+      if(completed.surface.canvas.hasPointerCapture(completed.pointer))completed.surface.canvas.releasePointerCapture(completed.pointer);
+      if(completed.owner!==host.document()){host.preview(undefined);return;}
+      if(completed.candidate&&completed.candidate!==completed.document)host.commit(completed.candidate);
+      else host.preview(undefined);
+    } catch(error) { cancelStroke(); host.preview(undefined); throw error; }
   }
-  result.addEventListener('pointerup', event => attempt(() => {
-    if (!stroke || stroke.pointer !== event.pointerId) return;
-    const next = point(event), last = stroke.points.at(-1)!;
-    // Pointerup reports zero pen pressure even though the final cell was painted while down.
-    if (event.pointerType === 'pen') next.pressure = last.pressure;
-    if (last.x !== next.x || last.y !== next.y) { stroke.points.push(next); previewStroke(); }
-    finishStroke();
-  }));
-  const cancelStroke = () => { if(strokeFrame!==undefined){cancelAnimationFrame(strokeFrame);strokeFrame=undefined;}stroke = undefined; host.preview(undefined); };
-  result.addEventListener('pointercancel', cancelStroke);
-  result.addEventListener('lostpointercapture', () => { if (stroke) cancelStroke(); });
-  result.addEventListener('pointerleave', () => { if (!stroke) el('cursor-cell').textContent = ''; });
-  choice('paint-tool').onchange = () => attempt(() => { if (stroke) cancelStroke(); adjustments?.finish(); syncCursor(); });
+  function cancelStroke() {
+    if(strokeFrame!==undefined){cancelAnimationFrame(strokeFrame);strokeFrame=undefined;}
+    const old=stroke;stroke=undefined;
+    if(old?.surface.canvas.hasPointerCapture(old.pointer))old.surface.canvas.releasePointerCapture(old.pointer);
+    if(old)host.preview(undefined);
+  }
+  function bindPaintSurface(surface: PixelArtBrushSurface) {
+    const canvas=surface.canvas;
+    canvas.addEventListener('pointerdown', event => attempt(() => {
+      const tool = choice('paint-tool').value;
+      if (event.button !== 0 || stroke || tool === 'inspect' || selectionDrawingTools.has(tool) || craftDrawingTools.has(tool) || pixelArtClusterTools.has(tool)) return;
+      if(surface.tile&&(!field('paint-wrap').checked||!pixelArtWrappedPaintTools.has(tool))){host.status('타일 위에서는 연필·지우개·직선·명암 도구와 반대쪽 경계로 이어 그리기를 사용하세요.');return;}
+      brushes?.finish();craft?.finish();adjustments?.finish();
+      event.preventDefault();
+      const doc = host.outputDocument(), source = renderPixelArtDocument2D(doc), p = point(event,surface);
+      if (!surface.tile&&(p.x < 0 || p.y < 0 || p.x >= source.w || p.y >= source.h)) return;
+      if (tool === 'picker') {
+        const i = p.y * source.w + p.x;
+        if (source.mask.data[i] && source.pixels[i] >>> 24) field('paint-color').value = cssColor(source.pixels[i]);
+        return;
+      }
+      const layerId = activePaint(doc);
+      if (!layerId && doc.layers.length >= pixelArtLayerLimit2D(doc.width, doc.height)) throw new RangeError('레이어 한도입니다. 그림 레이어를 선택하거나 현재 모습을 구운 뒤 그려 주세요.');
+      if (tool === 'fill') {
+        const mask = selectPixelRegion2D(source, p, { tolerance: integer('tolerance', 0, 100), includeTransparent: true,
+          selection: field('paint-in-selection').checked ? host.selection() : undefined });
+        const { output, touched } = painted(paintLayerSource(doc,layerId,source), mask, false);
+        const next = writePixelArtPaintLayer2D(doc, output, touched, layerId);
+        if (next !== doc) host.commit(next);
+        return;
+      }
+      stroke = { pointer: event.pointerId, surface, owner:host.document(), points: [p], tool, document: doc, options:brushOptions(), source:paintLayerSource(doc,layerId,source), merged:source, layerId };
+      canvas.setPointerCapture(event.pointerId); previewStroke();
+    }));
+    canvas.addEventListener('pointermove', event => attempt(() => {
+      const p = point(event,surface), inBounds=p.x>=0&&p.y>=0&&p.x<result.width&&p.y<result.height;
+      el('cursor-cell').textContent = surface.tile ? `타일 x ${p.x} · y ${p.y}` : inBounds ? `x ${p.x} · y ${p.y}` : '';
+      if (!stroke || stroke.surface!==surface || stroke.pointer !== event.pointerId) return;
+      const samples=event.getCoalescedEvents?.();
+      for (const sample of samples?.length ? samples : [event]) {
+        const next = point(sample,surface), last = stroke.points.at(-1)!;
+        if (last.x !== next.x || last.y !== next.y || last.pressure !== next.pressure) stroke.points.push(next);
+      }
+      if(strokeFrame===undefined)strokeFrame=requestAnimationFrame(()=>{strokeFrame=undefined;attempt(previewStroke);});
+    }));
+    canvas.addEventListener('pointerup', event => attempt(() => {
+      if (!stroke || stroke.surface!==surface || stroke.pointer !== event.pointerId) return;
+      const next = point(event,surface), last = stroke.points.at(-1)!;
+      // Pointerup reports zero pen pressure even though the final cell was painted while down.
+      if (event.pointerType === 'pen') next.pressure = last.pressure;
+      if (last.x !== next.x || last.y !== next.y) stroke.points.push(next);
+      finishStroke();
+    }));
+    canvas.addEventListener('pointercancel', event => {if(stroke?.surface===surface&&stroke.pointer===event.pointerId)cancelStroke();});
+    canvas.addEventListener('lostpointercapture', event => { if (stroke?.surface===surface&&stroke.pointer===event.pointerId) cancelStroke(); });
+    canvas.addEventListener('pointerleave', () => { if (!stroke) el('cursor-cell').textContent = ''; });
+  }
+  choice('paint-tool').onchange = () => attempt(() => { if (stroke) cancelStroke(); brushes?.finish(); adjustments?.finish(); syncCursor(); });
   function syncCursor() {
     const tool = choice('paint-tool').value;
+    const supported=pixelArtWrappedPaintTools.has(tool), wrapping=supported&&field('paint-wrap').checked;
+    field('paint-wrap').disabled=!supported;
+    el('paint-wrap-note').textContent = tool==='rectangle'||tool==='ellipse' ? '사각형·타원은 반복 경계 그리기를 지원하지 않습니다.'
+      : supported ? wrapping ? '타일 경계를 넘는 획과 붓끝이 반대쪽에 이어집니다.' : '반복 경계를 켜면 3 × 3 타일 위에서도 이어 그릴 수 있습니다.' : '반복 경계: 연필·지우개·직선·명암·군집·클론에서 사용';
+    tileInfo.textContent=wrapping?'3 × 3 이어 그리기 · 가운데 테두리가 원본 한 타일입니다.':'3 × 3 타일 확인 · 반복 경계 그리기를 켜면 직접 편집할 수 있습니다.';
+    tileCanvas.style.cursor=wrapping?'crosshair':'default';tileCanvas.dataset.editable=String(wrapping);
     result.style.cursor = tool === 'inspect' ? 'default' : 'crosshair';
     el('paint-hint').textContent = tool === 'inspect' ? '오른쪽 캔버스에 그립니다. 왼쪽에서는 선택과 보호 영역을 편집합니다.'
       : tool === 'move' ? '선택 영역을 드래그하거나 방향키로 옮기세요. Shift + 방향키: 10px. Escape: 취소.'
@@ -172,10 +193,11 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
       : tool === 'path' ? '클릭으로 점을 놓고 드래그로 곡률을 조절합니다. 제어점은 저장한 뒤에도 수정할 수 있습니다.'
       : tool === 'picker' ? '오른쪽 그림에서 색을 고른 뒤 B를 누르면 연필로 돌아갑니다.'
         : '오른쪽 캔버스에 그리세요. 한 번의 드래그가 한 번의 실행 취소에 대응합니다. 보호 영역은 유지됩니다.';
+    brushes?.sync();
   }
 
   function mutateLayer(id: string, fn: (layers: PixelArtDocumentLayer2D[], index: number) => void) {
-    craft?.cancel(); adjustments?.cancel();
+    craft?.cancel(); adjustments?.cancel(); brushes?.cancel(); cancelStroke();
     const doc = host.document(), layers = structuredClone(doc.layers), index = layers.findIndex(layer => layer.id === id);
     if (index < 0) return;
     fn(layers, index);
@@ -204,9 +226,9 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
       const name = document.createElement('input'); name.value = layer.name; name.className = 'layer-name'; name.maxLength = 160; name.setAttribute('aria-label', `${layer.name} 이름`);
       name.onchange = () => attempt(() => { if (!name.value.trim()) { name.value = layer.name; return; } mutateLayer(layer.id, (layers, i) => { layers[i].name = name.value.trim(); }); });
       li.append(name, actionButton('선택', `${layer.name} 선택`, () => host.commit({ ...host.document(), activeLayerId: layer.id })));
-      if (layer.kind === 'material') li.append(actionButton('설정', `${layer.name} 재질 수정`, () => {craft?.cancel();adjustments?.cancel();host.editMaterial(layer.id);}, !!layer.locked));
-      if (layer.kind === 'height' || layer.kind === 'path') li.append(actionButton('설정', `${layer.name} ${layer.kind==='height'?'높이':'곡선'} 수정`, () => {adjustments?.cancel();host.discardPreview();craft?.editLayer(layer.id);}, !!layer.locked || layer.visible===false));
-      if (layer.kind === 'palette' || layer.kind === 'relight') li.append(actionButton('설정', `${layer.name} ${layer.kind==='palette'?'팔레트':'조명'} 수정`, () => {craft?.cancel();adjustments?.edit(layer.id);}, !!layer.locked || layer.visible===false));
+      if (layer.kind === 'material') li.append(actionButton('설정', `${layer.name} 재질 수정`, () => {brushes?.cancel();craft?.cancel();adjustments?.cancel();host.editMaterial(layer.id);}, !!layer.locked));
+      if (layer.kind === 'height' || layer.kind === 'path') li.append(actionButton('설정', `${layer.name} ${layer.kind==='height'?'높이':'곡선'} 수정`, () => {brushes?.cancel();adjustments?.cancel();host.discardPreview();craft?.editLayer(layer.id);}, !!layer.locked || layer.visible===false));
+      if (layer.kind === 'palette' || layer.kind === 'relight') li.append(actionButton('설정', `${layer.name} ${layer.kind==='palette'?'팔레트':'조명'} 수정`, () => {brushes?.cancel();craft?.cancel();adjustments?.edit(layer.id);}, !!layer.locked || layer.visible===false));
       li.append(actionButton(layer.locked ? '잠김' : '잠금', `${layer.name} 편집 잠금`, () => mutateLayer(layer.id, (layers, i) => { layers[i].locked = !layers[i].locked; })),
         actionButton('↑', `${layer.name} 위로`, () => mutateLayer(layer.id, (layers, i) => { [layers[i], layers[i + 1]] = [layers[i + 1], layers[i]]; }), index === doc.layers.length - 1 || !!layer.locked),
         actionButton('↓', `${layer.name} 아래로`, () => mutateLayer(layer.id, (layers, i) => { [layers[i], layers[i - 1]] = [layers[i - 1], layers[i]]; }), index === 0 || !!layer.locked),
@@ -232,14 +254,21 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     const doc = host.document(); host.setSelection(resizePixelSelection2D(doc.width, doc.height, host.selection(), radius));
   });
 
-  function setAuthoredPalette(colors:number[]) {
-    authoredPalette=colors;
-    el('workbench-palette').replaceChildren(...colors.map((color,i)=>{
+  function renderAuthoredPalette() {
+    el('workbench-palette').replaceChildren(...(authoredPalette??[]).map((color,i)=>{
       const swatch=document.createElement('input');swatch.type='color';swatch.value=cssColor(color);swatch.setAttribute('aria-label',`작업 팔레트 ${i+1}`);
-      swatch.oninput=()=>{authoredPalette![i]=hex(swatch.value);};
+      swatch.oninput=()=>{if(authoredPalette){authoredPalette[i]=hex(swatch.value)>>>0;host.paletteChanged?.();}};
+      swatch.onchange=()=>{if(authoredPalette){authoredPalette[i]=hex(swatch.value)>>>0;adjustments?.paletteChanged();host.paletteChanged?.();}};
       swatch.ondblclick=()=>{field('paint-color').value=swatch.value;};return swatch;
     }));
+  }
+  function setAuthoredPalette(colors:readonly number[]) {
+    authoredPalette=colors.map(color=>color>>>0);renderAuthoredPalette();
     adjustments?.paletteChanged();
+    host.paletteChanged?.();
+  }
+  function restorePalette(colors?:readonly number[]) {
+    authoredPalette=colors===undefined?undefined:[...colors];renderAuthoredPalette();
   }
   btn('extract-palette').onclick = () => attempt(() => {
     const colors = extractPixelPalette2D(host.output(), { colors: integer('palette-count', 2, 64), locked: field('lock-paint-color').checked ? [field('paint-color').value] : [],
@@ -280,11 +309,24 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     wrapper.className = 'canvas-wrap'; grid.className = 'pixel-grid'; grid.setAttribute('aria-hidden', 'true');
     c.parentNode!.insertBefore(wrapper, c); wrapper.append(c, grid); return { c, grid };
   });
-  const tileHost = document.createElement('section'), tileLabel = document.createElement('div'), tileCanvas = document.createElement('canvas');
   let tileSprite: EditableSprite2D | undefined;
-  tileHost.className = 'tile-proof'; tileLabel.className = 'tile-proof-label'; tileLabel.textContent = '반복 경계 확인 · 3 × 3 · 원본을 바꾸지 않는 타일 미리보기';
-  tileHost.append(tileLabel, tileCanvas); el('result-host').closest('.comparison')!.after(tileHost);
+  tileHost.className = 'tile-proof'; tileLabel.className = 'tile-proof-label';tileCanvas.id='tile-canvas';
+  tileCanvas.setAttribute('aria-label','3 × 3 반복 타일. 반대쪽 경계로 이어 그리기를 켜면 타일 경계를 가로질러 직접 그릴 수 있습니다.');
+  const tileZoomLabel=document.createElement('label'),tileZoom=document.createElement('select'),tileViewport=document.createElement('div'),tileWrapper=document.createElement('div'),tileCenter=document.createElement('div');
+  tileZoom.id='tile-zoom';tileZoom.setAttribute('aria-label','반복 타일 배율');
+  for(const zoom of [1,2,4,8]){const option=document.createElement('option');option.value=String(zoom);option.textContent=`${zoom}×`;tileZoom.append(option);}tileZoom.value='2';
+  tileZoomLabel.append('타일 배율 ',tileZoom);tileLabel.append(tileInfo,tileZoomLabel);
+  tileViewport.className='tile-viewport';tileWrapper.className='canvas-wrap tile-canvas-wrap';tileCenter.className='tile-center-guide';tileCenter.setAttribute('aria-hidden','true');
+  tileWrapper.append(tileCanvas,tileCenter);tileViewport.append(tileWrapper);tileHost.append(tileLabel,tileViewport); el('result-host').closest('.comparison')!.after(tileHost);
   field('show-grid').onchange = () => syncOverlays(); field('tile-preview').onchange = () => syncOverlays();
+  tileZoom.onchange=()=>{syncOverlays();brushes?.sync();};
+  field('paint-wrap').addEventListener('change',()=>attempt(()=>{finishStroke();syncCursor();syncOverlays();host.refresh();}));
+  btn('edit-tiles').onclick=()=>attempt(()=>{
+    finishStroke();brushes?.finish();craft?.finish();adjustments?.finish();
+    if(!pixelArtWrappedPaintTools.has(choice('paint-tool').value))choice('paint-tool').value='pencil';
+    field('paint-wrap').checked=true;field('tile-preview').checked=true;
+    choice('paint-tool').dispatchEvent(new Event('change'));syncCursor();syncOverlays();host.refresh();tileHost.scrollIntoView({block:'center'});
+  });
   function syncOverlays() {
     for (const { c, grid } of grids) {
       const rect = c.getBoundingClientRect(), step = rect.width / c.width;
@@ -293,10 +335,13 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     }
     tileHost.classList.toggle('visible', field('tile-preview').checked);
     if (field('tile-preview').checked && host.output() && tileSprite!==host.output()) {
-      const sprite = host.output(), source = spriteCanvas(sprite); tileSprite=sprite;tileCanvas.width = sprite.w * 3; tileCanvas.height = sprite.h * 3;
+      const sprite = host.output(), source = spriteCanvas(sprite); tileSprite=sprite;
+      if(tileCanvas.width!==sprite.w*3)tileCanvas.width=sprite.w*3;if(tileCanvas.height!==sprite.h*3)tileCanvas.height=sprite.h*3;
       const ctx = tileCanvas.getContext('2d')!; ctx.imageSmoothingEnabled = false;
+      ctx.clearRect(0,0,tileCanvas.width,tileCanvas.height);
       for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) ctx.drawImage(source, x * sprite.w, y * sprite.h);
     }
+    tileCanvas.style.width=`${tileCanvas.width*Number(tileZoom.value)}px`;tileCanvas.style.height=`${tileCanvas.height*Number(tileZoom.value)}px`;
   }
   new ResizeObserver(syncOverlays).observe(el('result-host'));
   function surfaceMaps() {
@@ -324,7 +369,7 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
   });
   for(const id of ['save-png','save-project','undo','redo','save-normal','save-height','save-occlusion','save-shadow','save-map-info','new-canvas','import-png','open-project','apply-palette','apply-material','apply-relight','flatten-layers'])
     btn(id).addEventListener('click',event=>{try{
-      finishStroke();
+      finishStroke();brushes?.finish();
       if(id==='undo'||id==='redo'){craft?.cancel();adjustments?.cancel();}
       else {craft?.finish();if(id!=='apply-palette'&&id!=='apply-relight')adjustments?.finish();}
     }catch(error){event.preventDefault();event.stopImmediatePropagation();host.status(error instanceof Error?error.message:String(error),true);}}, {capture:true});
@@ -334,20 +379,24 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); btn(event.shiftKey ? 'redo' : 'undo').click(); return; }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); btn('save-project').click(); return; }
     if (event.ctrlKey || event.metaKey || event.altKey) return;
-    if (event.key === 'Escape') { adjustments?.cancel(); if (stroke) cancelStroke(); else if(!craftDrawingTools.has(choice('paint-tool').value)){ choice('paint-tool').value = 'inspect'; syncCursor(); } return; }
+    if (event.key === 'Escape') { adjustments?.cancel(); if (stroke) cancelStroke(); else if(!craftDrawingTools.has(choice('paint-tool').value)){ brushes?.cancel();choice('paint-tool').value = 'inspect'; syncCursor(); } return; }
     const shortcuts: Record<string, string> = { b: 'pencil', e: 'eraser', l: 'line', r: 'rectangle', o: 'ellipse', g: 'fill', i: 'picker' };
     const tool = shortcuts[event.key.toLowerCase()];
-    if (tool) { event.preventDefault(); choice('paint-tool').value = tool; syncCursor(); }
+    if (tool) { event.preventDefault(); choice('paint-tool').value = tool;choice('paint-tool').dispatchEvent(new Event('change')); syncCursor(); }
   });
   const selections = installPixelArtSelection(host, finishStroke);
+  bindPaintSurface(mainSurface);bindPaintSurface(tileSurface);
   craft=installPixelArtCraft(host);
-  adjustments=installPixelArtAdjustments(host,()=>authoredPalette??host.palette(),setAuthoredPalette,()=>{finishStroke();craft?.finish();});
-  return { finishStroke() { finishStroke(); selections.finish(); craft?.finish(); adjustments?.finish(); }, setAuthoredPalette, palette:()=>authoredPalette??host.palette(), sync() {
+  adjustments=installPixelArtAdjustments(host,()=>authoredPalette??host.palette(),setAuthoredPalette,()=>{finishStroke();brushes?.finish();craft?.finish();});
+  brushes=installPixelArtBrushes(host,[mainSurface,tileSurface],()=>{finishStroke();selections.finish();craft?.finish();adjustments?.finish();});
+  return { finishStroke() { finishStroke();brushes?.finish();selections.finish();craft?.finish();adjustments?.finish(); }, setAuthoredPalette,restorePalette,
+    authoredPalette:()=>authoredPalette?.slice(),palette:()=>authoredPalette??host.palette(), sync() {
+    if(stroke&&stroke.owner!==host.document())cancelStroke();
     syncLayers(); syncOverlays(); syncCursor(); selections.sync();
     const mapsAvailable = !!(host.output() as PixelArtDocumentRaster2D)?.channels;
     btn('apply-relight').disabled = !mapsAvailable || host.outputDocument().layers.length >= pixelArtLayerLimit2D(host.document().width, host.document().height);
     choice('normal-convention').disabled=!mapsAvailable;
     for (const id of ['save-normal', 'save-height', 'save-occlusion', 'save-shadow', 'save-map-info']) btn(id).disabled = !mapsAvailable;
-    craft?.sync();adjustments?.sync();
+    craft?.sync();adjustments?.sync();brushes?.sync();
   } };
 }
