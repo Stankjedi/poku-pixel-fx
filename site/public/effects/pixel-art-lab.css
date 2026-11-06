@@ -38,3 +38,20 @@
 .relight-panel{margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}.relight-panel>label{display:flex;flex-direction:column;position:relative;gap:8px;margin:12px 0;font-size:11px;color:#a8b9c3}.relight-panel input[type=color]{width:100%;height:30px;background:#15222c;border:1px solid #435664;border-radius:4px}
 .focus-mode .intro{display:none}.focus-mode .comparison{grid-template-columns:1fr}.focus-mode .comparison>.art-panel:first-child{display:none}.focus-mode .result-panel .canvas-host{height:66vh;min-height:420px}.focus-mode .layout{padding-top:20px}
 @media(max-width:700px){.animation-layout{grid-template-columns:minmax(0,1fr)}.animation-player{flex-direction:row;flex-wrap:wrap;justify-content:center}.animation-player canvas{width:112px;height:112px}.animation-player span{max-width:150px}.transform-panel .inline-controls{gap:8px}.focus-mode .result-panel .canvas-host{height:55vh;min-height:300px}}
+
+/* Curve handles are a separate UI surface, while the native canvas contains the exact artwork. */
+.craft-workbench{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start;margin:0 0 14px}
+.craft-studies{grid-column:1/-1;border:1px solid #2e4146;border-radius:7px;padding:12px 14px;background:linear-gradient(100deg,#14231f,#111c26);display:flex;align-items:center;flex-wrap:wrap;gap:7px 18px}.craft-studies>div:first-child{display:flex;flex-direction:column;gap:4px}.craft-studies strong{font-size:11px;font-weight:500;color:#c8d9c1}.craft-studies .inline-controls{margin:0;margin-left:auto;gap:7px}.craft-studies button{font-size:10px;padding:7px 10px}.craft-studies .hint{flex-basis:100%;font-size:10px;margin:0}
+.craft-panel{min-width:0;border:1px solid #2e4146;border-radius:7px;background:#111d26;padding:12px 14px}
+.craft-panel>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;color:#c9dfbc;font-size:12px;list-style:none;min-height:22px}
+.craft-panel>summary::before{content:'+';color:#759480;font-size:16px}.craft-panel[open]>summary::before{content:'−'}.craft-panel>summary>span:first-child{flex:1}
+.craft-panel>summary .small-label{font-size:8px;color:#77988a;white-space:nowrap}.craft-panel .hint{margin:9px 0;font-size:10px;line-height:1.7}
+.craft-panel .inline-controls{gap:9px 12px;margin:10px 0}.craft-panel .inline-controls label{font-size:10px;flex-wrap:wrap}
+.craft-panel .inline-controls input[type=number]{width:66px;max-width:100%;font-size:11px;padding:6px 7px}.craft-panel .inline-controls input#sculpt-target{width:78px}
+.craft-panel button{font-size:10px;padding:7px 9px}.craft-mode-buttons,.craft-view-buttons{display:flex;flex-wrap:wrap;gap:6px}.craft-mode-buttons button[aria-pressed=true]{background:#284135;border-color:#93b981;color:#d6ecc8}
+.craft-panel .craft-range{display:flex;flex-direction:column;gap:9px;position:relative;margin:13px 0;font-size:10px;color:#a8b9c3;padding-top:2px}.craft-panel .craft-range output{font-size:10px;color:#bbd5ad}
+.craft-panel>label.inline{font-size:10px;flex-wrap:wrap;color:#a8b9c3}.craft-panel>label.inline .hint{margin:0}.craft-panel select{min-width:78px;padding:6px 7px;font-size:11px}
+.craft-layer-editor{border-top:1px solid #354b44;padding-top:12px;margin-top:12px}.craft-layer-editor>strong{font-weight:500;font-size:11px;color:#c3ddba;overflow-wrap:anywhere}.craft-layer-editor[hidden]{display:none}
+.craft-overlay{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5;max-width:none;touch-action:none}
+@media(max-width:1100px){.craft-workbench{grid-template-columns:minmax(0,1fr)}.craft-panel>summary .small-label{font-size:9px}}
+@media(max-width:700px){.craft-panel{padding:11px 12px}.craft-panel .inline-controls{gap:9px}.craft-panel .path-node-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}.craft-panel .path-node-controls label{display:flex;flex-direction:column;align-items:start;gap:5px}.craft-panel .path-node-controls select{width:100%;min-width:0}.craft-panel .path-node-controls input{width:100%!important}.craft-panel .path-node-controls button{width:100%;padding-left:5px;padding-right:5px}}

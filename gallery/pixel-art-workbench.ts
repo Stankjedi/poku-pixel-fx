@@ -6,7 +6,8 @@ import { extractPixelPalette2D, createPixelPaletteRamp2D } from '../src/core/pix
 import { sortPixelColorsByLightness2D } from '../src/core/pixel-color-edit.js';
 import { exportPixelSurfaceMaps2D } from '../src/core/pixel-surface-maps.js';
 import { installPixelArtSelection, selectionDrawingTools } from './pixel-art-selection.js';
-import { createPixelRelighter2D } from '../src/core/pixel-relight.js';
+import { installPixelArtCraft, craftDrawingTools } from './pixel-art-craft.js';
+import { installPixelArtAdjustments } from './pixel-art-adjustments.js';
 import { encodeRGBAPNG } from './png.js';
 import { pixelArtLayerLimit2D } from '../src/authoring/pixel-art-project.js';
 import { createBlankPixelArtDocument2D, flattenPixelArtDocument2D, renderPixelArtDocument2D, writePixelArtPaintLayer2D, nextPixelArtLayerId2D,
@@ -32,6 +33,7 @@ export interface PixelArtWorkbenchHost {
   download(blob: Blob, name: string): void;
   filename(): string;
   editMaterial(id: string): void;
+  discardPreview(): void;
 }
 
 const el = (id: string) => document.getElementById(id)!;
@@ -53,6 +55,8 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     pointer: number; points: PixelBrushPoint2D[]; tool: string; document: PixelArtDocument2D;
     source: EditableSprite2D; merged:EditableSprite2D; layerId?: string; candidate?: PixelArtDocument2D;
   } | undefined;
+  let craft: ReturnType<typeof installPixelArtCraft> | undefined;
+  let adjustments: ReturnType<typeof installPixelArtAdjustments> | undefined;
   const point = (event: PointerEvent): PixelBrushPoint2D => {
     const r = result.getBoundingClientRect();
     return { x: Math.floor((event.clientX - r.left) * result.width / r.width), y: Math.floor((event.clientY - r.top) * result.height / r.height),
@@ -104,7 +108,8 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
   }
   result.addEventListener('pointerdown', event => attempt(() => {
     const tool = choice('paint-tool').value;
-    if (event.button !== 0 || tool === 'inspect' || selectionDrawingTools.has(tool)) return;
+    if (event.button !== 0 || tool === 'inspect' || selectionDrawingTools.has(tool) || craftDrawingTools.has(tool)) return;
+    adjustments?.finish();
     event.preventDefault();
     const p = point(event), source = host.output(), doc = host.outputDocument();
     if (p.x < 0 || p.y < 0 || p.x >= source.w || p.y >= source.h) return;
@@ -157,7 +162,7 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
   result.addEventListener('pointercancel', cancelStroke);
   result.addEventListener('lostpointercapture', () => { if (stroke) cancelStroke(); });
   result.addEventListener('pointerleave', () => { if (!stroke) el('cursor-cell').textContent = ''; });
-  choice('paint-tool').onchange = () => { if (stroke) cancelStroke(); syncCursor(); };
+  choice('paint-tool').onchange = () => attempt(() => { if (stroke) cancelStroke(); adjustments?.finish(); syncCursor(); });
   function syncCursor() {
     const tool = choice('paint-tool').value;
     result.style.cursor = tool === 'inspect' ? 'default' : 'crosshair';
@@ -165,11 +170,14 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
       : tool === 'move' ? '선택 영역을 드래그하거나 방향키로 옮기세요. Shift + 방향키: 10px. Escape: 취소.'
       : selectionDrawingTools.has(tool) ? '영역을 드래그하세요. Shift: 추가 · Alt: 빼기 · Shift + Alt: 교차.'
       : tool.startsWith('shade-') ? '작업 팔레트에 있는 색을 한 단계 바꿉니다. 팔레트 밖 색·알파·보호 영역은 유지됩니다.'
+      : tool.startsWith('height-') ? '원화 색을 유지하며 높이를 조각합니다. 높이·법선 보기에서 형태를 확인하세요.'
+      : tool === 'path' ? '클릭으로 점을 놓고 드래그로 곡률을 조절합니다. 제어점은 저장한 뒤에도 수정할 수 있습니다.'
       : tool === 'picker' ? '오른쪽 그림에서 색을 고른 뒤 B를 누르면 연필로 돌아갑니다.'
         : '오른쪽 캔버스에 그리세요. 한 번의 드래그가 한 번의 실행 취소에 대응합니다. 보호 영역은 유지됩니다.';
   }
 
   function mutateLayer(id: string, fn: (layers: PixelArtDocumentLayer2D[], index: number) => void) {
+    craft?.cancel(); adjustments?.cancel();
     const doc = host.document(), layers = structuredClone(doc.layers), index = layers.findIndex(layer => layer.id === id);
     if (index < 0) return;
     fn(layers, index);
@@ -194,11 +202,13 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
       const li = document.createElement('li'); li.dataset.layerId = layer.id;
       li.classList.toggle('active', doc.activeLayerId === layer.id); li.classList.toggle('hidden-layer', layer.visible === false);
       li.append(actionButton(layer.visible === false ? '○' : '●', `${layer.name} 표시 전환`, () => mutateLayer(layer.id, (layers, i) => { layers[i].visible = layers[i].visible === false; })));
-      const kind = document.createElement('span'); kind.className = 'layer-kind'; kind.textContent = { material: '재질', paint: '그림', palette: '색상', transform: '변형', relight: '조명' }[layer.kind]; li.append(kind);
+      const kind = document.createElement('span'); kind.className = 'layer-kind'; kind.textContent = { material: '재질', paint: '그림', palette: '색상', transform: '변형', relight: '조명', height:'높이', path:'곡선' }[layer.kind]; li.append(kind);
       const name = document.createElement('input'); name.value = layer.name; name.className = 'layer-name'; name.maxLength = 160; name.setAttribute('aria-label', `${layer.name} 이름`);
       name.onchange = () => attempt(() => { if (!name.value.trim()) { name.value = layer.name; return; } mutateLayer(layer.id, (layers, i) => { layers[i].name = name.value.trim(); }); });
       li.append(name, actionButton('선택', `${layer.name} 선택`, () => host.commit({ ...host.document(), activeLayerId: layer.id })));
-      if (layer.kind === 'material') li.append(actionButton('설정', `${layer.name} 재질 수정`, () => host.editMaterial(layer.id), !!layer.locked));
+      if (layer.kind === 'material') li.append(actionButton('설정', `${layer.name} 재질 수정`, () => {craft?.cancel();adjustments?.cancel();host.editMaterial(layer.id);}, !!layer.locked));
+      if (layer.kind === 'height' || layer.kind === 'path') li.append(actionButton('설정', `${layer.name} ${layer.kind==='height'?'높이':'곡선'} 수정`, () => {adjustments?.cancel();host.discardPreview();craft?.editLayer(layer.id);}, !!layer.locked || layer.visible===false));
+      if (layer.kind === 'palette' || layer.kind === 'relight') li.append(actionButton('설정', `${layer.name} ${layer.kind==='palette'?'팔레트':'조명'} 수정`, () => {craft?.cancel();adjustments?.edit(layer.id);}, !!layer.locked || layer.visible===false));
       li.append(actionButton(layer.locked ? '잠김' : '잠금', `${layer.name} 편집 잠금`, () => mutateLayer(layer.id, (layers, i) => { layers[i].locked = !layers[i].locked; })),
         actionButton('↑', `${layer.name} 위로`, () => mutateLayer(layer.id, (layers, i) => { [layers[i], layers[i + 1]] = [layers[i + 1], layers[i]]; }), index === doc.layers.length - 1 || !!layer.locked),
         actionButton('↓', `${layer.name} 아래로`, () => mutateLayer(layer.id, (layers, i) => { [layers[i], layers[i - 1]] = [layers[i - 1], layers[i]]; }), index === 0 || !!layer.locked),
@@ -232,7 +242,9 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
       swatch.ondblclick=()=>{field('paint-color').value=swatch.value;};return swatch;
     }));
   }
-  function setAuthoredPalette(colors:readonly number[]) { showAuthoredPalette(colors);host.workingPaletteChanged(); }
+  function setAuthoredPalette(colors:readonly number[]) {
+    showAuthoredPalette(colors);host.workingPaletteChanged();adjustments?.paletteChanged();
+  }
   btn('extract-palette').onclick = () => attempt(() => {
     const colors = extractPixelPalette2D(host.output(), { colors: integer('palette-count', 2, 64), locked: field('lock-paint-color').checked ? [field('paint-color').value] : [],
       ...(field('paint-in-selection').checked ? { selection: host.selection() } : {}) });
@@ -244,13 +256,6 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     setAuthoredPalette(colors); el('palette-note').textContent = `${colors.length}색 명암 팔레트 · 그림자와 밝은 면 사이에서 색상과 채도를 함께 조절했습니다.`;
   });
   btn('use-material-palette').onclick=()=>attempt(()=>host.setPalette(authoredPalette??host.palette()));
-  btn('apply-palette').onclick = () => attempt(() => {
-    const doc = host.outputDocument(), id = nextPixelArtLayerId2D(doc, 'palette'),palette=authoredPalette??host.palette();
-    const layer: PixelArtPaletteLayer2D = { kind: 'palette', id, name: `팔레트 · ${palette.length}색`, palette: [...palette],
-      dither: choice('palette-dither').value as PixelArtPaletteLayer2D['dither'], strength: 1,
-      ...(field('paint-in-selection').checked ? { selection: Array.from(host.selection()) } : {}), protectedMask: Array.from(host.protection()) };
-    host.commit({ ...doc, activeLayerId: id, layers: [...doc.layers, layer] });
-  });
   // These controls are independent of the material inspector. Changing a light must never
   // create a material draft that would replace a hand-painted multicolor albedo on apply.
   const relightRanges = ['angle', 'elevation', 'intensity', 'fill', 'ambient', 'roughness', 'ao', 'shadow', 'strength'];
@@ -262,23 +267,6 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
   }
   for (const name of relightRanges) field(`relight-${name}`).addEventListener('input', showRelightValues);
   showRelightValues();
-  btn('apply-relight').onclick = () => attempt(() => {
-    finishStroke();
-    const doc = host.outputDocument(), source = renderPixelArtDocument2D(doc);
-    if (!source.channels) throw new Error('재질 레이어를 적용해 높이·법선을 만든 뒤 재조명을 사용하세요.');
-    const angle = Number(field('relight-angle').value) * Math.PI / 180, elevation = Number(field('relight-elevation').value) * Math.PI / 180;
-    const lighting = createPixelRelighter2D({
-      lights: [{ direction: [Math.cos(angle) * Math.cos(elevation), Math.sin(angle) * Math.cos(elevation), Math.sin(elevation)], color: field('relight-key-color').value, intensity: Number(field('relight-intensity').value), castShadow: Number(field('relight-shadow').value) },
-        { direction: [-Math.cos(angle), -Math.sin(angle), .7], color: field('relight-fill-color').value, intensity: Number(field('relight-fill').value) }],
-      ambient: Number(field('relight-ambient').value), diffuseBands: integer('relight-bands', 2, 64), roughness: Number(field('relight-roughness').value),
-      ambientOcclusion: Number(field('relight-ao').value), strength: Number(field('relight-strength').value),
-      wrap: field('relight-wrap').checked,
-      ...(field('relight-palette').checked ? { palette: [...(authoredPalette ?? host.palette())] } : {}),
-    }).options;
-    const id = nextPixelArtLayerId2D(doc, 'relight');
-    host.commit({ ...doc, activeLayerId: id, layers: [...doc.layers, { kind: 'relight', id, name: '원화 색 유지 · 재조명', lighting,
-      ...(field('paint-in-selection').checked ? { selection: Array.from(host.selection()) } : {}), protectedMask: Array.from(host.protection()) }] });
-  });
 
   function spriteCanvas(sprite: EditableSprite2D) {
     const c = document.createElement('canvas'); c.width = sprite.w; c.height = sprite.h;
@@ -297,6 +285,7 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     c.parentNode!.insertBefore(wrapper, c); wrapper.append(c, grid); return { c, grid };
   });
   const tileHost = document.createElement('section'), tileLabel = document.createElement('div'), tileCanvas = document.createElement('canvas');
+  let tileSprite: EditableSprite2D | undefined;
   tileHost.className = 'tile-proof'; tileLabel.className = 'tile-proof-label'; tileLabel.textContent = '반복 경계 확인 · 3 × 3 · 원본을 바꾸지 않는 타일 미리보기';
   tileHost.append(tileLabel, tileCanvas); el('result-host').closest('.comparison')!.after(tileHost);
   field('show-grid').onchange = () => syncOverlays(); field('tile-preview').onchange = () => syncOverlays();
@@ -307,8 +296,8 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
       grid.classList.toggle('visible', field('show-grid').checked && step >= 4);
     }
     tileHost.classList.toggle('visible', field('tile-preview').checked);
-    if (field('tile-preview').checked && host.output()) {
-      const sprite = host.output(), source = spriteCanvas(sprite); tileCanvas.width = sprite.w * 3; tileCanvas.height = sprite.h * 3;
+    if (field('tile-preview').checked && host.output() && tileSprite!==host.output()) {
+      const sprite = host.output(), source = spriteCanvas(sprite); tileSprite=sprite;tileCanvas.width = sprite.w * 3; tileCanvas.height = sprite.h * 3;
       const ctx = tileCanvas.getContext('2d')!; ctx.imageSmoothingEnabled = false;
       for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) ctx.drawImage(source, x * sprite.w, y * sprite.h);
     }
@@ -316,10 +305,11 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
   new ResizeObserver(syncOverlays).observe(el('result-host'));
   function surfaceMaps() {
     const doc=host.outputDocument(),lastMaterial = doc.layers.filter((layer):layer is PixelArtMaterialLayer2D => layer.kind === 'material'&&layer.visible!==false).at(-1);
+    const lastSurface = doc.layers.filter(layer => layer.visible !== false && (layer.kind === 'height' || layer.kind === 'material')).at(-1);
     const tileSize=lastMaterial?.material.tileSize;
     return exportPixelSurfaceMaps2D(renderPixelArtDocument2D(doc), { normalConvention: choice('normal-convention').value as 'opengl' | 'directx',
       lighting: { light: lastMaterial?.material.light ?? [-.6, -.7, 1], ambientOcclusion: 1, castShadow: 1,
-        wrap:!!tileSize&&tileSize[0]===doc.width&&tileSize[1]===doc.height&&(lastMaterial?.material.bevel??0)===0,
+        wrap:lastSurface?.kind==='height'?lastSurface.wrap:!!tileSize&&tileSize[0]===doc.width&&tileSize[1]===doc.height&&(lastMaterial?.material.bevel??0)===0,
         occlusionRadius:lastMaterial?.material.occlusionRadius,shadowDistance:lastMaterial?.material.shadowDistance } });
   }
   for (const kind of ['normal', 'height', 'occlusion', 'shadow'] as const) btn(`save-${kind}`).onclick = () => attempt(() => {
@@ -337,25 +327,32 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     host.download(new Blob([JSON.stringify(info, null, 2)], { type: 'application/json' }), host.filename() + '-surface-maps.json');
   });
   for(const id of ['save-png','save-project','undo','redo','save-normal','save-height','save-occlusion','save-shadow','save-map-info','new-canvas','import-png','open-project','apply-palette','apply-material','apply-relight','flatten-layers'])
-    btn(id).addEventListener('click',()=>attempt(finishStroke),{capture:true});
+    btn(id).addEventListener('click',event=>{try{
+      finishStroke();
+      if(id==='undo'||id==='redo'){craft?.cancel();adjustments?.cancel();}
+      else {craft?.finish();if(id!=='apply-palette'&&id!=='apply-relight')adjustments?.finish();}
+    }catch(error){event.preventDefault();event.stopImmediatePropagation();host.status(error instanceof Error?error.message:String(error),true);}}, {capture:true});
   window.addEventListener('keydown', event => {
     const target = event.target as HTMLElement;
     if (target.closest('input,select,textarea,[contenteditable="true"]')) return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); btn(event.shiftKey ? 'redo' : 'undo').click(); return; }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') { event.preventDefault(); btn('save-project').click(); return; }
     if (event.ctrlKey || event.metaKey || event.altKey) return;
-    if (event.key === 'Escape') { if (stroke) cancelStroke(); else { choice('paint-tool').value = 'inspect'; syncCursor(); } return; }
+    if (event.key === 'Escape') { adjustments?.cancel(); if (stroke) cancelStroke(); else if(!craftDrawingTools.has(choice('paint-tool').value)){ choice('paint-tool').value = 'inspect'; syncCursor(); } return; }
     const shortcuts: Record<string, string> = { b: 'pencil', e: 'eraser', l: 'line', r: 'rectangle', o: 'ellipse', g: 'fill', i: 'picker' };
     const tool = shortcuts[event.key.toLowerCase()];
     if (tool) { event.preventDefault(); choice('paint-tool').value = tool; syncCursor(); }
   });
   const selections = installPixelArtSelection(host, finishStroke);
-  return { finishStroke() { finishStroke(); selections.finish(); }, setAuthoredPalette, restoreAuthoredPalette:showAuthoredPalette,
-    storedPalette:()=>authoredPalette, palette:()=>authoredPalette??host.palette(), sync() {
+  craft=installPixelArtCraft(host);
+  adjustments=installPixelArtAdjustments(host,()=>authoredPalette??host.palette(),setAuthoredPalette,()=>{finishStroke();craft?.finish();});
+  return { finishStroke() { finishStroke(); selections.finish(); craft?.finish(); adjustments?.finish(); }, setAuthoredPalette,
+    restoreAuthoredPalette:showAuthoredPalette, storedPalette:()=>authoredPalette, palette:()=>authoredPalette??host.palette(), sync() {
     syncLayers(); syncOverlays(); syncCursor(); selections.sync();
     const mapsAvailable = !!(host.output() as PixelArtDocumentRaster2D)?.channels;
     btn('apply-relight').disabled = !mapsAvailable || host.outputDocument().layers.length >= pixelArtLayerLimit2D(host.document().width, host.document().height);
     choice('normal-convention').disabled=!mapsAvailable;
     for (const id of ['save-normal', 'save-height', 'save-occlusion', 'save-shadow', 'save-map-info']) btn(id).disabled = !mapsAvailable;
+    craft?.sync();adjustments?.sync();
   } };
 }

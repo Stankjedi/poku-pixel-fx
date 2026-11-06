@@ -3,11 +3,11 @@
   "baselineCommit": "ad18d8a34427416696910634a28d830251fbfaa4",
   "build": "passed",
   "nodeTests": {
-    "total": 1026,
-    "passed": 1026,
+    "total": 1075,
+    "passed": 1075,
     "failed": 0,
     "skipped": 0,
-    "durationMs": 59985.716791
+    "durationMs": 46844.856891
   },
   "preparedAssets": "verified against current source",
   "localBrowser": {
@@ -17,5 +17,6 @@
   },
   "visualEvidence": "../previews/pixel-art-production/evidence.json",
   "browserHarness": "tools/pixel-art-production-browser-harness.mjs",
-  "existingArtwork": "No source changes under src/fx or src/3d."
+  "existingArtwork": "No source changes under src/fx or src/3d.",
+  "integratedMainCommit": "f39a2fea51e54120c0d7fcfcf0575bd3d329d89f"
 }

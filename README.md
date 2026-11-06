@@ -16,6 +16,20 @@ RGB가 정확히 일치하는 색 교체와 두 색 맞교환, 원화 명도·�
 [제작 흐름](docs/PIXEL_ART_PRODUCTION.md) · [정확한 색 편집 API](docs/PIXEL_COLOR_EDIT.md) ·
 [스프라이트시트 가져오기](docs/PIXEL_ART_SHEET_IMPORT.md) · [PNG 정밀 입력](docs/PIXEL_PNG_IMPORT.md)
 
+## Pixel Art Lab · 높이 조각과 편집 가능한 곡선
+
+가져온 PNG의 색을 그대로 두고 높이를 올리거나 깎고, 맞추고, 정리할 수 있습니다.
+다시 움직일 수 있는 곡선 제어점, 길이에 따른 선 굵기 변화, 닫힌 형태 채움으로 큰 실루엣을 만들고
+기존 픽셀 붓으로 마무리하세요. 조명·팔레트·높이 레이어의 설정도 같은 레이어에서 다시 편집합니다.
+선택·보호·타일 경계·실행 취소·프레임별 독립 문서와 함께 동작하며 기존 효과의 원화와 기본 출력은 유지합니다.
+
+![실제 곡선과 높이 도구로 작성한 네이티브 픽셀 예제](docs/previews/pixel-art-craft/comparison-native.png)
+
+`npm ci && npm run build && npm run gallery` 후 `/gallery/pixel-art-lab.html`을 열고
+**깃 장식 열기** 또는 **천 주름 열기**로 편집 가능한 예제를 시작하세요.
+[사용법·저장 규약·검증 범위](docs/PIXEL_ART_CRAFT.md) · [높이 API](docs/PIXEL_HEIGHT_SCULPT.md) ·
+[곡선 API](docs/PIXEL_PATH_EDITOR.md)
+
 ## Pixel Art Lab · 정밀 편집과 프레임 애니메이션
 
 사각·타원·올가미 선택, 픽셀 단위 이동·복제·반전·90° 회전, 필압과 팔레트 명암 브러시를 사용할 수 있습니다.

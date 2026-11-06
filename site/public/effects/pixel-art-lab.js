@@ -3,6 +3,7 @@ import {
 } from "./chunks/chunk-OHTBDYQJ.js";
 import {
   PIXEL_MATERIAL_PALETTES_2D,
+  applyPixelHeightDeltas2D,
   combinePixelSelections2D,
   createOrganicSilhouette2D,
   createPixelColorReplacer2D,
@@ -20,14 +21,18 @@ import {
   rasterizePixelBrush2D,
   rasterizePixelContour2D,
   rasterizePixelLasso2D,
+  rasterizePixelPath2D,
   rasterizePixelShape2D,
+  refreshPixelHeightNormals2D,
   resizePixelSelection2D,
+  sculptPixelHeight2D,
   selectPixelRegion2D,
   shadePixelMask2D,
   sortPixelColorsByLightness2D,
   transformPixelSelection2D,
+  validatePixelArtPath2D,
   validatePixelSelectionTransformOptions2D
-} from "./chunks/chunk-Q4UVK4W6.js";
+} from "./chunks/chunk-WP6F6TUS.js";
 import {
   hex
 } from "./chunks/chunk-MBWWV6CB.js";
@@ -130,9 +135,9 @@ function mask(value, size, label) {
     throw new RangeError(`${label} must have one binary value per native cell`);
   return value.slice();
 }
-function validatePixelArtProject2D(input2) {
-  if (!input2 || typeof input2 !== "object") throw new TypeError("Expected a pixel art project");
-  const p = input2;
+function validatePixelArtProject2D(input3) {
+  if (!input3 || typeof input3 !== "object") throw new TypeError("Expected a pixel art project");
+  const p = input3;
   if (p.schema !== "poku-pixel-art/v1" || !name(p.name)) throw new RangeError("Invalid pixel art project identity");
   const n = rasterSize(p.width, p.height);
   if (!Array.isArray(p.pixels) || p.pixels.length !== n)
@@ -191,19 +196,19 @@ function cells(width, height) {
   pixelArtLayerLimit2D(width, height);
   return width * height;
 }
-function values(input2, n, label, valid) {
-  if (!Array.isArray(input2) || input2.length !== n || !Array.from(input2).every(valid)) throw new RangeError(`${label} must have ${n} valid native values`);
-  return input2.slice();
+function values(input3, n, label, valid) {
+  if (!Array.isArray(input3) || input3.length !== n || !Array.from(input3).every(valid)) throw new RangeError(`${label} must have ${n} valid native values`);
+  return input3.slice();
 }
-function binary(input2, n, label) {
-  return input2 === void 0 ? void 0 : values(input2, n, label, (v) => v === 0 || v === 1);
+function binary(input3, n, label) {
+  return input3 === void 0 ? void 0 : values(input3, n, label, (v) => v === 0 || v === 1);
 }
 var packed = (v) => Number.isInteger(v) && v >= 0 && v <= 4294967295;
 var float = (v) => Number.isFinite(v) && Number.isFinite(Math.fround(v));
-function origin(input2) {
-  if (input2 === void 0) return void 0;
-  if (!Array.isArray(input2) || input2.length !== 2 || !Array.from(input2).every((v) => Number.isFinite(v) && Math.abs(v) <= 1e9)) throw new RangeError("Origin needs two finite coordinates within \xB11e9");
-  return [...input2];
+function origin(input3) {
+  if (input3 === void 0) return void 0;
+  if (!Array.isArray(input3) || input3.length !== 2 || !Array.from(input3).every((v) => Number.isFinite(v) && Math.abs(v) <= 1e9)) throw new RangeError("Origin needs two finite coordinates within \xB11e9");
+  return [...input3];
 }
 function identity(layer) {
   if (!validName(layer.id) || !validName(layer.name) || layer.visible !== void 0 && typeof layer.visible !== "boolean" || layer.locked !== void 0 && typeof layer.locked !== "boolean") throw new RangeError("Every layer needs an ID, name and boolean visibility/lock");
@@ -215,14 +220,23 @@ function optionalMasks(layer, n) {
     ...layer.protectedMask !== void 0 ? { protectedMask: binary(layer.protectedMask, n, "Protection") } : {}
   };
 }
+function sparseIndices(input3, n, label) {
+  if (!Array.isArray(input3) || input3.length > n) throw new RangeError(`${label} indices must fit the raster`);
+  let previous = -1;
+  for (const i of input3) {
+    if (!Number.isInteger(i) || i <= previous || i >= n) throw new RangeError(`${label} indices must be unique, sorted and inside the raster`);
+    previous = i;
+  }
+  return input3.slice();
+}
 function upgradePixelArtProject2D(project2) {
   const p = validatePixelArtProject2D(project2);
   return { ...p, schema: "poku-pixel-art/v2", layers: p.layers.map((layer, i) => ({ ...layer, id: `material-${i + 1}`, kind: "material" })) };
 }
-function validatePixelArtDocument2D(input2) {
-  if (!input2 || typeof input2 !== "object") throw new TypeError("Expected a pixel art document");
-  if (input2.schema === "poku-pixel-art/v1") return upgradePixelArtProject2D(input2);
-  const p = input2;
+function validatePixelArtDocument2D(input3) {
+  if (!input3 || typeof input3 !== "object") throw new TypeError("Expected a pixel art document");
+  if (input3.schema === "poku-pixel-art/v1") return upgradePixelArtProject2D(input3);
+  const p = input3;
   if (p.schema !== "poku-pixel-art/v2" || !validName(p.name)) throw new RangeError("Invalid pixel art document identity");
   const n = cells(p.width, p.height), pixels = values(p.pixels, n, "Source pixels", packed), sourceMask = binary(p.mask, n, "Source mask");
   if (!Array.isArray(p.layers) || p.layers.length > pixelArtLayerLimit2D(p.width, p.height)) throw new RangeError("Pixel art layer budget exceeded");
@@ -233,16 +247,31 @@ function validatePixelArtDocument2D(input2) {
     if (ids.has(common.id)) throw new RangeError("Layer IDs must be unique");
     ids.add(common.id);
     if (layer.kind === "paint") {
-      if (!Array.isArray(layer.indices) || layer.indices.length > n) throw new RangeError("Paint indices must fit the raster");
-      let previous = -1;
-      for (const i of layer.indices) {
-        if (!Number.isInteger(i) || i <= previous || i >= n) throw new RangeError("Paint indices must be unique, sorted and inside the raster");
-        previous = i;
-      }
+      const indices = sparseIndices(layer.indices, n, "Paint");
       if (layer.opacity !== void 0 && (!Number.isFinite(layer.opacity) || layer.opacity < 0 || layer.opacity > 1)) throw new RangeError("Layer opacity must be within 0..1");
-      return { ...common, kind: "paint", indices: layer.indices.slice(), pixels: values(layer.pixels, layer.indices.length, "Paint pixels", packed), ...layer.opacity !== void 0 ? { opacity: layer.opacity } : {} };
+      return { ...common, kind: "paint", indices, pixels: values(layer.pixels, indices.length, "Paint pixels", packed), ...layer.opacity !== void 0 ? { opacity: layer.opacity } : {} };
+    }
+    if (layer.kind === "height") {
+      const indices = sparseIndices(layer.indices, n, "Height");
+      if (layer.strength !== void 0 && (!Number.isFinite(layer.strength) || layer.strength < 0 || layer.strength > 4)) throw new RangeError("Height layer strength must be within 0..4");
+      if (layer.wrap !== void 0 && typeof layer.wrap !== "boolean") throw new RangeError("Height wrap must be boolean");
+      return {
+        ...common,
+        kind: "height",
+        indices,
+        deltas: values(layer.deltas, indices.length, "Height offsets", float),
+        ...layer.strength !== void 0 ? { strength: layer.strength } : {},
+        ...layer.wrap !== void 0 ? { wrap: layer.wrap } : {},
+        ...layer.protectedMask !== void 0 ? { protectedMask: binary(layer.protectedMask, n, "Height protection") } : {}
+      };
     }
     const masks = optionalMasks(layer, n);
+    if (layer.kind === "path") {
+      const path = validatePixelArtPath2D(layer.nodes, layer.options);
+      if (!Number.isInteger(layer.color) || layer.color < -2147483648 || layer.color > 4294967295) throw new RangeError("Path color must be packed RGBA");
+      if (layer.alphaLock !== void 0 && typeof layer.alphaLock !== "boolean") throw new RangeError("Path alpha lock must be boolean");
+      return { ...common, kind: "path", ...path, color: layer.color >>> 0, ...masks, ...layer.alphaLock !== void 0 ? { alphaLock: layer.alphaLock } : {} };
+    }
     if (layer.kind === "transform") {
       const t = layer.transform;
       if (!t || typeof t !== "object" || !Array.isArray(layer.selection)) throw new RangeError("Transform layers need a selection and grid transform");
@@ -259,11 +288,13 @@ function validatePixelArtDocument2D(input2) {
       return { ...common, kind: "palette", palette: [...options.palette], dither: options.dither, strength: options.strength, ...masks, ...objectOrigin ? { origin: objectOrigin } : {} };
     }
     if (layer.kind !== "material" || !layer.material || typeof layer.material !== "object") throw new RangeError("Unknown pixel art layer kind");
+    if (layer.heightSource !== void 0 && layer.heightSource !== "authored") throw new RangeError("Unknown material height source");
     return {
       ...common,
       kind: "material",
       material: structuredClone(createPixelMaterial2D(layer.material).options),
       ...masks,
+      ...layer.heightSource ? { heightSource: layer.heightSource } : {},
       ...objectOrigin ? { origin: objectOrigin } : {},
       ...layer.height !== void 0 ? { height: values(layer.height, n, "Authored height", float) } : {}
     };
@@ -339,32 +370,83 @@ function paintRaster(out, layer) {
   }
   return { ...out, pixels, mask: mask2, ...channels ? { channels } : {} };
 }
-function renderPixelArtAuthoredHeight2D(document2) {
-  const p = validatePixelArtDocument2D(document2);
-  if (!p.authoredHeight) return void 0;
-  let out = sourceRaster(p);
-  const n = p.width * p.height;
-  out.channels = {
+function pathRaster(out, layer) {
+  const coverage = rasterizePixelPath2D(out.w, out.h, layer.nodes, layer.options);
+  const painted = paintPixelMask2D(out, coverage, layer.color, {
+    mode: "replace",
+    selection: layer.selection,
+    protectedMask: layer.protectedMask,
+    alphaLock: layer.alphaLock
+  });
+  const indices = [], pixels = [];
+  for (let i = 0; i < coverage.length; i++) {
+    if (painted.pixels[i] !== out.pixels[i] || painted.mask.data[i] !== out.mask.data[i]) {
+      indices.push(i);
+      pixels.push(painted.pixels[i]);
+    }
+  }
+  return indices.length ? paintRaster(out, { kind: "paint", id: layer.id, name: layer.name, indices, pixels }) : out;
+}
+function refreshPaintedSurface(before, after, wrap, protectedMask2) {
+  if (before === after || !after.channels) return after;
+  let changed2;
+  for (let i = 0; i < after.pixels.length; i++) {
+    const wasOccupied = !!before.mask.data[i] && !!(before.pixels[i] >>> 24);
+    const isOccupied = !!after.mask.data[i] && !!(after.pixels[i] >>> 24);
+    if (wasOccupied !== isOccupied) {
+      changed2 ??= new Uint8Array(after.pixels.length);
+      changed2[i] = 1;
+    }
+  }
+  return changed2 ? refreshPixelHeightNormals2D({ ...after, channels: after.channels }, changed2, { wrap, protectedMask: protectedMask2 }) : after;
+}
+function formRaster(p) {
+  const out = sourceRaster(p), n = p.width * p.height, normal = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) normal[i * 3 + 2] = 1;
+  return { ...out, channels: {
     w: p.width,
     h: p.height,
-    material: out.channels?.material ?? new Uint16Array(n),
-    height: Float32Array.from(p.authoredHeight),
-    normal: out.channels?.normal ?? new Float32Array(n * 3)
-  };
+    material: new Uint16Array(n),
+    height: p.authoredHeight ? Float32Array.from(p.authoredHeight) : new Float32Array(n),
+    normal
+  } };
+}
+function replayFormLayer(out, layer) {
+  if (layer.kind === "transform") return transformPixelSelection2D(out, layer.selection, { ...layer.transform, protectedMask: layer.protectedMask }).sprite;
+  if (layer.kind === "paint") return paintRaster(out, layer);
+  if (layer.kind === "path") return pathRaster(out, layer);
+  if (layer.kind === "height") return applyPixelHeightDeltas2D(out, layer.indices, layer.deltas, layer);
+  return out;
+}
+function renderPixelArtAuthoredHeight2D(document2) {
+  const p = validatePixelArtDocument2D(document2);
+  if (!p.authoredHeight && !p.layers.some((layer) => layer.kind === "height" && layer.visible !== false)) return void 0;
+  let out = formRaster(p);
   for (const layer of p.layers) {
     if (layer.visible === false) continue;
-    if (layer.kind === "transform") out = transformPixelSelection2D(out, layer.selection, { ...layer.transform, protectedMask: layer.protectedMask }).sprite;
-    else if (layer.kind === "paint") out = paintRaster(out, layer);
+    out = replayFormLayer(out, layer);
   }
   return out.channels.height;
 }
 function renderPixelArtDocument2D(document2) {
   const p = validatePixelArtDocument2D(document2);
   let out = sourceRaster(p);
+  let form = p.layers.some((layer) => layer.visible !== false && (layer.kind === "height" || layer.kind === "material" && layer.heightSource === "authored")) ? formRaster(p) : void 0;
+  let sculptedSurface = false, surfaceWrap = false;
   for (const layer of p.layers) {
     if (layer.visible === false) continue;
+    if (layer.kind === "height") {
+      out = applyPixelHeightDeltas2D(out, layer.indices, layer.deltas, { ...layer, height: form?.channels?.height });
+      if (form) form = replayFormLayer(form, layer);
+      sculptedSurface = true;
+      surfaceWrap = layer.wrap ?? false;
+      continue;
+    }
+    if (form) form = replayFormLayer(form, layer);
     if (layer.kind === "material") {
-      out = createPixelMaterial2D(layer.material).shade(out, layer);
+      const material = createPixelMaterial2D(layer.material);
+      out = material.shade(out, layer.heightSource === "authored" ? { ...layer, height: form?.channels?.height } : layer);
+      if (sculptedSurface) surfaceWrap = !!material.options.tileSize && material.options.tileSize[0] === p.width && material.options.tileSize[1] === p.height && !material.options.bevel;
       continue;
     }
     if (layer.kind === "palette") {
@@ -379,7 +461,15 @@ function renderPixelArtDocument2D(document2) {
       out = createPixelRelighter2D(layer.lighting).shade(out, layer);
       continue;
     }
+    if (layer.kind === "path") {
+      const before2 = out;
+      out = pathRaster(out, layer);
+      if (sculptedSurface) out = refreshPaintedSurface(before2, out, surfaceWrap, layer.protectedMask);
+      continue;
+    }
+    const before = out;
     out = paintRaster(out, layer);
+    if (sculptedSurface) out = refreshPaintedSurface(before, out, surfaceWrap);
   }
   return out;
 }
@@ -405,6 +495,108 @@ function writePixelArtPaintLayer2D(document2, source, touched, layerId) {
   if (!existing && document2.layers.length >= pixelArtLayerLimit2D(document2.width, document2.height)) throw new RangeError("Pixel art layer budget exceeded");
   const id = existing?.id ?? nextPixelArtLayerId2D(document2, "paint"), indices = [...changes.keys()].sort((a, b) => a - b);
   const layer = { ...existing ?? { id, name: `Paint ${document2.layers.length + 1}` }, kind: "paint", indices, pixels: indices.map((i) => changes.get(i)) };
+  const layers = document2.layers.slice();
+  if (index < 0) layers.push(layer);
+  else layers[index] = layer;
+  return { ...document2, layers, activeLayerId: id };
+}
+function writePixelArtHeightLayer2D(document2, deltas, touched, layerId, options = {}) {
+  const n = cells(document2.width, document2.height);
+  if (deltas.length !== n || touched.length !== n) throw new RangeError("Sculpt offsets and stroke mask must match the document");
+  if (options.wrap !== void 0 && typeof options.wrap !== "boolean") throw new RangeError("Height wrap must be boolean");
+  if (options.protectedMask && (options.protectedMask.length !== n || !Array.from(options.protectedMask).every((v) => v === 0 || v === 1))) throw new RangeError("Height protection must match the document");
+  const index = layerId === void 0 ? -1 : document2.layers.findIndex((layer2) => layer2.id === layerId);
+  if (layerId !== void 0 && index < 0) throw new RangeError("Height layer does not exist");
+  const existing = index < 0 ? void 0 : document2.layers[index];
+  if (existing && (existing.kind !== "height" || existing.locked || existing.visible === false)) throw new RangeError("Choose an unlocked visible height layer");
+  const current = existing, strength = current?.strength ?? 1;
+  if (current && index !== document2.layers.length - 1) throw new RangeError("Choose the top height layer or create a new height layer for this stroke");
+  if (!strength) throw new RangeError("Set the height layer strength above zero before sculpting");
+  const changes = /* @__PURE__ */ new Map();
+  current?.indices.forEach((i, j) => changes.set(i, current.deltas[j]));
+  const strokeIndices = [], strokeDeltas = [];
+  let changed2 = false, separate = false;
+  for (let i = 0; i < n; i++) {
+    if (!Number.isFinite(touched[i]) || !float(deltas[i])) throw new RangeError("Sculpt changes must contain finite native values");
+    const delta = Math.fround(deltas[i]);
+    if (!touched[i] || !delta || options.protectedMask?.[i] || current?.protectedMask?.[i]) continue;
+    strokeIndices.push(i);
+    strokeDeltas.push(delta);
+    const value = (changes.get(i) ?? 0) + delta / strength;
+    if (!float(value)) separate = true;
+    else if (value) changes.set(i, value);
+    else changes.delete(i);
+    changed2 = true;
+  }
+  if (!changed2) return document2;
+  const wrap = options.wrap ?? current?.wrap ?? false;
+  const protection = options.protectedMask && current?.protectedMask ? Uint8Array.from(options.protectedMask, (value, i) => Number(!!value || !!current.protectedMask[i])) : options.protectedMask ?? current?.protectedMask;
+  const appendStroke = () => writePixelArtHeightLayer2D(
+    document2,
+    deltas,
+    touched,
+    void 0,
+    { wrap, ...protection ? { protectedMask: protection } : {} }
+  );
+  if (separate) {
+    if (current) return appendStroke();
+    throw new RangeError("Accumulated height exceeds Float32 geometry range");
+  }
+  const indices = [...changes.keys()].sort((a, b) => a - b), accumulated = indices.map((i) => changes.get(i));
+  if (current) {
+    const { activeLayerId: _active, ...base } = document2;
+    const lowerDocument = { ...base, layers: document2.layers.slice(0, index) };
+    const lower = renderPixelArtDocument2D(lowerDocument), form = renderPixelArtAuthoredHeight2D(lowerDocument);
+    const before = applyPixelHeightDeltas2D(lower, current.indices, current.deltas, { ...current, height: form });
+    const expected = applyPixelHeightDeltas2D(before, strokeIndices, strokeDeltas, { wrap, protectedMask: protection });
+    let combined;
+    try {
+      combined = applyPixelHeightDeltas2D(lower, indices, accumulated, { ...current, wrap, height: form });
+    } catch (error) {
+      if (error instanceof RangeError) return appendStroke();
+      throw error;
+    }
+    let exact = true;
+    for (let i = 0; i < n; i++) {
+      if (combined.channels.height[i] !== expected.channels.height[i]) {
+        exact = false;
+        break;
+      }
+      const j = i * 3;
+      if (combined.channels.normal[j] !== expected.channels.normal[j] || combined.channels.normal[j + 1] !== expected.channels.normal[j + 1] || combined.channels.normal[j + 2] !== expected.channels.normal[j + 2]) {
+        exact = false;
+        break;
+      }
+    }
+    if (exact) {
+      const expectedForm = renderPixelArtAuthoredHeight2D(document2);
+      for (let j = 0; j < strokeIndices.length; j++) {
+        const i = strokeIndices[j];
+        if (before.mask.data[i] && before.pixels[i] >>> 24) {
+          expectedForm[i] = Math.fround(expectedForm[i] + strokeDeltas[j]);
+          if (!float(expectedForm[i])) throw new RangeError("Accumulated authored height exceeds Float32 geometry range");
+        }
+      }
+      for (let i = 0; i < n; i++) {
+        const combinedForm = lower.mask.data[i] && lower.pixels[i] >>> 24 && !current.protectedMask?.[i] ? Math.fround((form?.[i] ?? 0) + Math.fround(changes.get(i) ?? 0) * strength) : form?.[i] ?? 0;
+        if (combinedForm !== expectedForm[i]) {
+          exact = false;
+          break;
+        }
+      }
+    }
+    if (!exact) return appendStroke();
+  }
+  if (!current && document2.layers.length >= pixelArtLayerLimit2D(document2.width, document2.height)) throw new RangeError("Pixel art layer budget exceeded");
+  const id = current?.id ?? nextPixelArtLayerId2D(document2, "height");
+  const layer = {
+    ...current ?? { id, name: `Height ${document2.layers.length + 1}` },
+    kind: "height",
+    indices,
+    deltas: accumulated,
+    wrap,
+    ...!current && options.protectedMask ? { protectedMask: Array.from(options.protectedMask) } : {}
+  };
   const layers = document2.layers.slice();
   if (index < 0) layers.push(layer);
   else layers[index] = layer;
@@ -510,8 +702,8 @@ var translationOnly = (transform) => !transform.copy && !transform.flipX && !tra
 function translationBase(doc, selected, transform) {
   const layer = doc.layers.at(-1), boundary = transform.boundary ?? "reject";
   if (!translationOnly(transform) || boundary === "clip" || layer?.kind !== "transform" || doc.activeLayerId !== layer.id || layer.locked || layer.visible === false || layer.transform.copy || (layer.transform.boundary ?? "reject") !== boundary || !sameMask(layer.protectedMask, transform.protectedMask, selected.length)) return;
-  const { activeLayerId, ...input2 } = doc;
-  const source = renderPixelArtDocument2D({ ...input2, layers: doc.layers.slice(0, -1) });
+  const { activeLayerId, ...input3 } = doc;
+  const source = renderPixelArtDocument2D({ ...input3, layers: doc.layers.slice(0, -1) });
   const prior = transformPixelSelection2D(source, layer.selection, { ...layer.transform, protectedMask: layer.protectedMask });
   if (!sameMask(prior.selection, selected, selected.length)) return;
   return { layer, source };
@@ -776,19 +968,1177 @@ function installPixelArtSelection(host, finishPaint) {
   return { sync, finish, cancel };
 }
 
-// gallery/pixel-art-workbench.ts
+// src/examples/pixel-craft-study.ts
+var node = (point2, incoming, outgoing) => ({ point: point2, ...incoming ? { in: incoming } : {}, ...outgoing ? { out: outgoing } : {} });
+function createPixelCraftStudy2D(kind = "plume") {
+  if (kind !== "plume" && kind !== "folds") throw new RangeError("Unknown pixel craft study");
+  let doc = createBlankPixelArtDocument2D(160, 192, kind === "plume" ? "\uCCAD\uB85D \uAE43 \uC7A5\uC2DD \xB7 \uACE1\uC120\uACFC \uB192\uC774" : "\uC218\uB193\uC740 \uCC9C \xB7 \uC9C1\uC811 \uC870\uAC01\uD55C \uC8FC\uB984");
+  const path = (name2, color, nodes, fill, startWidth = 0, endWidth = startWidth) => {
+    const id = `path-${doc.layers.length + 1}`;
+    const layer = {
+      kind: "path",
+      id,
+      name: name2,
+      color: hex(color),
+      nodes,
+      options: { closed: fill, fill, strokeWidth: startWidth, startWidth, endWidth, pixelPerfect: false }
+    };
+    doc = { ...doc, layers: [...doc.layers, layer], activeLayerId: id };
+  };
+  if (kind === "plume") {
+    path("\uAE43\uC758 \uD718\uC5B4\uC9C4 \uC678\uACFD", "#153d4b", [
+      node([100, 12], [96, 8], [130, 39]),
+      node([132, 68], [133, 41], [139, 100]),
+      node([89, 145], [131, 123], [77, 154]),
+      node([66, 170], [76, 157], [64, 146]),
+      node([28, 97], [34, 134], [20, 65]),
+      node([70, 28], [35, 43], [84, 23])
+    ], true);
+    path("\uC548\uCABD \uCCAD\uB85D \uBA74", "#257b83", [
+      node([100, 20], [89, 24], [125, 48]),
+      node([125, 71], [126, 49], [131, 102]),
+      node([83, 140], [115, 125], [76, 148]),
+      node([70, 154], [75, 149], [66, 133]),
+      node([36, 96], [45, 129], [31, 68]),
+      node([72, 35], [45, 48], [84, 28])
+    ], true);
+    path("\uD55C\uCABD \uD070 \uC0C9 \uB369\uC5B4\uB9AC", "#43a294", [
+      node([100, 24], void 0, [93, 57]),
+      node([81, 105], [86, 84], [78, 125]),
+      node([70, 150], [74, 137], [65, 127]),
+      node([40, 94], [49, 121], [35, 67]),
+      node([74, 38], [49, 49], [86, 31])
+    ], true);
+    for (let i = 0; i < 8; i++) {
+      const y = 46 + i * 12, x = 99 - i * 3.2;
+      path(
+        `\uC67C\uCABD \uAE43 \uACB0 ${i + 1}`,
+        i % 3 === 0 ? "#98cbb0" : "#68b7a1",
+        [node([x, y], void 0, [x - 10, y - 10]), node([47 + i * 1.7, 57 + i * 10], [56 + i, 46 + i * 10])],
+        false,
+        2.4,
+        0.4
+      );
+      if (i < 6) path(
+        `\uC624\uB978\uCABD \uAE43 \uACB0 ${i + 1}`,
+        i % 2 ? "#2d696b" : "#1b515d",
+        [node([x + 2, y], void 0, [x + 18, y - 7]), node([126 - i * 2.4, 59 + i * 11], [132 - i * 2, 49 + i * 11])],
+        false,
+        2.2,
+        0.5
+      );
+    }
+    path("\uAE08\uBE5B \uC911\uC2EC \uC904\uAE30", "#c7a866", [node([64, 177], void 0, [81, 144]), node([100, 29], [82, 81])], false, 5, 0.6);
+    path("\uC904\uAE30\uC758 \uC791\uC740 \uBC18\uC0AC", "#f0d6a0", [node([66, 170], void 0, [79, 139]), node([98, 39], [85, 85])], false, 1.6, 0.3);
+    path("\uC544\uB798 \uAE08\uC18D \uACE0\uB9AC", "#9f744b", [node([54, 166]), node([72, 172]), node([69, 180]), node([51, 174])], true);
+    path("\uACE0\uB9AC\uC758 \uBC1D\uC740 \uBAA8\uC11C\uB9AC", "#e2be7c", [node([54, 166]), node([72, 172])], false, 2);
+  } else {
+    path("\uB465\uAE00\uAC8C \uD718\uC5B4\uC9C4 \uCC9C \uC724\uACFD", "#192b42", [
+      node([27, 20], [23, 25], [68, 8]),
+      node([135, 26], [102, 35], [126, 73]),
+      node([130, 162], [127, 123], [104, 177]),
+      node([32, 170], [70, 153], [38, 115])
+    ], true);
+    path("\uCCAD\uC0C9 \uBE44\uB2E8\uC758 \uBC14\uD0D5", "#426c91", [
+      node([33, 27], void 0, [72, 16]),
+      node([128, 32], [98, 41], [121, 78]),
+      node([124, 156], [121, 121], [100, 168]),
+      node([39, 162], [72, 148], [44, 113])
+    ], true);
+    path("\uC67C\uCABD \uB113\uC740 \uC0C9\uBA74", "#577e9a", [node([35, 28]), node([55, 25], void 0, [45, 87]), node([61, 157], [51, 133]), node([40, 163], void 0, [46, 109])], true);
+    path("\uC624\uB978\uCABD \uB113\uC740 \uC0C9\uBA74", "#325876", [node([102, 35], void 0, [94, 73]), node([105, 160], [100, 125]), node([123, 156], void 0, [123, 105]), node([127, 33])], true);
+    path("\uC704\uCABD \uC790\uC218 \uC120", "#c49e65", [node([32, 27], void 0, [73, 15]), node([129, 32], [98, 42])], false, 2);
+    path("\uC544\uB798\uCABD \uC790\uC218 \uC120", "#c49e65", [node([39, 160], void 0, [73, 146]), node([124, 154], [101, 166])], false, 2);
+    const n = doc.width * doc.height, accents = /* @__PURE__ */ new Map();
+    for (let j = 0; j < 8; j++) for (let i = 0; i < 6; i++) {
+      const x = 45 + i * 13 + (j % 2 ? 5 : 0), y = 47 + j * 13;
+      if (x > 119) continue;
+      const c = hex((i + j) % 3 ? "#668498" : "#a5a48f") >>> 0;
+      for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) accents.set((y + dy) * 160 + x + dx, c);
+    }
+    const visible = renderPixelArtDocument2D(doc);
+    const indices = [...accents.keys()].filter((i) => i < n && visible.mask.data[i]).sort((a, b) => a - b);
+    doc.layers.push({ kind: "paint", id: "embroidery", name: "\uC190\uC73C\uB85C \uC124\uACC4\uD55C \uC790\uC218 \uAD70\uC9D1", indices, pixels: indices.map((i) => accents.get(i)) });
+    path("\uD0C0\uC6D0\uD615 \uAE08\uC18D \uC7A5\uC2DD", "#b18b55", [
+      node([80, 54], [68, 54], [94, 54]),
+      node([96, 72], [96, 61], [96, 83]),
+      node([80, 91], [92, 91], [66, 91]),
+      node([63, 72], [63, 83], [63, 60])
+    ], true);
+    path("\uC548\uCABD \uC5D0\uB098\uBA5C", "#275d65", [
+      node([80, 59], [71, 59], [90, 59]),
+      node([91, 72], [91, 65], [91, 80]),
+      node([80, 86], [89, 86], [70, 86]),
+      node([68, 72], [68, 80], [68, 64])
+    ], true);
+    path("\uAE08\uBE5B \uC2DD\uBB3C \uBB38\uC591", "#d9be80", [node([78, 82], void 0, [85, 68]), node([78, 63], [75, 68])], false, 2, 0.6);
+    path("\uBB38\uC591\uC758 \uAC00\uC9C0", "#c8b882", [node([80, 74], void 0, [85, 77]), node([87, 69], [89, 73])], false, 1.2, 0.4);
+  }
+  let surface = renderPixelArtDocument2D(doc), sculptId;
+  const strokes = kind === "plume" ? [
+    { points: [{ x: 76, y: 139 }, { x: 84, y: 99 }, { x: 99, y: 40 }], size: 34, strength: 8 },
+    { points: [{ x: 47, y: 76 }, { x: 56, y: 105 }, { x: 70, y: 131 }], size: 28, strength: 3 },
+    { points: [{ x: 55, y: 171 }, { x: 69, y: 175 }], size: 8, strength: 4 }
+  ] : [
+    { points: [{ x: 47, y: 28 }, { x: 49, y: 78 }, { x: 57, y: 150 }], size: 31, strength: 9 },
+    { points: [{ x: 80, y: 32 }, { x: 73, y: 111 }, { x: 84, y: 157 }], size: 30, strength: 8 },
+    { points: [{ x: 113, y: 35 }, { x: 107, y: 88 }, { x: 116, y: 151 }], size: 26, strength: 7 },
+    { points: [{ x: 80, y: 72 }], size: 36, strength: 7 }
+  ];
+  for (const stroke of strokes) {
+    const result = sculptPixelHeight2D(surface, stroke.points, { mode: "raise", size: stroke.size, strength: stroke.strength, hardness: 0.12 });
+    doc = writePixelArtHeightLayer2D(doc, result.deltas, result.touched, sculptId);
+    sculptId = doc.activeLayerId;
+    surface = renderPixelArtDocument2D(doc);
+  }
+  if (sculptId) doc.layers = doc.layers.map((layer) => layer.id === sculptId ? { ...layer, name: "\uBD93\uC73C\uB85C \uC791\uC131\uD55C \uD070 \uBD80\uD53C" } : layer);
+  doc.layers.push({ kind: "relight", id: "craft-light", name: "\uB530\uB73B\uD55C \uC8FC \uAD11\uC6D0\uACFC \uCC28\uAC00\uC6B4 \uBCF4\uC870\uAD11", lighting: {
+    lights: [{ direction: [-0.75, -0.55, 1], color: "#ffe6bf", intensity: 0.82 }, { direction: [0.8, 0.25, 0.65], color: "#79c9da", intensity: 0.2 }],
+    ambient: 0.28,
+    ambientColor: "#c6d4e8",
+    diffuseBands: 12,
+    specular: kind === "plume" ? 0.16 : 0.08,
+    roughness: 0.52,
+    ambientOcclusion: 0.25,
+    strength: 1
+  } });
+  doc.activeLayerId = "craft-light";
+  return doc;
+}
+
+// gallery/pixel-art-craft.ts
+var craftDrawingTools = /* @__PURE__ */ new Set(["height-raise", "height-lower", "height-flatten", "height-smooth", "path"]);
 var el2 = (id) => document.getElementById(id);
-var field2 = (id) => el2(id);
+var input = (id) => el2(id);
 var choice = (id) => el2(id);
-var btn = (id) => el2(id);
+var button2 = (id) => el2(id);
+var number = (id, low, high, integer3 = false) => {
+  const value = Number(input(id).value);
+  if (!Number.isFinite(value) || value < low || value > high || integer3 && !Number.isInteger(value))
+    throw new RangeError(`${input(id).getAttribute("aria-label") ?? id}: ${low}~${high}${integer3 ? " \uBC94\uC704\uC758 \uC815\uC218" : " \uBC94\uC704\uC758 \uAC12"}\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694.`);
+  return value;
+};
+var sameMask2 = (a, b, count) => {
+  if (a && a.length !== count) return false;
+  for (let i = 0; i < count; i++) if (!!a?.[i] !== !!b[i]) return false;
+  return true;
+};
+var cssColor = (c) => "#" + [c & 255, c >>> 8 & 255, c >>> 16 & 255].map((v) => v.toString(16).padStart(2, "0")).join("");
+function installPixelArtCraft(host) {
+  const result = el2("result"), toolSelect = choice("paint-tool");
+  const svgNS = "http://www.w3.org/2000/svg", overlay = document.createElementNS(svgNS, "svg");
+  overlay.classList.add("craft-overlay");
+  overlay.setAttribute("aria-hidden", "true");
+  result.parentElement.append(overlay);
+  const attempt2 = (fn) => {
+    try {
+      fn();
+    } catch (error) {
+      host.status(error instanceof Error ? error.message : String(error), true);
+    }
+  };
+  let queued2, lastTool = toolSelect.value, synchronizing = false;
+  let hover;
+  let stroke;
+  let path;
+  let drag;
+  let heightEdit;
+  function setView(view2) {
+    choice("view").value = view2;
+    choice("view").dispatchEvent(new Event("change"));
+  }
+  function selectTool(tool) {
+    toolSelect.value = tool;
+    toolSelect.dispatchEvent(new Event("change"));
+    host.refresh();
+  }
+  function nativePoint(event, pressure = false) {
+    const rect = result.getBoundingClientRect();
+    return {
+      x: Math.floor((event.clientX - rect.left) * result.width / rect.width),
+      y: Math.floor((event.clientY - rect.top) * result.height / rect.height),
+      ...pressure && event.pointerType === "pen" && input("pen-pressure").checked ? { pressure: event.pressure } : {}
+    };
+  }
+  function pathPoint(event) {
+    const rect = result.getBoundingClientRect(), snap = (v) => Math.round(v * 2) / 2;
+    return [snap((event.clientX - rect.left) * result.width / rect.width), snap((event.clientY - rect.top) * result.height / rect.height)];
+  }
+  function release(pointer2) {
+    if (pointer2 !== void 0 && result.hasPointerCapture(pointer2)) result.releasePointerCapture(pointer2);
+  }
+  function cancelQueue() {
+    if (queued2 !== void 0) cancelAnimationFrame(queued2);
+    queued2 = void 0;
+  }
+  function schedulePreview() {
+    if (queued2 !== void 0) return;
+    queued2 = requestAnimationFrame(() => {
+      queued2 = void 0;
+      attempt2(() => {
+        if (stroke) previewSculpt();
+        else if (path) previewPath();
+      });
+    });
+  }
+  function canReuseHeightLayer(doc, wrap, protection) {
+    const active2 = doc.layers.find((layer) => layer.id === doc.activeLayerId);
+    if (active2?.kind === "height" && (active2.locked || active2.visible === false)) throw new Error("\uC120\uD0DD\uD55C \uB192\uC774 \uB808\uC774\uC5B4\uC758 \uD45C\uC2DC\uC640 \uC7A0\uAE08\uC744 \uD655\uC778\uD574 \uC8FC\uC138\uC694.");
+    const last = doc.layers.at(-1);
+    return last?.kind === "height" && doc.activeLayerId === last.id && !last.locked && last.visible !== false && (last.strength ?? 1) === 1 && !!last.wrap === wrap && sameMask2(last.protectedMask, protection, doc.width * doc.height) ? last.id : void 0;
+  }
+  function previewSculpt() {
+    if (!stroke) return;
+    stroke.result = sculptPixelHeight2D(stroke.source, stroke.points, stroke.options);
+    host.preview(stroke.result.sprite);
+    syncOverlay();
+  }
+  function finishSculpt() {
+    if (!stroke) return;
+    cancelQueue();
+    previewSculpt();
+    const completed = stroke;
+    stroke = void 0;
+    release(completed.pointer);
+    if (completed.owner !== host.document()) {
+      host.preview(void 0);
+      return;
+    }
+    try {
+      if (completed.result?.touched.some(Boolean)) {
+        const next = writePixelArtHeightLayer2D(
+          completed.document,
+          completed.result.deltas,
+          completed.result.touched,
+          completed.layerId,
+          { wrap: completed.options?.wrap, protectedMask: completed.options?.protectedMask }
+        );
+        host.commit(next);
+      } else {
+        host.preview(void 0);
+        host.status("\uB192\uC774\uB97C \uBC14\uAFC0 \uC140\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uBA3C\uC800 \uC0C9\uC744 \uADF8\uB9AC\uAC70\uB098 \uC120\uD0DD\xB7\uBCF4\uD638 \uC601\uC5ED\uACFC \uBD93 \uC138\uAE30\uB97C \uD655\uC778\uD558\uC138\uC694.");
+      }
+    } catch (error) {
+      host.preview(void 0);
+      throw error;
+    }
+    syncOverlay();
+  }
+  function cancelSculpt() {
+    cancelQueue();
+    const old = stroke;
+    stroke = void 0;
+    release(old?.pointer);
+    host.preview(void 0);
+    syncOverlay();
+  }
+  function startSculpt(event) {
+    finishPath();
+    finishHeightEdit();
+    const doc = host.outputDocument(), source = renderPixelArtDocument2D(doc);
+    const p = nativePoint(event, true);
+    if (p.x < 0 || p.y < 0 || p.x >= source.w || p.y >= source.h) return;
+    const height = source.channels ? void 0 : renderPixelArtAuthoredHeight2D(doc);
+    if (event.altKey) {
+      input("sculpt-target").value = String(source.channels?.height[p.y * source.w + p.x] ?? height?.[p.y * source.w + p.x] ?? 0);
+      showValues();
+      host.status("\uC774 \uC140\uC758 \uB192\uC774\uB97C \uBAA9\uD45C \uB192\uC774\uB85C \uAC00\uC838\uC654\uC2B5\uB2C8\uB2E4.");
+      return;
+    }
+    const protection = host.protection().slice(), wrap = input("sculpt-wrap").checked, layerId = canReuseHeightLayer(doc, wrap, protection);
+    if (!layerId && doc.layers.length >= pixelArtLayerLimit2D(doc.width, doc.height)) throw new RangeError("\uB192\uC774 \uB808\uC774\uC5B4\uB97C \uCD94\uAC00\uD560 \uACF5\uAC04\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uB9E8 \uC704\uC758 \uB192\uC774 \uB808\uC774\uC5B4\uB97C \uC120\uD0DD\uD558\uAC70\uB098 \uD604\uC7AC \uBAA8\uC2B5\uC744 \uAD6C\uC6CC \uC8FC\uC138\uC694.");
+    stroke = {
+      pointer: event.pointerId,
+      owner: host.document(),
+      document: doc,
+      source,
+      points: [p],
+      layerId,
+      options: {
+        mode: toolSelect.value.slice(7),
+        size: number("sculpt-size", 1, 256, true),
+        strength: number("sculpt-strength", 0, 64),
+        hardness: number("sculpt-hardness", 0, 1),
+        targetHeight: number("sculpt-target", -1e6, 1e6),
+        symmetry: choice("paint-symmetry").value,
+        wrap,
+        ...input("paint-in-selection").checked ? { selection: host.selection().slice() } : {},
+        protectedMask: protection,
+        ...height ? { height } : {}
+      }
+    };
+    result.setPointerCapture(event.pointerId);
+    previewSculpt();
+  }
+  function pathOptions() {
+    const closed = input("path-closed").checked;
+    return {
+      closed,
+      fill: input("path-fill").checked,
+      strokeWidth: number("path-width", 0, 256),
+      ...input("path-taper").checked && !closed ? { startWidth: number("path-start-width", 0, 256), endWidth: number("path-end-width", 0, 256) } : {},
+      pixelPerfect: input("pixel-perfect").checked,
+      symmetry: choice("paint-symmetry").value
+    };
+  }
+  function pathReady() {
+    if (!path?.nodes.length) return false;
+    return input("path-fill").checked || (input("path-taper").checked && !input("path-closed").checked ? Number(input("path-start-width").value) > 0 || Number(input("path-end-width").value) > 0 : Number(input("path-width").value) > 0);
+  }
+  function pathDocument() {
+    if (!path) throw new Error("\uBA3C\uC800 \uACBD\uB85C\uC758 \uC810\uC744 \uCD94\uAC00\uD574 \uC8FC\uC138\uC694.");
+    const existing = path.document.layers.find((layer2) => layer2.id === path.layerId), id = path.layerId ?? nextPixelArtLayerId2D(path.document, "path");
+    const layer = {
+      ...existing ?? { id, name: "\uC9C1\uC811 \uADF8\uB9B0 \uACE1\uC120" },
+      kind: "path",
+      nodes: structuredClone(path.nodes),
+      options: pathOptions(),
+      color: (hex(input("paint-color").value) & 16777215 | number("path-alpha", 0, 255, true) << 24) >>> 0,
+      selection: path.selection?.slice(),
+      protectedMask: path.protectedMask.slice(),
+      alphaLock: path.alphaLock
+    };
+    return { ...path.document, activeLayerId: id, layers: existing ? path.document.layers.map((old) => old.id === id ? layer : old) : [...path.document.layers, layer] };
+  }
+  function previewPath() {
+    if (!path) return;
+    if (pathReady()) {
+      const next = pathDocument(), raster = renderPixelArtDocument2D(next);
+      path.candidate = next;
+      host.preview(raster);
+    } else {
+      path.candidate = void 0;
+      host.preview(void 0);
+    }
+    syncPathControls();
+    syncOverlay();
+  }
+  function newPath() {
+    finishSculpt();
+    finishHeightEdit();
+    const doc = host.outputDocument();
+    if (doc.layers.length >= pixelArtLayerLimit2D(doc.width, doc.height)) throw new RangeError("\uACBD\uB85C \uB808\uC774\uC5B4\uB97C \uCD94\uAC00\uD560 \uACF5\uAC04\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uAE30\uC874 \uACBD\uB85C\uB97C \uC218\uC815\uD558\uAC70\uB098 \uD604\uC7AC \uBAA8\uC2B5\uC744 \uAD6C\uC6CC \uC8FC\uC138\uC694.");
+    path = {
+      owner: host.document(),
+      document: doc,
+      nodes: [],
+      selected: -1,
+      dirty: false,
+      ...input("paint-in-selection").checked ? { selection: Array.from(host.selection()) } : {},
+      protectedMask: Array.from(host.protection()),
+      alphaLock: input("alpha-lock").checked
+    };
+    el2("path-craft-panel").open = true;
+    syncPathControls();
+    syncOverlay();
+  }
+  function finishPath() {
+    if (!path) return;
+    cancelQueue();
+    const oldDrag = drag;
+    drag = void 0;
+    release(oldDrag?.pointer);
+    if (path.owner !== host.document()) {
+      path = void 0;
+      host.preview(void 0);
+      return;
+    }
+    if (!path.nodes.length || !path.dirty) {
+      path = void 0;
+      host.preview(void 0);
+      syncPathControls();
+      syncOverlay();
+      return;
+    }
+    if (!pathReady()) throw new Error("\uC120\uC744 \uADF8\uB9AC\uB824\uBA74 \uAD75\uAE30\uB97C 0\uBCF4\uB2E4 \uD06C\uAC8C \uC815\uD558\uAC70\uB098 \uB2EB\uD78C \uBAA8\uC591\uC758 \uCC44\uC6B0\uAE30\uB97C \uCF1C \uC8FC\uC138\uC694.");
+    const next = pathDocument();
+    renderPixelArtDocument2D(next);
+    const pending = path;
+    try {
+      host.commit(next);
+      path = void 0;
+    } catch (error) {
+      if (host.document() === pending.owner) {
+        path = pending;
+        host.preview(renderPixelArtDocument2D(next));
+      } else {
+        path = void 0;
+        host.preview(void 0);
+      }
+      syncPathControls();
+      syncOverlay();
+      throw error;
+    }
+    syncPathControls();
+    syncOverlay();
+  }
+  function cancelPath() {
+    cancelQueue();
+    const old = drag;
+    drag = void 0;
+    path = void 0;
+    release(old?.pointer);
+    host.preview(void 0);
+    syncPathControls();
+    syncOverlay();
+  }
+  function hitNode(event) {
+    if (!path) return;
+    const rect = result.getBoundingClientRect(), sx = rect.width / result.width, sy = rect.height / result.height;
+    const distance = (p) => Math.hypot(rect.left + p[0] * sx - event.clientX, rect.top + p[1] * sy - event.clientY);
+    const candidates = [];
+    const selected = path.nodes[path.selected];
+    if (selected) {
+      candidates.push({ index: path.selected, part: "point", distance: distance(selected.point) });
+      for (const part of ["in", "out"]) if (selected[part]) candidates.push({ index: path.selected, part, distance: distance(selected[part]) });
+    }
+    path.nodes.forEach((node2, index) => {
+      if (index !== path.selected) candidates.push({ index, part: "point", distance: distance(node2.point) });
+    });
+    const nearest = candidates.filter((candidate) => candidate.distance <= 8).sort((a, b) => a.distance - b.distance + (a.distance === b.distance ? Number(a.part !== "point") - Number(b.part !== "point") : 0))[0];
+    if (nearest) return { index: nearest.index, part: nearest.part };
+  }
+  function startPath(event) {
+    finishSculpt();
+    finishHeightEdit();
+    if (!path) newPath();
+    const p = pathPoint(event), hit = hitNode(event), before = structuredClone(path.nodes);
+    if (!hit && (p[0] < 0 || p[1] < 0 || p[0] > result.width || p[1] > result.height)) return;
+    if (!hit && path.nodes.length >= 1024) throw new RangeError("\uD55C \uACBD\uB85C\uC5D0\uB294 \uC810\uC744 1024\uAC1C\uAE4C\uC9C0 \uB458 \uC218 \uC788\uC2B5\uB2C8\uB2E4.");
+    if (!hit) {
+      path.nodes.push({ point: p });
+      path.selected = path.nodes.length - 1;
+      path.dirty = true;
+    } else path.selected = hit.index;
+    drag = { pointer: event.pointerId, index: path.selected, part: hit?.part ?? "create", start: p, nodes: before };
+    result.setPointerCapture(event.pointerId);
+    previewPath();
+  }
+  function movePath(event) {
+    if (!path || !drag || drag.pointer !== event.pointerId) return;
+    const p = pathPoint(event), node2 = path.nodes[drag.index];
+    if (drag.part === "create") {
+      if (Math.hypot(p[0] - node2.point[0], p[1] - node2.point[1]) < 0.5) return;
+      node2.out = p;
+      node2.in = [2 * node2.point[0] - p[0], 2 * node2.point[1] - p[1]];
+    } else if (drag.part === "point") {
+      const original = drag.nodes[drag.index], dx = p[0] - drag.start[0], dy = p[1] - drag.start[1];
+      node2.point = [original.point[0] + dx, original.point[1] + dy];
+      if (original.in) node2.in = [original.in[0] + dx, original.in[1] + dy];
+      if (original.out) node2.out = [original.out[0] + dx, original.out[1] + dy];
+    } else {
+      node2[drag.part] = p;
+      if (input("path-linked-handles").checked && !event.altKey) node2[drag.part === "in" ? "out" : "in"] = [2 * node2.point[0] - p[0], 2 * node2.point[1] - p[1]];
+    }
+    path.dirty = true;
+    schedulePreview();
+    syncOverlay();
+  }
+  function finishPathDrag() {
+    if (!drag) return;
+    cancelQueue();
+    const previous = drag;
+    drag = void 0;
+    release(previous.pointer);
+    previewPath();
+  }
+  function cancelPathDrag() {
+    if (!drag || !path) return;
+    cancelQueue();
+    const previous = drag;
+    drag = void 0;
+    path.nodes = previous.nodes;
+    path.selected = Math.min(path.selected, path.nodes.length - 1);
+    release(previous.pointer);
+    previewPath();
+  }
+  function moveSelected(dx, dy) {
+    if (!path || path.selected < 0) return;
+    const node2 = path.nodes[path.selected];
+    for (const part of ["point", "in", "out"]) if (node2[part]) node2[part] = [node2[part][0] + dx, node2[part][1] + dy];
+    path.dirty = true;
+    previewPath();
+  }
+  function selectedKind(smooth) {
+    if (!path || path.selected < 0) return;
+    const i = path.selected, node2 = path.nodes[i];
+    if (!smooth) {
+      delete node2.in;
+      delete node2.out;
+    } else {
+      const previous = path.nodes[i - 1]?.point ?? node2.point, next = path.nodes[i + 1]?.point ?? node2.point;
+      let dx = (next[0] - previous[0]) / 6, dy = (next[1] - previous[1]) / 6;
+      if (Math.hypot(dx, dy) < 1) {
+        dx = Math.max(2, result.width / 12);
+        dy = 0;
+      }
+      node2.in = [node2.point[0] - dx, node2.point[1] - dy];
+      node2.out = [node2.point[0] + dx, node2.point[1] + dy];
+    }
+    path.dirty = true;
+    previewPath();
+  }
+  function removeSelected() {
+    if (!path || path.selected < 0) return;
+    path.nodes.splice(path.selected, 1);
+    path.selected = Math.min(path.selected, path.nodes.length - 1);
+    path.dirty = true;
+    previewPath();
+  }
+  function heightDocument() {
+    if (!heightEdit) throw new Error("\uBA3C\uC800 \uB192\uC774 \uB808\uC774\uC5B4\uB97C \uC120\uD0DD\uD558\uC138\uC694.");
+    const strength = number("height-layer-strength", 0, 4);
+    return {
+      ...heightEdit.document,
+      activeLayerId: heightEdit.layer.id,
+      layers: heightEdit.document.layers.map((layer) => layer.id === heightEdit.layer.id ? { ...heightEdit.layer, strength } : layer)
+    };
+  }
+  function finishHeightEdit() {
+    if (!heightEdit) return;
+    if (heightEdit.owner !== host.document() || !heightEdit.dirty) {
+      heightEdit = void 0;
+      host.preview(void 0);
+      showValues();
+      return;
+    }
+    const next = heightDocument();
+    renderPixelArtDocument2D(next);
+    const pending = heightEdit;
+    try {
+      host.commit(next);
+      heightEdit = void 0;
+    } catch (error) {
+      if (host.document() === pending.owner) {
+        heightEdit = pending;
+        host.preview(renderPixelArtDocument2D(next));
+      } else {
+        heightEdit = void 0;
+        host.preview(void 0);
+      }
+      showValues();
+      throw error;
+    }
+    showValues();
+  }
+  function cancelHeightEdit() {
+    heightEdit = void 0;
+    host.preview(void 0);
+    showValues();
+  }
+  function editLayer(id) {
+    finish();
+    host.discardPreview();
+    const doc = host.outputDocument(), layer = doc.layers.find((layer2) => layer2.id === id);
+    if (!layer || layer.kind !== "path" && layer.kind !== "height") throw new Error("\uC120\uD0DD\uD55C \uACE1\uC120 \uB610\uB294 \uB192\uC774 \uB808\uC774\uC5B4\uB97C \uCC3E\uC744 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4.");
+    if (layer.locked || layer.visible === false) throw new Error("\uB808\uC774\uC5B4\uC758 \uD45C\uC2DC\uC640 \uC7A0\uAE08\uC744 \uD655\uC778\uD55C \uB4A4 \uC218\uC815\uD558\uC138\uC694.");
+    if (layer.kind === "path") {
+      selectTool("path");
+      input("paint-color").value = cssColor(layer.color);
+      input("path-alpha").value = String(layer.color >>> 24);
+      input("path-closed").checked = layer.options.closed ?? false;
+      input("path-fill").checked = layer.options.fill ?? false;
+      input("path-width").value = String(layer.options.closed ? layer.options.startWidth ?? layer.options.strokeWidth ?? 1 : layer.options.strokeWidth ?? 1);
+      input("path-start-width").value = String(layer.options.startWidth ?? layer.options.strokeWidth ?? 1);
+      input("path-end-width").value = String(layer.options.endWidth ?? layer.options.strokeWidth ?? 1);
+      input("path-taper").checked = !layer.options.closed && ((layer.options.startWidth ?? layer.options.strokeWidth ?? 1) !== (layer.options.strokeWidth ?? 1) || (layer.options.endWidth ?? layer.options.strokeWidth ?? 1) !== (layer.options.strokeWidth ?? 1));
+      input("pixel-perfect").checked = layer.options.pixelPerfect ?? false;
+      choice("paint-symmetry").value = layer.options.symmetry ?? "none";
+      input("alpha-lock").checked = layer.alphaLock ?? false;
+      input("paint-in-selection").checked = !!layer.selection;
+      path = {
+        owner: host.document(),
+        document: doc,
+        layerId: layer.id,
+        nodes: structuredClone(layer.nodes),
+        selected: layer.nodes.length ? 0 : -1,
+        ...layer.selection ? { selection: layer.selection.slice() } : {},
+        protectedMask: layer.protectedMask?.slice() ?? Array.from(host.protection()),
+        alphaLock: layer.alphaLock ?? false,
+        dirty: false
+      };
+      if (layer.selection) host.setSelection(Uint8Array.from(layer.selection));
+      el2("path-craft-panel").open = true;
+      previewPath();
+    } else {
+      selectTool("height-raise");
+      heightEdit = { owner: host.document(), document: doc, layer, dirty: false };
+      input("height-layer-strength").value = String(layer.strength ?? 1);
+      el2("height-layer-name").textContent = layer.name;
+      el2("height-craft-panel").open = true;
+      showValues();
+    }
+  }
+  function showValues() {
+    el2("sculpt-hardness-value").textContent = `${Math.round(Number(input("sculpt-hardness").value) * 100)}%`;
+    el2("height-layer-strength-value").textContent = `${Number(input("height-layer-strength").value).toFixed(2)}\xD7`;
+    el2("height-layer-editor").hidden = !heightEdit;
+    const mode = toolSelect.value.slice(7), blended = mode === "flatten" || mode === "smooth";
+    el2("sculpt-strength-note").textContent = blended ? "\uB9DE\uCD94\uAE30\xB7\uC815\uB9AC\uB294 0~1 \uD63C\uD569 \uAC15\uB3C4\uC785\uB2C8\uB2E4. 1\uBCF4\uB2E4 \uD070 \uAC12\uC740 \uC644\uC804 \uC801\uC6A9\uC73C\uB85C \uCC98\uB9AC\uD569\uB2C8\uB2E4." : "\uC62C\uB9AC\uAE30\xB7\uB0B4\uB9AC\uAE30\uC758 \uC138\uAE30\uB294 \uB124\uC774\uD2F0\uBE0C \uD53D\uC140 \uB192\uC774\uC785\uB2C8\uB2E4. \uD55C \uD68D \uC548\uC5D0\uC11C \uACB9\uCCD0\uB3C4 \uC911\uBCF5 \uAC00\uC0B0\uD558\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4.";
+    for (const item of document.querySelectorAll("[data-craft-tool]")) item.setAttribute("aria-pressed", String(item.dataset.craftTool === toolSelect.value));
+  }
+  let nodeOptionsKey = "";
+  function syncPathControls() {
+    const nodes = path?.nodes ?? [], selected = path?.selected ?? -1, closed = input("path-closed").checked;
+    input("path-taper").disabled = closed;
+    input("path-start-width").disabled = closed || !input("path-taper").checked;
+    input("path-end-width").disabled = closed || !input("path-taper").checked;
+    const key = `${nodes.length}:${selected}`;
+    if (key !== nodeOptionsKey) {
+      nodeOptionsKey = key;
+      const select5 = choice("path-node");
+      select5.replaceChildren(...nodes.map((_, i) => {
+        const option = document.createElement("option");
+        option.value = String(i);
+        option.textContent = `\uC810 ${i + 1}`;
+        return option;
+      }));
+      select5.value = String(selected);
+      select5.disabled = !nodes.length;
+    }
+    for (const id of ["path-corner", "path-smooth", "path-delete", "path-x", "path-y"]) el2(id).disabled = selected < 0;
+    const point2 = nodes[selected]?.point;
+    if (point2) {
+      for (const [id, value] of [["path-x", point2[0]], ["path-y", point2[1]]]) if (document.activeElement !== input(id)) input(id).value = String(Math.round(value * 1e3) / 1e3);
+    }
+    button2("path-apply").disabled = !pathReady();
+    button2("path-cancel").disabled = !path;
+    button2("path-apply").textContent = path?.layerId ? "\uACBD\uB85C \uC218\uC815 \uC801\uC6A9" : "\uACBD\uB85C \uB808\uC774\uC5B4 \uC801\uC6A9";
+    el2("path-info").textContent = !path ? "\uC624\uB978\uCABD \uADF8\uB9BC\uC744 \uD074\uB9AD\uD574 \uC810\uC744 \uCD94\uAC00\uD558\uC138\uC694. \uB204\uB978 \uCC44 \uB4DC\uB798\uADF8\uD558\uBA74 \uACE1\uC120 \uD578\uB4E4\uC774 \uC0DD\uAE41\uB2C8\uB2E4." : `${path.layerId ? "\uAE30\uC874 \uACBD\uB85C \uC218\uC815" : "\uC0C8 \uACBD\uB85C"} \xB7 ${nodes.length}\uAC1C \uC810${selected >= 0 ? ` \xB7 \uC120\uD0DD ${selected + 1}` : ""} \xB7 Enter \uC801\uC6A9 / Escape \uCDE8\uC18C \xB7 \uBC29\uD5A5\uD0A4\uB85C \uC810 \uC774\uB3D9`;
+  }
+  function svg(tag, attributes) {
+    const node2 = document.createElementNS(svgNS, tag);
+    for (const [name2, value] of Object.entries(attributes)) node2.setAttribute(name2, String(value));
+    return node2;
+  }
+  function syncOverlay() {
+    const rect = result.getBoundingClientRect(), scale = rect.width / result.width || 1;
+    overlay.setAttribute("viewBox", `0 0 ${result.width} ${result.height}`);
+    overlay.style.width = result.style.width;
+    overlay.style.height = result.style.height;
+    const elements = [], line = { "vector-effect": "non-scaling-stroke", "stroke-width": 1.2 };
+    if (path && toolSelect.value === "path") {
+      let d = "";
+      path.nodes.forEach((node2, i) => {
+        if (!i) {
+          d = `M ${node2.point.join(" ")}`;
+          return;
+        }
+        const previous = path.nodes[i - 1];
+        d += previous.out || node2.in ? ` C ${(previous.out ?? previous.point).join(" ")} ${(node2.in ?? node2.point).join(" ")} ${node2.point.join(" ")}` : ` L ${node2.point.join(" ")}`;
+      });
+      if (path.nodes.length && input("path-closed").checked) {
+        const first = path.nodes[0], last = path.nodes.at(-1);
+        d += ` C ${(last.out ?? last.point).join(" ")} ${(first.in ?? first.point).join(" ")} ${first.point.join(" ")}`;
+      }
+      if (d) elements.push(svg("path", { d, fill: "none", stroke: "#dcf5cb", "stroke-dasharray": "4 4", ...line }));
+      const selected = path.nodes[path.selected];
+      if (selected) for (const part of ["in", "out"]) {
+        const p = selected[part];
+        if (!p) continue;
+        elements.push(svg("line", { x1: selected.point[0], y1: selected.point[1], x2: p[0], y2: p[1], stroke: "#90cfff", ...line }));
+        elements.push(svg("circle", { cx: p[0], cy: p[1], r: 4 / scale, fill: "#18394e", stroke: "#bce3ff", ...line }));
+      }
+      path.nodes.forEach((node2, i) => {
+        const half = (i === path.selected ? 4 : 3) / scale;
+        elements.push(svg("rect", {
+          x: node2.point[0] - half,
+          y: node2.point[1] - half,
+          width: half * 2,
+          height: half * 2,
+          fill: i === path.selected ? "#d3f2b9" : "#172a23",
+          stroke: "#d3f2b9",
+          ...line
+        }));
+      });
+    } else if (toolSelect.value.startsWith("height-") && hover) {
+      const fullSize = Number(input("sculpt-size").value), size = Math.max(1, fullSize * (hover.pressure ?? 1)), wrap = input("sculpt-wrap").checked;
+      const anchor = fullSize % 2 ? 0.5 : 1;
+      for (const oy of wrap ? [-result.height, 0, result.height] : [0]) for (const ox of wrap ? [-result.width, 0, result.width] : [0]) {
+        elements.push(svg("circle", { cx: hover.x + anchor + ox, cy: hover.y + anchor + oy, r: size / 2, fill: "none", stroke: "#d9f2c4", ...line }));
+      }
+    }
+    overlay.replaceChildren(...elements);
+    overlay.style.display = elements.length ? "" : "none";
+  }
+  function finish() {
+    finishSculpt();
+    finishPathDrag();
+    finishPath();
+    finishHeightEdit();
+  }
+  function cancel() {
+    cancelQueue();
+    const oldStroke = stroke, oldDrag = drag;
+    stroke = void 0;
+    drag = void 0;
+    path = void 0;
+    heightEdit = void 0;
+    release(oldStroke?.pointer);
+    release(oldDrag?.pointer);
+    host.preview(void 0);
+    showValues();
+    syncPathControls();
+    syncOverlay();
+  }
+  function sync() {
+    if (synchronizing) return;
+    synchronizing = true;
+    try {
+      if (stroke && stroke.owner !== host.document() || path && path.owner !== host.document() || heightEdit && heightEdit.owner !== host.document()) cancel();
+      const tool = toolSelect.value;
+      if (lastTool !== tool) {
+        if (path && tool !== "path") attempt2(finishPath);
+        if (stroke) attempt2(finishSculpt);
+        lastTool = tool;
+      }
+      showValues();
+      syncPathControls();
+      syncOverlay();
+      if (tool === "path") el2("paint-hint").textContent = "\uD074\uB9AD: \uC810 \uCD94\uAC00 \xB7 \uB4DC\uB798\uADF8: \uACE1\uC120 \uD578\uB4E4 \xB7 \uC810/\uD578\uB4E4 \uC774\uB3D9 \xB7 Enter: \uC801\uC6A9 \xB7 Escape: \uCDE8\uC18C";
+      else if (tool.startsWith("height-")) el2("paint-hint").textContent = "\uC0C9\uACFC \uD22C\uBA85\uB3C4\uB97C \uBCF4\uC874\uD558\uACE0 \uD45C\uBA74 \uB192\uC774\uB97C \uC9C1\uC811 \uB9CC\uB4ED\uB2C8\uB2E4. Alt + \uD074\uB9AD: \uBAA9\uD45C \uB192\uC774 \uCD94\uCD9C. \uBCF4\uD638\xB7\uC120\uD0DD\xB7\uB300\uCE6D\uC744 \uC801\uC6A9\uD569\uB2C8\uB2E4.";
+    } finally {
+      synchronizing = false;
+    }
+  }
+  result.addEventListener("pointerdown", (event) => attempt2(() => {
+    if (event.button !== 0 || !craftDrawingTools.has(toolSelect.value)) return;
+    event.preventDefault();
+    if (toolSelect.value === "path") startPath(event);
+    else startSculpt(event);
+  }));
+  result.addEventListener("pointermove", (event) => attempt2(() => {
+    hover = nativePoint(event, true);
+    if (stroke && stroke.pointer === event.pointerId) {
+      const samples = event.getCoalescedEvents?.();
+      for (const sample of samples?.length ? samples : [event]) {
+        const p = nativePoint(sample, true), last = stroke.points.at(-1);
+        if (last.x !== p.x || last.y !== p.y || last.pressure !== p.pressure) stroke.points.push(p);
+      }
+      schedulePreview();
+    } else if (drag) movePath(event);
+    syncOverlay();
+  }));
+  result.addEventListener("pointerup", (event) => attempt2(() => {
+    if (stroke?.pointer === event.pointerId) {
+      const p = nativePoint(event, true), last = stroke.points.at(-1);
+      if (event.pointerType === "pen") p.pressure = last.pressure;
+      if (last.x !== p.x || last.y !== p.y) stroke.points.push(p);
+      finishSculpt();
+    } else if (drag?.pointer === event.pointerId) {
+      movePath(event);
+      finishPathDrag();
+    }
+  }));
+  result.addEventListener("pointercancel", () => {
+    if (stroke) cancelSculpt();
+    if (drag) cancelPathDrag();
+  });
+  result.addEventListener("lostpointercapture", () => {
+    if (stroke) cancelSculpt();
+    if (drag) cancelPathDrag();
+  });
+  result.addEventListener("pointerleave", () => {
+    if (!stroke && !drag) {
+      hover = void 0;
+      syncOverlay();
+    }
+  });
+  toolSelect.addEventListener("change", () => attempt2(() => {
+    const tool = toolSelect.value;
+    if (path && tool !== "path") finishPath();
+    if (stroke) finishSculpt();
+    if (heightEdit && !tool.startsWith("height-")) finishHeightEdit();
+    if (tool.startsWith("height-")) {
+      el2("height-craft-panel").open = true;
+      if (!lastTool.startsWith("height-") && choice("view").value === "color") setView("height");
+    } else if (tool === "path") {
+      el2("path-craft-panel").open = true;
+      if (choice("view").value !== "color") setView("color");
+    }
+    lastTool = tool;
+    sync();
+  }));
+  for (const item of document.querySelectorAll("[data-craft-tool]")) item.onclick = () => attempt2(() => selectTool(item.dataset.craftTool));
+  for (const item of document.querySelectorAll("[data-craft-view]")) item.onclick = () => setView(item.dataset.craftView);
+  for (const kind of ["plume", "folds"]) button2(`craft-study-${kind}`).onclick = () => attempt2(() => {
+    cancel();
+    host.discardPreview();
+    host.newCanvas(createPixelCraftStudy2D(kind));
+    input("paint-in-selection").checked = false;
+    input("alpha-lock").checked = false;
+    selectTool("inspect");
+    setView("color");
+    choice("zoom").value = "auto";
+    choice("zoom").dispatchEvent(new Event("change"));
+    el2("craft-study-note").textContent = kind === "plume" ? "\uAE43 \uC7A5\uC2DD\uC758 \uACE1\uC120 \uB808\uC774\uC5B4\uB97C \uACE0\uB974\uACE0 \uC124\uC815\uC744 \uC5F4\uC5B4 \uC810\xB7\uD578\uB4E4\uC744 \uC218\uC815\uD574 \uBCF4\uC138\uC694." : "\uCC9C\uC758 \uB192\uC774 \uB808\uC774\uC5B4\uB97C \uACE0\uB974\uACE0 \uBC30\uC728\uC744 \uC870\uC808\uD558\uAC70\uB098, \uB192\uC774 \uBD93\uC73C\uB85C \uC8FC\uB984\uC744 \uB354\uD574 \uBCF4\uC138\uC694.";
+  });
+  for (const id of ["sculpt-size", "sculpt-strength", "sculpt-hardness", "sculpt-target", "sculpt-wrap"]) input(id).addEventListener("input", () => {
+    showValues();
+    syncOverlay();
+  });
+  button2("path-new").onclick = () => attempt2(() => {
+    finish();
+    selectTool("path");
+    newPath();
+  });
+  button2("path-apply").onclick = () => attempt2(finishPath);
+  button2("path-cancel").onclick = cancelPath;
+  button2("path-corner").onclick = () => attempt2(() => selectedKind(false));
+  button2("path-smooth").onclick = () => attempt2(() => selectedKind(true));
+  button2("path-delete").onclick = () => attempt2(removeSelected);
+  choice("path-node").onchange = () => {
+    if (path) {
+      path.selected = Number(choice("path-node").value);
+      syncPathControls();
+      syncOverlay();
+    }
+  };
+  for (const [id, axis] of [["path-x", 0], ["path-y", 1]]) input(id).onchange = () => attempt2(() => {
+    if (!path || path.selected < 0) return;
+    const delta = number(id, -1048576, 1048576) - path.nodes[path.selected].point[axis];
+    moveSelected(axis === 0 ? delta : 0, axis === 1 ? delta : 0);
+  });
+  for (const id of ["path-closed", "path-fill", "path-width", "path-taper", "path-start-width", "path-end-width", "path-alpha"]) input(id).addEventListener("input", () => attempt2(() => {
+    if (id === "path-fill" && input(id).checked) input("path-closed").checked = true;
+    if (id === "path-closed" && !input(id).checked) input("path-fill").checked = false;
+    if (path) {
+      path.dirty = true;
+      previewPath();
+    } else syncPathControls();
+  }));
+  for (const id of ["paint-color", "paint-symmetry", "pixel-perfect", "paint-in-selection", "alpha-lock"]) el2(id).addEventListener("input", () => attempt2(() => {
+    if (path) {
+      if (id === "paint-in-selection") path.selection = input(id).checked ? Array.from(host.selection()) : void 0;
+      if (id === "alpha-lock") path.alphaLock = input(id).checked;
+      path.dirty = true;
+      previewPath();
+    }
+  }));
+  input("height-layer-strength").oninput = () => attempt2(() => {
+    showValues();
+    if (!heightEdit) return;
+    heightEdit.dirty = true;
+    host.preview(renderPixelArtDocument2D(heightDocument()));
+  });
+  button2("height-layer-apply").onclick = () => attempt2(finishHeightEdit);
+  button2("height-layer-cancel").onclick = cancelHeightEdit;
+  window.addEventListener("keydown", (event) => {
+    if (event.target.closest('input,select,textarea,[contenteditable="true"]')) return;
+    if (event.key === "Escape" && (stroke || path || heightEdit)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      cancel();
+      return;
+    }
+    if (event.key === "Enter" && (path || heightEdit)) {
+      event.preventDefault();
+      attempt2(finish);
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (toolSelect.value === "path" && path) {
+      if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        attempt2(removeSelected);
+        return;
+      }
+      const step = event.shiftKey ? 10 : 1, delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+      if (delta[event.key]) {
+        event.preventDefault();
+        attempt2(() => moveSelected(...delta[event.key]));
+        return;
+      }
+    }
+    if (event.key.toLowerCase() === "p" || event.key.toLowerCase() === "h") {
+      event.preventDefault();
+      attempt2(() => selectTool(event.key.toLowerCase() === "p" ? "path" : "height-raise"));
+    }
+  }, { capture: true });
+  showValues();
+  syncPathControls();
+  return { sync, finish, editLayer, cancel };
+}
+
+// gallery/pixel-art-adjustments.ts
+var el3 = (id) => document.getElementById(id);
+var field2 = (id) => el3(id);
+var choice2 = (id) => el3(id);
+var button3 = (id) => el3(id);
+var cssColor2 = (c) => typeof c === "string" ? c : "#" + [c & 255, c >>> 8 & 255, c >>> 16 & 255].map((v) => v.toString(16).padStart(2, "0")).join("");
+function installPixelArtAdjustments(host, palette2, setPalette, finishStroke) {
+  let editing;
+  let queued2 = 0, loading = false;
+  const attempt2 = (fn) => {
+    try {
+      fn();
+    } catch (error) {
+      host.status(error instanceof Error ? error.message : String(error), true);
+    }
+  };
+  const note = document.createElement("p");
+  note.className = "hint";
+  note.id = "adjustment-edit-state";
+  note.hidden = true;
+  el3("layer-list").before(note);
+  const cancelButtons = ["palette", "relight"].map((kind) => {
+    const cancel = document.createElement("button");
+    cancel.id = `cancel-${kind}-edit`;
+    cancel.textContent = "\uC218\uC815 \uCDE8\uC18C";
+    cancel.hidden = true;
+    button3(`apply-${kind}`).after(cancel);
+    cancel.onclick = () => cancelEdit();
+    return cancel;
+  });
+  const strengthLabel = document.createElement("label");
+  strengthLabel.textContent = "\uC801\uC6A9 \uAC15\uB3C4 ";
+  const strength = document.createElement("input");
+  strength.id = "palette-strength";
+  strength.type = "number";
+  strength.min = "0";
+  strength.max = "1";
+  strength.step = "0.05";
+  strength.value = "1";
+  strengthLabel.append(strength);
+  button3("apply-palette").before(strengthLabel);
+  function cancelEdit(clearPreview = true) {
+    if (queued2) cancelAnimationFrame(queued2);
+    queued2 = 0;
+    const hadPreview = !!editing?.candidate;
+    editing = void 0;
+    syncLabels();
+    if (clearPreview && hadPreview) host.preview(void 0);
+  }
+  function setNumber(id, value) {
+    const control = field2(id);
+    control.step = "any";
+    if (control.min !== "") control.min = String(Math.min(Number(control.min), value));
+    if (control.max !== "") control.max = String(Math.max(Number(control.max), value));
+    control.value = String(value);
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  function readNewLight() {
+    const a = Number(field2("relight-angle").value) * Math.PI / 180, e = Number(field2("relight-elevation").value) * Math.PI / 180;
+    return {
+      lights: [
+        {
+          direction: [Math.cos(a) * Math.cos(e), Math.sin(a) * Math.cos(e), Math.sin(e)],
+          color: field2("relight-key-color").value,
+          intensity: Number(field2("relight-intensity").value),
+          castShadow: Number(field2("relight-shadow").value)
+        },
+        { direction: [-Math.cos(a), -Math.sin(a), 0.7], color: field2("relight-fill-color").value, intensity: Number(field2("relight-fill").value) }
+      ],
+      ambient: Number(field2("relight-ambient").value),
+      diffuseBands: Number(field2("relight-bands").value),
+      roughness: Number(field2("relight-roughness").value),
+      ambientOcclusion: Number(field2("relight-ao").value),
+      strength: Number(field2("relight-strength").value),
+      wrap: field2("relight-wrap").checked,
+      ...field2("relight-palette").checked ? { palette: [...palette2()] } : {}
+    };
+  }
+  function readEditedLight(layer, changed2) {
+    const original = structuredClone(createPixelRelighter2D(layer.lighting).options), input3 = readNewLight();
+    const lights = original.lights.map((light) => ({ ...light, direction: [...light.direction] }));
+    const keyChanged = ["relight-angle", "relight-elevation", "relight-key-color", "relight-intensity", "relight-shadow"].some((id) => changed2.has(id));
+    if (keyChanged) {
+      const source = lights[0] ?? input3.lights[0];
+      lights[0] = {
+        ...source,
+        direction: [...source.direction],
+        ...changed2.has("relight-angle") || changed2.has("relight-elevation") ? { direction: [...input3.lights[0].direction] } : {},
+        ...changed2.has("relight-key-color") ? { color: hex(field2("relight-key-color").value) } : {},
+        ...changed2.has("relight-intensity") ? { intensity: input3.lights[0].intensity } : {},
+        ...changed2.has("relight-shadow") ? { castShadow: input3.lights[0].castShadow } : {}
+      };
+    }
+    if (changed2.has("relight-fill-color") || changed2.has("relight-fill")) {
+      if (!lights[0]) lights[0] = { ...createPixelRelighter2D({ lights: [{ direction: [0, 0, 1], intensity: 0 }] }).options.lights[0], direction: [0, 0, 1] };
+      const source = lights[1] ?? createPixelRelighter2D({ lights: [input3.lights[1]] }).options.lights[0];
+      lights[1] = {
+        ...source,
+        direction: [...source.direction],
+        ...changed2.has("relight-fill-color") ? { color: hex(field2("relight-fill-color").value) } : {},
+        ...changed2.has("relight-fill") ? { intensity: Number(field2("relight-fill").value) } : {}
+      };
+    }
+    const result = { ...original, lights };
+    const mapping = { ambient: "ambient", bands: "diffuseBands", roughness: "roughness", ao: "ambientOcclusion", strength: "strength" };
+    for (const [control, key] of Object.entries(mapping)) if (changed2.has(`relight-${control}`)) result[key] = Number(field2(`relight-${control}`).value);
+    if (changed2.has("relight-wrap")) result.wrap = field2("relight-wrap").checked;
+    if (changed2.has("relight-palette") || changed2.has("palette-colors") && field2("relight-palette").checked) {
+      if (field2("relight-palette").checked) result.palette = [...palette2()];
+      else delete result.palette;
+    }
+    return result;
+  }
+  function candidate() {
+    if (!editing || editing.base !== host.document()) throw new Error("\uD3B8\uC9D1\uD560 \uB808\uC774\uC5B4\uAC00 \uBC14\uB00C\uC5C8\uC2B5\uB2C8\uB2E4. \uC124\uC815\uC744 \uB2E4\uC2DC \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
+    const { base, layer, changed: changed2 } = editing;
+    const replacement2 = layer.kind === "palette" ? {
+      ...layer,
+      palette: [...palette2()],
+      dither: choice2("palette-dither").value,
+      strength: Number(strength.value)
+    } : { ...layer, lighting: readEditedLight(layer, changed2) };
+    return { ...base, layers: base.layers.map((item) => item.id === layer.id ? replacement2 : item), activeLayerId: layer.id };
+  }
+  function preview() {
+    queued2 = 0;
+    if (!editing || !editing.changed.size || editing.base !== host.document()) return;
+    attempt2(() => {
+      const next = candidate(), raster = renderPixelArtDocument2D(next);
+      editing.candidate = next;
+      host.preview(raster);
+      note.textContent = `${editing.layer.name} \uC218\uC815 \uC911 \xB7 \uAC19\uC740 \uB808\uC774\uC5B4\uC5D0 \uC801\uC6A9\uD569\uB2C8\uB2E4.`;
+    });
+  }
+  function mark(id) {
+    if (loading || !editing) return;
+    if (editing.layer.kind === "palette" && !["palette-dither", "palette-strength", "palette-colors"].includes(id)) return;
+    if (editing.layer.kind === "relight" && !id.startsWith("relight-") && id !== "palette-colors") return;
+    editing.changed.add(id);
+    if (!queued2) queued2 = requestAnimationFrame(preview);
+  }
+  for (const id of [
+    "palette-dither",
+    "palette-strength",
+    "relight-angle",
+    "relight-elevation",
+    "relight-key-color",
+    "relight-fill-color",
+    "relight-intensity",
+    "relight-fill",
+    "relight-ambient",
+    "relight-roughness",
+    "relight-ao",
+    "relight-shadow",
+    "relight-strength",
+    "relight-bands",
+    "relight-wrap",
+    "relight-palette"
+  ]) {
+    el3(id).addEventListener("input", () => mark(id));
+    el3(id).addEventListener("change", () => mark(id));
+  }
+  el3("workbench-palette").addEventListener("input", () => mark("palette-colors"));
+  function edit(id) {
+    finishStroke();
+    cancelEdit();
+    host.discardPreview();
+    const base = host.document(), layer = base.layers.find((layer2) => layer2.id === id);
+    if (!layer || layer.kind !== "palette" && layer.kind !== "relight" || layer.locked || layer.visible === false) return;
+    loading = true;
+    try {
+      editing = { base, layer: structuredClone(layer), changed: /* @__PURE__ */ new Set() };
+      if (layer.kind === "palette") {
+        setPalette(layer.palette.map((c) => typeof c === "string" ? hex(c) : c));
+        choice2("palette-dither").value = layer.dither ?? "none";
+        strength.value = String(layer.strength ?? 1);
+        el3("palette-note").textContent = `${layer.name}\uC758 \uD314\uB808\uD2B8\uB97C \uC218\uC815\uD569\uB2C8\uB2E4. \uC800\uC7A5\uB41C \uC120\uD0DD\xB7\uBCF4\uD638\xB7\uC88C\uD45C\uB294 \uC720\uC9C0\uB429\uB2C8\uB2E4.`;
+        el3("palette-note").scrollIntoView({ block: "nearest" });
+      } else {
+        const options = createPixelRelighter2D(layer.lighting).options, key = options.lights[0], fill = options.lights[1], direction2 = key?.direction ?? [-0.6, -0.7, 1];
+        setNumber("relight-angle", Math.atan2(direction2[1], direction2[0]) * 180 / Math.PI);
+        setNumber("relight-elevation", Math.atan2(direction2[2], Math.hypot(direction2[0], direction2[1])) * 180 / Math.PI);
+        field2("relight-key-color").value = cssColor2(key?.color ?? "#ffffff");
+        field2("relight-fill-color").value = cssColor2(fill?.color ?? "#ffffff");
+        for (const [name2, value] of Object.entries({
+          intensity: key?.intensity ?? 0,
+          fill: fill?.intensity ?? 0,
+          ambient: options.ambient,
+          roughness: options.roughness,
+          ao: options.ambientOcclusion,
+          shadow: key?.castShadow ?? 0,
+          strength: options.strength,
+          bands: options.diffuseBands
+        })) setNumber(`relight-${name2}`, value);
+        field2("relight-wrap").checked = options.wrap;
+        field2("relight-palette").checked = !!options.palette;
+        if (options.palette) setPalette([...options.palette]);
+        el3("apply-relight").closest("details").open = true;
+        el3("apply-relight").scrollIntoView({ block: "nearest" });
+      }
+      syncLabels();
+    } finally {
+      loading = false;
+    }
+  }
+  function applyEditing() {
+    if (!editing) return false;
+    if (!editing.changed.size) {
+      cancelEdit();
+      return true;
+    }
+    const next = candidate();
+    renderPixelArtDocument2D(next);
+    cancelEdit(false);
+    host.commit(next);
+    return true;
+  }
+  function apply(kind) {
+    finishStroke();
+    if (editing?.layer.kind === kind) {
+      applyEditing();
+      return;
+    }
+    cancelEdit();
+    const doc = host.outputDocument(), id = nextPixelArtLayerId2D(doc, kind);
+    const masks = { ...field2("paint-in-selection").checked ? { selection: Array.from(host.selection()) } : {}, protectedMask: Array.from(host.protection()) };
+    const layer = kind === "palette" ? {
+      kind,
+      id,
+      name: `\uD314\uB808\uD2B8 \xB7 ${palette2().length}\uC0C9`,
+      palette: [...palette2()],
+      dither: choice2("palette-dither").value,
+      strength: Number(strength.value),
+      ...masks
+    } : { kind, id, name: "\uC6D0\uD654 \uC0C9 \uC720\uC9C0 \xB7 \uC7AC\uC870\uBA85", lighting: createPixelRelighter2D(readNewLight()).options, ...masks };
+    if (kind === "relight" && !renderPixelArtDocument2D(doc).channels) throw new Error("\uB192\uC774 \uC870\uAC01\uC774\uB098 \uC7AC\uC9C8\uB85C \uD45C\uBA74\uC744 \uB9CC\uB4E0 \uB4A4 \uC7AC\uC870\uBA85\uC744 \uC0AC\uC6A9\uD558\uC138\uC694.");
+    host.commit({ ...doc, layers: [...doc.layers, layer], activeLayerId: id });
+  }
+  button3("apply-palette").onclick = () => attempt2(() => apply("palette"));
+  button3("apply-relight").onclick = () => attempt2(() => apply("relight"));
+  function syncLabels() {
+    note.hidden = !editing;
+    if (editing && !editing.changed.size) note.textContent = `${editing.layer.name} \uC124\uC815 \xB7 \uAC12\uC744 \uBC14\uAFBC \uB4A4 \uC801\uC6A9\uD558\uAC70\uB098 \uCDE8\uC18C\uD558\uC138\uC694.`;
+    for (const kind of ["palette", "relight"]) {
+      const active2 = editing?.layer.kind === kind;
+      button3(`apply-${kind}`).textContent = active2 ? kind === "palette" ? "\uD314\uB808\uD2B8 \uC218\uC815 \uC801\uC6A9" : "\uC870\uBA85 \uC218\uC815 \uC801\uC6A9" : kind === "palette" ? "\uD314\uB808\uD2B8 \uC870\uC815 \uB808\uC774\uC5B4 \uCD94\uAC00" : "\uC7AC\uC870\uBA85 \uB808\uC774\uC5B4 \uCD94\uAC00";
+      cancelButtons[kind === "palette" ? 0 : 1].hidden = !active2;
+    }
+  }
+  return {
+    edit,
+    cancel: cancelEdit,
+    finish: () => {
+      if (editing?.changed.size) applyEditing();
+    },
+    paletteChanged: () => mark("palette-colors"),
+    sync() {
+      if (editing && editing.base !== host.document()) cancelEdit();
+      const hasRoom = host.outputDocument().layers.length < pixelArtLayerLimit2D(host.document().width, host.document().height);
+      button3("apply-palette").disabled = !hasRoom && editing?.layer.kind !== "palette";
+      button3("apply-relight").disabled = !hasRoom && editing?.layer.kind !== "relight" || !host.output().channels;
+      syncLabels();
+    }
+  };
+}
+
+// gallery/pixel-art-workbench.ts
+var el4 = (id) => document.getElementById(id);
+var field3 = (id) => el4(id);
+var choice3 = (id) => el4(id);
+var btn = (id) => el4(id);
 var integer = (id, low, high) => {
-  const value = Number(field2(id).value);
+  const value = Number(field3(id).value);
   if (!Number.isInteger(value) || value < low || value > high) throw new RangeError(`${low}~${high} \uBC94\uC704\uC758 \uC815\uC218\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694.`);
   return value;
 };
-var cssColor = (c) => "#" + [c & 255, c >>> 8 & 255, c >>> 16 & 255].map((v) => v.toString(16).padStart(2, "0")).join("");
+var cssColor3 = (c) => "#" + [c & 255, c >>> 8 & 255, c >>> 16 & 255].map((v) => v.toString(16).padStart(2, "0")).join("");
 function installPixelArtWorkbench(host) {
-  const result = el2("result");
+  const result = el4("result");
   const attempt2 = (fn) => {
     try {
       fn();
@@ -797,20 +2147,22 @@ function installPixelArtWorkbench(host) {
     }
   };
   let rowsKey = "", authoredPalette, strokeFrame, stroke;
+  let craft;
+  let adjustments;
   const point2 = (event) => {
     const r = result.getBoundingClientRect();
     return {
       x: Math.floor((event.clientX - r.left) * result.width / r.width),
       y: Math.floor((event.clientY - r.top) * result.height / r.height),
-      ...event.pointerType === "pen" && field2("pen-pressure").checked ? { pressure: event.pressure } : {}
+      ...event.pointerType === "pen" && field3("pen-pressure").checked ? { pressure: event.pressure } : {}
     };
   };
   function brushOptions() {
     return {
       size: integer("paint-size", 1, 64),
-      tip: choice("paint-tip").value,
-      pixelPerfect: field2("pixel-perfect").checked,
-      symmetry: choice("paint-symmetry").value
+      tip: choice3("paint-tip").value,
+      pixelPerfect: field3("pixel-perfect").checked,
+      symmetry: choice3("paint-symmetry").value
     };
   }
   function activePaint(document2) {
@@ -833,37 +2185,38 @@ function installPixelArtWorkbench(host) {
     const baseline = source;
     const output = shadeStep ? shadePixelMask2D(baseline, mask2, authoredPalette ?? host.palette(), shadeStep, {
       protectedMask: host.protection(),
-      selection: field2("paint-in-selection").checked ? host.selection() : void 0
-    }) : paintPixelMask2D(source, mask2, erase ? null : hex(field2("paint-color").value), {
+      selection: field3("paint-in-selection").checked ? host.selection() : void 0
+    }) : paintPixelMask2D(source, mask2, erase ? null : hex(field3("paint-color").value), {
       mode: "replace",
       protectedMask: host.protection(),
-      selection: field2("paint-in-selection").checked ? host.selection() : void 0,
-      alphaLock: field2("alpha-lock").checked
+      selection: field3("paint-in-selection").checked ? host.selection() : void 0,
+      alphaLock: field3("alpha-lock").checked
     });
     const touched = Uint8Array.from(mask2, (v, i) => v && (baseline.pixels[i] !== output.pixels[i] || baseline.mask.data[i] !== output.mask.data[i]) ? 1 : 0);
-    if (erase && merged && !field2("alpha-lock").checked) for (let i = 0; i < touched.length; i++) {
-      if (mask2[i] && !host.protection()[i] && (!field2("paint-in-selection").checked || host.selection()[i]) && merged.mask.data[i] && merged.pixels[i] >>> 24) touched[i] = 1;
+    if (erase && merged && !field3("alpha-lock").checked) for (let i = 0; i < touched.length; i++) {
+      if (mask2[i] && !host.protection()[i] && (!field3("paint-in-selection").checked || host.selection()[i]) && merged.mask.data[i] && merged.pixels[i] >>> 24) touched[i] = 1;
     }
     return { output, touched };
   }
   function previewStroke() {
     if (!stroke) return;
     const { document: doc, points, tool, source, merged, layerId } = stroke, options = brushOptions();
-    const mask2 = ["line", "rectangle", "ellipse"].includes(tool) ? rasterizePixelShape2D(doc.width, doc.height, tool, [points[0].x, points[0].y], [points.at(-1).x, points.at(-1).y], { ...options, filled: field2("paint-filled").checked }) : rasterizePixelBrush2D(doc.width, doc.height, points, options);
+    const mask2 = ["line", "rectangle", "ellipse"].includes(tool) ? rasterizePixelShape2D(doc.width, doc.height, tool, [points[0].x, points[0].y], [points.at(-1).x, points.at(-1).y], { ...options, filled: field3("paint-filled").checked }) : rasterizePixelBrush2D(doc.width, doc.height, points, options);
     const { output, touched } = painted(source, mask2, tool === "eraser", merged, tool === "shade-light" ? 1 : tool === "shade-dark" ? -1 : 0);
     const next = writePixelArtPaintLayer2D(doc, output, touched, layerId);
     stroke.candidate = next;
     host.preview(!layerId ? output : renderPixelArtDocument2D(next));
   }
   result.addEventListener("pointerdown", (event) => attempt2(() => {
-    const tool = choice("paint-tool").value;
-    if (event.button !== 0 || tool === "inspect" || selectionDrawingTools.has(tool)) return;
+    const tool = choice3("paint-tool").value;
+    if (event.button !== 0 || tool === "inspect" || selectionDrawingTools.has(tool) || craftDrawingTools.has(tool)) return;
+    adjustments?.finish();
     event.preventDefault();
     const p = point2(event), source = host.output(), doc = host.outputDocument();
     if (p.x < 0 || p.y < 0 || p.x >= source.w || p.y >= source.h) return;
     if (tool === "picker") {
       const i = p.y * source.w + p.x;
-      if (source.mask.data[i] && source.pixels[i] >>> 24) field2("paint-color").value = cssColor(source.pixels[i]);
+      if (source.mask.data[i] && source.pixels[i] >>> 24) field3("paint-color").value = cssColor3(source.pixels[i]);
       return;
     }
     const layerId = activePaint(doc);
@@ -872,7 +2225,7 @@ function installPixelArtWorkbench(host) {
       const mask2 = selectPixelRegion2D(source, p, {
         tolerance: integer("tolerance", 0, 100),
         includeTransparent: true,
-        selection: field2("paint-in-selection").checked ? host.selection() : void 0
+        selection: field3("paint-in-selection").checked ? host.selection() : void 0
       });
       const { output, touched } = painted(paintLayerSource(doc, layerId, source), mask2, false);
       const next = writePixelArtPaintLayer2D(doc, output, touched, layerId);
@@ -885,7 +2238,7 @@ function installPixelArtWorkbench(host) {
   }));
   result.addEventListener("pointermove", (event) => attempt2(() => {
     const p = point2(event);
-    el2("cursor-cell").textContent = p.x >= 0 && p.y >= 0 && p.x < result.width && p.y < result.height ? `x ${p.x} \xB7 y ${p.y}` : "";
+    el4("cursor-cell").textContent = p.x >= 0 && p.y >= 0 && p.x < result.width && p.y < result.height ? `x ${p.x} \xB7 y ${p.y}` : "";
     if (!stroke || stroke.pointer !== event.pointerId) return;
     for (const sample of event.getCoalescedEvents?.().length ? event.getCoalescedEvents() : [event]) {
       const next = point2(sample), last = stroke.points.at(-1);
@@ -932,18 +2285,21 @@ function installPixelArtWorkbench(host) {
     if (stroke) cancelStroke();
   });
   result.addEventListener("pointerleave", () => {
-    if (!stroke) el2("cursor-cell").textContent = "";
+    if (!stroke) el4("cursor-cell").textContent = "";
   });
-  choice("paint-tool").onchange = () => {
+  choice3("paint-tool").onchange = () => attempt2(() => {
     if (stroke) cancelStroke();
+    adjustments?.finish();
     syncCursor();
-  };
+  });
   function syncCursor() {
-    const tool = choice("paint-tool").value;
+    const tool = choice3("paint-tool").value;
     result.style.cursor = tool === "inspect" ? "default" : "crosshair";
-    el2("paint-hint").textContent = tool === "inspect" ? "\uC624\uB978\uCABD \uCE94\uBC84\uC2A4\uC5D0 \uADF8\uB9BD\uB2C8\uB2E4. \uC67C\uCABD\uC5D0\uC11C\uB294 \uC120\uD0DD\uACFC \uBCF4\uD638 \uC601\uC5ED\uC744 \uD3B8\uC9D1\uD569\uB2C8\uB2E4." : tool === "move" ? "\uC120\uD0DD \uC601\uC5ED\uC744 \uB4DC\uB798\uADF8\uD558\uAC70\uB098 \uBC29\uD5A5\uD0A4\uB85C \uC62E\uAE30\uC138\uC694. Shift + \uBC29\uD5A5\uD0A4: 10px. Escape: \uCDE8\uC18C." : selectionDrawingTools.has(tool) ? "\uC601\uC5ED\uC744 \uB4DC\uB798\uADF8\uD558\uC138\uC694. Shift: \uCD94\uAC00 \xB7 Alt: \uBE7C\uAE30 \xB7 Shift + Alt: \uAD50\uCC28." : tool.startsWith("shade-") ? "\uC791\uC5C5 \uD314\uB808\uD2B8\uC5D0 \uC788\uB294 \uC0C9\uC744 \uD55C \uB2E8\uACC4 \uBC14\uAFC9\uB2C8\uB2E4. \uD314\uB808\uD2B8 \uBC16 \uC0C9\xB7\uC54C\uD30C\xB7\uBCF4\uD638 \uC601\uC5ED\uC740 \uC720\uC9C0\uB429\uB2C8\uB2E4." : tool === "picker" ? "\uC624\uB978\uCABD \uADF8\uB9BC\uC5D0\uC11C \uC0C9\uC744 \uACE0\uB978 \uB4A4 B\uB97C \uB204\uB974\uBA74 \uC5F0\uD544\uB85C \uB3CC\uC544\uAC11\uB2C8\uB2E4." : "\uC624\uB978\uCABD \uCE94\uBC84\uC2A4\uC5D0 \uADF8\uB9AC\uC138\uC694. \uD55C \uBC88\uC758 \uB4DC\uB798\uADF8\uAC00 \uD55C \uBC88\uC758 \uC2E4\uD589 \uCDE8\uC18C\uC5D0 \uB300\uC751\uD569\uB2C8\uB2E4. \uBCF4\uD638 \uC601\uC5ED\uC740 \uC720\uC9C0\uB429\uB2C8\uB2E4.";
+    el4("paint-hint").textContent = tool === "inspect" ? "\uC624\uB978\uCABD \uCE94\uBC84\uC2A4\uC5D0 \uADF8\uB9BD\uB2C8\uB2E4. \uC67C\uCABD\uC5D0\uC11C\uB294 \uC120\uD0DD\uACFC \uBCF4\uD638 \uC601\uC5ED\uC744 \uD3B8\uC9D1\uD569\uB2C8\uB2E4." : tool === "move" ? "\uC120\uD0DD \uC601\uC5ED\uC744 \uB4DC\uB798\uADF8\uD558\uAC70\uB098 \uBC29\uD5A5\uD0A4\uB85C \uC62E\uAE30\uC138\uC694. Shift + \uBC29\uD5A5\uD0A4: 10px. Escape: \uCDE8\uC18C." : selectionDrawingTools.has(tool) ? "\uC601\uC5ED\uC744 \uB4DC\uB798\uADF8\uD558\uC138\uC694. Shift: \uCD94\uAC00 \xB7 Alt: \uBE7C\uAE30 \xB7 Shift + Alt: \uAD50\uCC28." : tool.startsWith("shade-") ? "\uC791\uC5C5 \uD314\uB808\uD2B8\uC5D0 \uC788\uB294 \uC0C9\uC744 \uD55C \uB2E8\uACC4 \uBC14\uAFC9\uB2C8\uB2E4. \uD314\uB808\uD2B8 \uBC16 \uC0C9\xB7\uC54C\uD30C\xB7\uBCF4\uD638 \uC601\uC5ED\uC740 \uC720\uC9C0\uB429\uB2C8\uB2E4." : tool.startsWith("height-") ? "\uC6D0\uD654 \uC0C9\uC744 \uC720\uC9C0\uD558\uBA70 \uB192\uC774\uB97C \uC870\uAC01\uD569\uB2C8\uB2E4. \uB192\uC774\xB7\uBC95\uC120 \uBCF4\uAE30\uC5D0\uC11C \uD615\uD0DC\uB97C \uD655\uC778\uD558\uC138\uC694." : tool === "path" ? "\uD074\uB9AD\uC73C\uB85C \uC810\uC744 \uB193\uACE0 \uB4DC\uB798\uADF8\uB85C \uACE1\uB960\uC744 \uC870\uC808\uD569\uB2C8\uB2E4. \uC81C\uC5B4\uC810\uC740 \uC800\uC7A5\uD55C \uB4A4\uC5D0\uB3C4 \uC218\uC815\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4." : tool === "picker" ? "\uC624\uB978\uCABD \uADF8\uB9BC\uC5D0\uC11C \uC0C9\uC744 \uACE0\uB978 \uB4A4 B\uB97C \uB204\uB974\uBA74 \uC5F0\uD544\uB85C \uB3CC\uC544\uAC11\uB2C8\uB2E4." : "\uC624\uB978\uCABD \uCE94\uBC84\uC2A4\uC5D0 \uADF8\uB9AC\uC138\uC694. \uD55C \uBC88\uC758 \uB4DC\uB798\uADF8\uAC00 \uD55C \uBC88\uC758 \uC2E4\uD589 \uCDE8\uC18C\uC5D0 \uB300\uC751\uD569\uB2C8\uB2E4. \uBCF4\uD638 \uC601\uC5ED\uC740 \uC720\uC9C0\uB429\uB2C8\uB2E4.";
   }
   function mutateLayer(id, fn) {
+    craft?.cancel();
+    adjustments?.cancel();
     const doc = host.document(), layers = structuredClone(doc.layers), index = layers.findIndex((layer) => layer.id === id);
     if (index < 0) return;
     fn(layers, index);
@@ -951,14 +2307,14 @@ function installPixelArtWorkbench(host) {
     host.commit({ ...base, layers, ...activeLayerId && layers.some((layer) => layer.id === activeLayerId) ? { activeLayerId } : {} });
   }
   const actionButton = (label, title, action, disabled = false) => {
-    const button5 = document.createElement("button");
-    button5.type = "button";
-    button5.textContent = label;
-    button5.title = title;
-    button5.setAttribute("aria-label", title);
-    button5.disabled = disabled;
-    button5.onclick = () => attempt2(action);
-    return button5;
+    const button7 = document.createElement("button");
+    button7.type = "button";
+    button7.textContent = label;
+    button7.title = title;
+    button7.setAttribute("aria-label", title);
+    button7.disabled = disabled;
+    button7.onclick = () => attempt2(action);
+    return button7;
   };
   function syncLayers() {
     const doc = host.document(), key = JSON.stringify([doc.activeLayerId, doc.layers.map(({ id, name: name2, kind, visible, locked }) => ({ id, name: name2, kind, visible, locked }))]);
@@ -967,10 +2323,10 @@ function installPixelArtWorkbench(host) {
     btn("apply-palette").disabled = !hasRoom;
     btn("flatten-layers").disabled = !doc.layers.length;
     const selected = doc.layers.find((layer) => layer.id === doc.activeLayerId);
-    el2("active-layer").textContent = selected ? `${selected.kind === "paint" ? "\uADF8\uB9AC\uB294 \uACF3" : "\uC120\uD0DD\uD55C \uB808\uC774\uC5B4"}: ${selected.name}${selected.locked ? " \xB7 \uC7A0\uAE40" : ""}` : "\uADF8\uB9AC\uBA74 \uB9E8 \uC704\uC5D0 \uADF8\uB9BC \uB808\uC774\uC5B4\uAC00 \uC0DD\uAE41\uB2C8\uB2E4.";
+    el4("active-layer").textContent = selected ? `${selected.kind === "paint" ? "\uADF8\uB9AC\uB294 \uACF3" : "\uC120\uD0DD\uD55C \uB808\uC774\uC5B4"}: ${selected.name}${selected.locked ? " \xB7 \uC7A0\uAE40" : ""}` : "\uADF8\uB9AC\uBA74 \uB9E8 \uC704\uC5D0 \uADF8\uB9BC \uB808\uC774\uC5B4\uAC00 \uC0DD\uAE41\uB2C8\uB2E4.";
     if (key === rowsKey) return;
     rowsKey = key;
-    el2("layer-list").replaceChildren(...doc.layers.map((layer, index) => {
+    el4("layer-list").replaceChildren(...doc.layers.map((layer, index) => {
       const li = document.createElement("li");
       li.dataset.layerId = layer.id;
       li.classList.toggle("active", doc.activeLayerId === layer.id);
@@ -980,7 +2336,7 @@ function installPixelArtWorkbench(host) {
       })));
       const kind = document.createElement("span");
       kind.className = "layer-kind";
-      kind.textContent = { material: "\uC7AC\uC9C8", paint: "\uADF8\uB9BC", palette: "\uC0C9\uC0C1", transform: "\uBCC0\uD615", relight: "\uC870\uBA85" }[layer.kind];
+      kind.textContent = { material: "\uC7AC\uC9C8", paint: "\uADF8\uB9BC", palette: "\uC0C9\uC0C1", transform: "\uBCC0\uD615", relight: "\uC870\uBA85", height: "\uB192\uC774", path: "\uACE1\uC120" }[layer.kind];
       li.append(kind);
       const name2 = document.createElement("input");
       name2.value = layer.name;
@@ -997,7 +2353,20 @@ function installPixelArtWorkbench(host) {
         });
       });
       li.append(name2, actionButton("\uC120\uD0DD", `${layer.name} \uC120\uD0DD`, () => host.commit({ ...host.document(), activeLayerId: layer.id })));
-      if (layer.kind === "material") li.append(actionButton("\uC124\uC815", `${layer.name} \uC7AC\uC9C8 \uC218\uC815`, () => host.editMaterial(layer.id), !!layer.locked));
+      if (layer.kind === "material") li.append(actionButton("\uC124\uC815", `${layer.name} \uC7AC\uC9C8 \uC218\uC815`, () => {
+        craft?.cancel();
+        adjustments?.cancel();
+        host.editMaterial(layer.id);
+      }, !!layer.locked));
+      if (layer.kind === "height" || layer.kind === "path") li.append(actionButton("\uC124\uC815", `${layer.name} ${layer.kind === "height" ? "\uB192\uC774" : "\uACE1\uC120"} \uC218\uC815`, () => {
+        adjustments?.cancel();
+        host.discardPreview();
+        craft?.editLayer(layer.id);
+      }, !!layer.locked || layer.visible === false));
+      if (layer.kind === "palette" || layer.kind === "relight") li.append(actionButton("\uC124\uC815", `${layer.name} ${layer.kind === "palette" ? "\uD314\uB808\uD2B8" : "\uC870\uBA85"} \uC218\uC815`, () => {
+        craft?.cancel();
+        adjustments?.edit(layer.id);
+      }, !!layer.locked || layer.visible === false));
       li.append(
         actionButton(layer.locked ? "\uC7A0\uAE40" : "\uC7A0\uAE08", `${layer.name} \uD3B8\uC9D1 \uC7A0\uAE08`, () => mutateLayer(layer.id, (layers, i) => {
           layers[i].locked = !layers[i].locked;
@@ -1018,16 +2387,16 @@ function installPixelArtWorkbench(host) {
   btn("new-paint-layer").onclick = () => attempt2(() => {
     const doc = host.outputDocument(), id = nextPixelArtLayerId2D(doc, "paint");
     host.commit({ ...doc, activeLayerId: id, layers: [...doc.layers, { kind: "paint", id, name: `\uADF8\uB9BC ${doc.layers.length + 1}`, indices: [], pixels: [] }] });
-    choice("paint-tool").value = "pencil";
+    choice3("paint-tool").value = "pencil";
     syncCursor();
   });
   btn("flatten-layers").onclick = () => attempt2(() => host.commit(flattenPixelArtDocument2D(host.outputDocument())));
   btn("new-canvas").onclick = () => attempt2(() => {
     const width = integer("new-width", 1, 512), height = integer("new-height", 1, 512);
     host.newCanvas(createBlankPixelArtDocument2D(width, height, `Artwork-${width}x${height}`));
-    field2("paint-in-selection").checked = false;
-    field2("alpha-lock").checked = false;
-    choice("paint-tool").value = "pencil";
+    field3("paint-in-selection").checked = false;
+    field3("alpha-lock").checked = false;
+    choice3("paint-tool").value = "pencil";
     syncCursor();
   });
   btn("invert-selection").onclick = () => host.setSelection(Uint8Array.from(host.selection(), (v) => v ? 0 : 1));
@@ -1037,17 +2406,17 @@ function installPixelArtWorkbench(host) {
   });
   function showAuthoredPalette(colors) {
     authoredPalette = colors ? [...colors] : void 0;
-    el2("workbench-palette").replaceChildren(...(authoredPalette ?? []).map((color, i) => {
+    el4("workbench-palette").replaceChildren(...(authoredPalette ?? []).map((color, i) => {
       const swatch = document.createElement("input");
       swatch.type = "color";
-      swatch.value = cssColor(color);
+      swatch.value = cssColor3(color);
       swatch.setAttribute("aria-label", `\uC791\uC5C5 \uD314\uB808\uD2B8 ${i + 1}`);
       swatch.oninput = () => {
         authoredPalette[i] = hex(swatch.value);
         host.workingPaletteChanged();
       };
       swatch.ondblclick = () => {
-        field2("paint-color").value = swatch.value;
+        field3("paint-color").value = swatch.value;
       };
       return swatch;
     }));
@@ -1055,74 +2424,33 @@ function installPixelArtWorkbench(host) {
   function setAuthoredPalette(colors) {
     showAuthoredPalette(colors);
     host.workingPaletteChanged();
+    adjustments?.paletteChanged();
   }
   btn("extract-palette").onclick = () => attempt2(() => {
     const colors = extractPixelPalette2D(host.output(), {
       colors: integer("palette-count", 2, 64),
-      locked: field2("lock-paint-color").checked ? [field2("paint-color").value] : [],
-      ...field2("paint-in-selection").checked ? { selection: host.selection() } : {}
+      locked: field3("lock-paint-color").checked ? [field3("paint-color").value] : [],
+      ...field3("paint-in-selection").checked ? { selection: host.selection() } : {}
     });
     if (!colors.length) throw new Error("\uC0C9\uC744 \uCD94\uCD9C\uD560 \uBD88\uD22C\uBA85\uD55C \uD53D\uC140\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uBA3C\uC800 \uADF8\uB9AC\uAC70\uB098 PNG\uB97C \uAC00\uC838\uC624\uC138\uC694.");
     setAuthoredPalette(sortPixelColorsByLightness2D(colors));
-    el2("palette-note").textContent = `\uD604\uC7AC \uADF8\uB9BC\uC5D0\uC11C ${colors.length}\uC0C9\uC744 \uCD94\uCD9C\uD574 \uC5B4\uB450\uC6B4 \uC0C9\uBD80\uD130 \uC815\uB82C\uD588\uC2B5\uB2C8\uB2E4. \uACE0\uC815\uD55C \uC0C9\uC758 \uAC12\uC740 \uADF8\uB300\uB85C \uC720\uC9C0\uD569\uB2C8\uB2E4.`;
+    el4("palette-note").textContent = `\uD604\uC7AC \uADF8\uB9BC\uC5D0\uC11C ${colors.length}\uC0C9\uC744 \uCD94\uCD9C\uD574 \uC5B4\uB450\uC6B4 \uC0C9\uBD80\uD130 \uC815\uB82C\uD588\uC2B5\uB2C8\uB2E4. \uACE0\uC815\uD55C \uC0C9\uC758 \uAC12\uC740 \uADF8\uB300\uB85C \uC720\uC9C0\uD569\uB2C8\uB2E4.`;
   });
   btn("generate-ramp").onclick = () => attempt2(() => {
-    const colors = createPixelPaletteRamp2D({ shadow: field2("ramp-shadow").value, midtone: field2("ramp-midtone").value, highlight: field2("ramp-highlight").value, colors: integer("palette-count", 2, 64) });
+    const colors = createPixelPaletteRamp2D({ shadow: field3("ramp-shadow").value, midtone: field3("ramp-midtone").value, highlight: field3("ramp-highlight").value, colors: integer("palette-count", 2, 64) });
     setAuthoredPalette(colors);
-    el2("palette-note").textContent = `${colors.length}\uC0C9 \uBA85\uC554 \uD314\uB808\uD2B8 \xB7 \uADF8\uB9BC\uC790\uC640 \uBC1D\uC740 \uBA74 \uC0AC\uC774\uC5D0\uC11C \uC0C9\uC0C1\uACFC \uCC44\uB3C4\uB97C \uD568\uAED8 \uC870\uC808\uD588\uC2B5\uB2C8\uB2E4.`;
+    el4("palette-note").textContent = `${colors.length}\uC0C9 \uBA85\uC554 \uD314\uB808\uD2B8 \xB7 \uADF8\uB9BC\uC790\uC640 \uBC1D\uC740 \uBA74 \uC0AC\uC774\uC5D0\uC11C \uC0C9\uC0C1\uACFC \uCC44\uB3C4\uB97C \uD568\uAED8 \uC870\uC808\uD588\uC2B5\uB2C8\uB2E4.`;
   });
   btn("use-material-palette").onclick = () => attempt2(() => host.setPalette(authoredPalette ?? host.palette()));
-  btn("apply-palette").onclick = () => attempt2(() => {
-    const doc = host.outputDocument(), id = nextPixelArtLayerId2D(doc, "palette"), palette2 = authoredPalette ?? host.palette();
-    const layer = {
-      kind: "palette",
-      id,
-      name: `\uD314\uB808\uD2B8 \xB7 ${palette2.length}\uC0C9`,
-      palette: [...palette2],
-      dither: choice("palette-dither").value,
-      strength: 1,
-      ...field2("paint-in-selection").checked ? { selection: Array.from(host.selection()) } : {},
-      protectedMask: Array.from(host.protection())
-    };
-    host.commit({ ...doc, activeLayerId: id, layers: [...doc.layers, layer] });
-  });
   const relightRanges = ["angle", "elevation", "intensity", "fill", "ambient", "roughness", "ao", "shadow", "strength"];
   function showRelightValues() {
     for (const name2 of relightRanges) {
-      const value = Number(field2(`relight-${name2}`).value);
-      el2(`relight-${name2}-value`).textContent = `${Math.round(value * 1e3) / 1e3}${name2 === "angle" || name2 === "elevation" ? "\xB0" : ""}`;
+      const value = Number(field3(`relight-${name2}`).value);
+      el4(`relight-${name2}-value`).textContent = `${Math.round(value * 1e3) / 1e3}${name2 === "angle" || name2 === "elevation" ? "\xB0" : ""}`;
     }
   }
-  for (const name2 of relightRanges) field2(`relight-${name2}`).addEventListener("input", showRelightValues);
+  for (const name2 of relightRanges) field3(`relight-${name2}`).addEventListener("input", showRelightValues);
   showRelightValues();
-  btn("apply-relight").onclick = () => attempt2(() => {
-    finishStroke();
-    const doc = host.outputDocument(), source = renderPixelArtDocument2D(doc);
-    if (!source.channels) throw new Error("\uC7AC\uC9C8 \uB808\uC774\uC5B4\uB97C \uC801\uC6A9\uD574 \uB192\uC774\xB7\uBC95\uC120\uC744 \uB9CC\uB4E0 \uB4A4 \uC7AC\uC870\uBA85\uC744 \uC0AC\uC6A9\uD558\uC138\uC694.");
-    const angle = Number(field2("relight-angle").value) * Math.PI / 180, elevation = Number(field2("relight-elevation").value) * Math.PI / 180;
-    const lighting = createPixelRelighter2D({
-      lights: [
-        { direction: [Math.cos(angle) * Math.cos(elevation), Math.sin(angle) * Math.cos(elevation), Math.sin(elevation)], color: field2("relight-key-color").value, intensity: Number(field2("relight-intensity").value), castShadow: Number(field2("relight-shadow").value) },
-        { direction: [-Math.cos(angle), -Math.sin(angle), 0.7], color: field2("relight-fill-color").value, intensity: Number(field2("relight-fill").value) }
-      ],
-      ambient: Number(field2("relight-ambient").value),
-      diffuseBands: integer("relight-bands", 2, 64),
-      roughness: Number(field2("relight-roughness").value),
-      ambientOcclusion: Number(field2("relight-ao").value),
-      strength: Number(field2("relight-strength").value),
-      wrap: field2("relight-wrap").checked,
-      ...field2("relight-palette").checked ? { palette: [...authoredPalette ?? host.palette()] } : {}
-    }).options;
-    const id = nextPixelArtLayerId2D(doc, "relight");
-    host.commit({ ...doc, activeLayerId: id, layers: [...doc.layers, {
-      kind: "relight",
-      id,
-      name: "\uC6D0\uD654 \uC0C9 \uC720\uC9C0 \xB7 \uC7AC\uC870\uBA85",
-      lighting,
-      ...field2("paint-in-selection").checked ? { selection: Array.from(host.selection()) } : {},
-      protectedMask: Array.from(host.protection())
-    }] });
-  });
   function spriteCanvas(sprite) {
     const c = document.createElement("canvas");
     c.width = sprite.w;
@@ -1144,7 +2472,7 @@ function installPixelArtWorkbench(host) {
     host.download(await encodeRGBAPNG(sprite.w, sprite.h, rgba), name2);
   }
   const grids = ["source", "result"].map((id) => {
-    const c = el2(id), wrapper = document.createElement("div"), grid = document.createElement("div");
+    const c = el4(id), wrapper = document.createElement("div"), grid = document.createElement("div");
     wrapper.className = "canvas-wrap";
     grid.className = "pixel-grid";
     grid.setAttribute("aria-hidden", "true");
@@ -1153,22 +2481,24 @@ function installPixelArtWorkbench(host) {
     return { c, grid };
   });
   const tileHost = document.createElement("section"), tileLabel = document.createElement("div"), tileCanvas = document.createElement("canvas");
+  let tileSprite;
   tileHost.className = "tile-proof";
   tileLabel.className = "tile-proof-label";
   tileLabel.textContent = "\uBC18\uBCF5 \uACBD\uACC4 \uD655\uC778 \xB7 3 \xD7 3 \xB7 \uC6D0\uBCF8\uC744 \uBC14\uAFB8\uC9C0 \uC54A\uB294 \uD0C0\uC77C \uBBF8\uB9AC\uBCF4\uAE30";
   tileHost.append(tileLabel, tileCanvas);
-  el2("result-host").closest(".comparison").after(tileHost);
-  field2("show-grid").onchange = () => syncOverlays();
-  field2("tile-preview").onchange = () => syncOverlays();
+  el4("result-host").closest(".comparison").after(tileHost);
+  field3("show-grid").onchange = () => syncOverlays();
+  field3("tile-preview").onchange = () => syncOverlays();
   function syncOverlays() {
     for (const { c, grid } of grids) {
       const rect = c.getBoundingClientRect(), step = rect.width / c.width;
       grid.style.backgroundSize = `${step}px ${rect.height / c.height}px`;
-      grid.classList.toggle("visible", field2("show-grid").checked && step >= 4);
+      grid.classList.toggle("visible", field3("show-grid").checked && step >= 4);
     }
-    tileHost.classList.toggle("visible", field2("tile-preview").checked);
-    if (field2("tile-preview").checked && host.output()) {
+    tileHost.classList.toggle("visible", field3("tile-preview").checked);
+    if (field3("tile-preview").checked && host.output() && tileSprite !== host.output()) {
       const sprite = host.output(), source = spriteCanvas(sprite);
+      tileSprite = sprite;
       tileCanvas.width = sprite.w * 3;
       tileCanvas.height = sprite.h * 3;
       const ctx = tileCanvas.getContext("2d");
@@ -1176,17 +2506,18 @@ function installPixelArtWorkbench(host) {
       for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) ctx.drawImage(source, x * sprite.w, y * sprite.h);
     }
   }
-  new ResizeObserver(syncOverlays).observe(el2("result-host"));
+  new ResizeObserver(syncOverlays).observe(el4("result-host"));
   function surfaceMaps() {
     const doc = host.outputDocument(), lastMaterial = doc.layers.filter((layer) => layer.kind === "material" && layer.visible !== false).at(-1);
+    const lastSurface = doc.layers.filter((layer) => layer.visible !== false && (layer.kind === "height" || layer.kind === "material")).at(-1);
     const tileSize = lastMaterial?.material.tileSize;
     return exportPixelSurfaceMaps2D(renderPixelArtDocument2D(doc), {
-      normalConvention: choice("normal-convention").value,
+      normalConvention: choice3("normal-convention").value,
       lighting: {
         light: lastMaterial?.material.light ?? [-0.6, -0.7, 1],
         ambientOcclusion: 1,
         castShadow: 1,
-        wrap: !!tileSize && tileSize[0] === doc.width && tileSize[1] === doc.height && (lastMaterial?.material.bevel ?? 0) === 0,
+        wrap: lastSurface?.kind === "height" ? lastSurface.wrap : !!tileSize && tileSize[0] === doc.width && tileSize[1] === doc.height && (lastMaterial?.material.bevel ?? 0) === 0,
         occlusionRadius: lastMaterial?.material.occlusionRadius,
         shadowDistance: lastMaterial?.material.shadowDistance
       }
@@ -1216,7 +2547,22 @@ function installPixelArtWorkbench(host) {
     host.download(new Blob([JSON.stringify(info, null, 2)], { type: "application/json" }), host.filename() + "-surface-maps.json");
   });
   for (const id of ["save-png", "save-project", "undo", "redo", "save-normal", "save-height", "save-occlusion", "save-shadow", "save-map-info", "new-canvas", "import-png", "open-project", "apply-palette", "apply-material", "apply-relight", "flatten-layers"])
-    btn(id).addEventListener("click", () => attempt2(finishStroke), { capture: true });
+    btn(id).addEventListener("click", (event) => {
+      try {
+        finishStroke();
+        if (id === "undo" || id === "redo") {
+          craft?.cancel();
+          adjustments?.cancel();
+        } else {
+          craft?.finish();
+          if (id !== "apply-palette" && id !== "apply-relight") adjustments?.finish();
+        }
+      } catch (error) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        host.status(error instanceof Error ? error.message : String(error), true);
+      }
+    }, { capture: true });
   window.addEventListener("keydown", (event) => {
     const target = event.target;
     if (target.closest('input,select,textarea,[contenteditable="true"]')) return;
@@ -1232,9 +2578,10 @@ function installPixelArtWorkbench(host) {
     }
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (event.key === "Escape") {
+      adjustments?.cancel();
       if (stroke) cancelStroke();
-      else {
-        choice("paint-tool").value = "inspect";
+      else if (!craftDrawingTools.has(choice3("paint-tool").value)) {
+        choice3("paint-tool").value = "inspect";
         syncCursor();
       }
       return;
@@ -1243,15 +2590,22 @@ function installPixelArtWorkbench(host) {
     const tool = shortcuts[event.key.toLowerCase()];
     if (tool) {
       event.preventDefault();
-      choice("paint-tool").value = tool;
+      choice3("paint-tool").value = tool;
       syncCursor();
     }
   });
   const selections = installPixelArtSelection(host, finishStroke);
+  craft = installPixelArtCraft(host);
+  adjustments = installPixelArtAdjustments(host, () => authoredPalette ?? host.palette(), setAuthoredPalette, () => {
+    finishStroke();
+    craft?.finish();
+  });
   return {
     finishStroke() {
       finishStroke();
       selections.finish();
+      craft?.finish();
+      adjustments?.finish();
     },
     setAuthoredPalette,
     restoreAuthoredPalette: showAuthoredPalette,
@@ -1264,8 +2618,10 @@ function installPixelArtWorkbench(host) {
       selections.sync();
       const mapsAvailable = !!host.output()?.channels;
       btn("apply-relight").disabled = !mapsAvailable || host.outputDocument().layers.length >= pixelArtLayerLimit2D(host.document().width, host.document().height);
-      choice("normal-convention").disabled = !mapsAvailable;
+      choice3("normal-convention").disabled = !mapsAvailable;
       for (const id of ["save-normal", "save-height", "save-occlusion", "save-shadow", "save-map-info"]) btn(id).disabled = !mapsAvailable;
+      craft?.sync();
+      adjustments?.sync();
     }
   };
 }
@@ -1308,6 +2664,9 @@ function documentFootprint(document2) {
       stored += arrayLength(value);
       if (object(value)) for (const option of Object.values(value)) stored += arrayLength(option);
     }
+    if (layer.kind === "path" && Array.isArray(layer.nodes)) for (const node2 of layer.nodes) {
+      if (object(node2)) stored += arrayLength(node2.point) + arrayLength(node2.in) + arrayLength(node2.out);
+    }
   }
   return { stored, render: document2.width * document2.height * (1 + document2.layers.length) };
 }
@@ -1339,11 +2698,11 @@ function checkAnimation(animation) {
   for (let i = 0; i < animation.frames.length; i++) addDuration(animation.direction === "reverse" ? animation.frames.length - 1 - i : i);
   if (animation.direction === "pingpong") for (let i = animation.frames.length - 2; i > 0; i--) addDuration(i);
 }
-function validatePixelArtAnimation2D(input2) {
-  if (!object(input2)) throw new TypeError("Expected a pixel art animation");
-  const schema = input2.schema;
-  if (schema === "poku-pixel-art/v1" || schema === "poku-pixel-art/v2") return createPixelArtAnimation2D(validatePixelArtDocument2D(input2));
-  const p = input2;
+function validatePixelArtAnimation2D(input3) {
+  if (!object(input3)) throw new TypeError("Expected a pixel art animation");
+  const schema = input3.schema;
+  if (schema === "poku-pixel-art/v1" || schema === "poku-pixel-art/v2") return createPixelArtAnimation2D(validatePixelArtDocument2D(input3));
+  const p = input3;
   checkAnimation(p);
   return {
     schema: "poku-pixel-art/v3",
@@ -1706,10 +3065,10 @@ var PixelArtAnimationHistory2D = class {
 };
 
 // gallery/pixel-art-timeline.ts
-var el3 = (id) => document.getElementById(id);
-var field3 = (id) => el3(id);
-var select2 = (id) => el3(id);
-var button2 = (id) => el3(id);
+var el5 = (id) => document.getElementById(id);
+var field4 = (id) => el5(id);
+var select2 = (id) => el5(id);
+var button4 = (id) => el5(id);
 var active = (animation) => animation.frames.find((frame) => frame.id === animation.activeFrameId);
 function draw(canvas2, sprite, thumbnail = false) {
   const source = thumbnail ? document.createElement("canvas") : canvas2;
@@ -1738,12 +3097,12 @@ function installPixelArtTimeline(host) {
   const cache = /* @__PURE__ */ new Map();
   let cacheBytes = 0;
   const dirtyThumbnails = /* @__PURE__ */ new Set();
-  const result = el3("result");
+  const result = el5("result");
   const onion = document.createElement("canvas");
   onion.className = "onion-overlay";
   onion.setAttribute("aria-hidden", "true");
   result.parentElement.insertBefore(onion, result);
-  const player = el3("animation-preview");
+  const player = el5("animation-preview");
   const attempt2 = (fn) => {
     try {
       fn();
@@ -1784,8 +3143,8 @@ function installPixelArtTimeline(host) {
     cancelAnimationFrame(raf);
     raf = 0;
     lastPlaybackIndex = -1;
-    button2("play-animation").textContent = "\uC7AC\uC0DD";
-    button2("play-animation").setAttribute("aria-pressed", "false");
+    button4("play-animation").textContent = "\uC7AC\uC0DD";
+    button4("play-animation").setAttribute("aria-pressed", "false");
   }
   function showActive(raster) {
     if (!state) return;
@@ -1848,8 +3207,8 @@ function installPixelArtTimeline(host) {
     });
     started = performance.now();
     playing = true;
-    button2("play-animation").textContent = "\uC815\uC9C0";
-    button2("play-animation").setAttribute("aria-pressed", "true");
+    button4("play-animation").textContent = "\uC815\uC9C0";
+    button4("play-animation").setAttribute("aria-pressed", "true");
     const tick = (now) => {
       if (!playing || !state || !clock) return;
       try {
@@ -1860,7 +3219,7 @@ function installPixelArtTimeline(host) {
           lastPlaybackIndex = index;
         }
         const time = finished ? clock.durationMs : elapsed % clock.durationMs;
-        el3("animation-playhead").textContent = `${index + 1} / ${state.frames.length} \xB7 ${Math.floor(time)} ms`;
+        el5("animation-playhead").textContent = `${index + 1} / ${state.frames.length} \xB7 ${Math.floor(time)} ms`;
         if (finished) {
           stop();
           return;
@@ -1873,57 +3232,57 @@ function installPixelArtTimeline(host) {
     };
     raf = requestAnimationFrame(tick);
   }
-  button2("play-animation").onclick = () => attempt2(() => playing ? stop() : play());
+  button4("play-animation").onclick = () => attempt2(() => playing ? stop() : play());
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) stop();
   });
-  button2("add-frame").onclick = () => attempt2(() => {
+  button4("add-frame").onclick = () => attempt2(() => {
     capture();
     commit(addPixelArtAnimationFrame2D(ensure()));
   });
-  button2("duplicate-frame").onclick = () => attempt2(() => {
+  button4("duplicate-frame").onclick = () => attempt2(() => {
     capture();
     commit(duplicatePixelArtAnimationFrame2D(ensure()));
   });
-  button2("remove-frame").onclick = () => attempt2(() => {
+  button4("remove-frame").onclick = () => attempt2(() => {
     capture();
     commit(removePixelArtAnimationFrame2D(ensure()), true);
   });
-  for (const [id, delta] of [["frame-left", -1], ["frame-right", 1]]) button2(id).onclick = () => attempt2(() => {
+  for (const [id, delta] of [["frame-left", -1], ["frame-right", 1]]) button4(id).onclick = () => attempt2(() => {
     capture();
     const animation = ensure(), index = animation.frames.findIndex((frame) => frame.id === animation.activeFrameId);
     if (index + delta >= 0 && index + delta < animation.frames.length) commit(movePixelArtAnimationFrame2D(animation, animation.activeFrameId, index + delta));
   });
-  field3("frame-duration").onchange = () => attempt2(() => {
-    const durationMs = Number(field3("frame-duration").value);
+  field4("frame-duration").onchange = () => attempt2(() => {
+    const durationMs = Number(field4("frame-duration").value);
     capture();
     const animation = ensure();
     commit(updatePixelArtAnimationFrame2D(animation, animation.activeFrameId, { durationMs }));
   });
-  field3("frame-name").onchange = () => attempt2(() => {
-    const name2 = field3("frame-name").value.trim();
+  field4("frame-name").onchange = () => attempt2(() => {
+    const name2 = field4("frame-name").value.trim();
     capture();
     const animation = ensure();
     commit(updatePixelArtAnimationFrame2D(animation, animation.activeFrameId, { name: name2 }));
   });
-  for (const id of ["animation-loop", "animation-direction"]) el3(id).addEventListener("change", () => attempt2(() => {
-    const loop = field3("animation-loop").checked, direction2 = select2("animation-direction").value;
+  for (const id of ["animation-loop", "animation-direction"]) el5(id).addEventListener("change", () => attempt2(() => {
+    const loop = field4("animation-loop").checked, direction2 = select2("animation-direction").value;
     capture();
     commit({ ...ensure(), loop, direction: direction2 });
   }));
-  for (const id of ["onion-skin", "onion-opacity"]) el3(id).addEventListener("input", () => {
+  for (const id of ["onion-skin", "onion-opacity"]) el5(id).addEventListener("input", () => {
     onionVersion = "";
     sync();
   });
-  button2("extract-animation-palette").onclick = () => attempt2(() => {
+  button4("extract-animation-palette").onclick = () => attempt2(() => {
     capture();
-    const animation = ensure(), count = Number(field3("palette-count").value);
+    const animation = ensure(), count = Number(field4("palette-count").value);
     const palette2 = extractPixelAnimationPalette2D(animation.frames.map((frame, i) => ({ sprite: frameRaster(i), duration: frame.durationMs })), { colors: count, weighting: "equal-frame" });
     if (!palette2.length) throw new Error("\uC0C9\uC744 \uCD94\uCD9C\uD560 \uD504\uB808\uC784\uC774 \uBE44\uC5B4 \uC788\uC2B5\uB2C8\uB2E4.");
     host.setPalette(sortPixelColorsByLightness2D(palette2));
-    el3("palette-note").textContent = `${animation.frames.length}\uAC1C \uD504\uB808\uC784\uC5D0\uC11C \uACF5\uD1B5 ${palette2.length}\uC0C9\uC744 \uCD94\uCD9C\uD574 \uBA85\uB3C4\uC21C\uC73C\uB85C \uC815\uB82C\uD588\uC2B5\uB2C8\uB2E4.`;
+    el5("palette-note").textContent = `${animation.frames.length}\uAC1C \uD504\uB808\uC784\uC5D0\uC11C \uACF5\uD1B5 ${palette2.length}\uC0C9\uC744 \uCD94\uCD9C\uD574 \uBA85\uB3C4\uC21C\uC73C\uB85C \uC815\uB82C\uD588\uC2B5\uB2C8\uB2E4.`;
   });
-  button2("apply-animation-palette").onclick = () => attempt2(() => {
+  button4("apply-animation-palette").onclick = () => attempt2(() => {
     capture();
     const animation = ensure(), palette2 = [...host.palette()];
     const frames = animation.frames.map((frame) => {
@@ -1941,8 +3300,8 @@ function installPixelArtTimeline(host) {
     });
     commit({ ...animation, frames }, true);
   });
-  button2("save-animation-sheet").onclick = () => attempt2(() => {
-    const requestedColumns = Number(field3("sheet-columns").value), padding = Number(field3("sheet-padding").value);
+  button4("save-animation-sheet").onclick = () => attempt2(() => {
+    const requestedColumns = Number(field4("sheet-columns").value), padding = Number(field4("sheet-padding").value);
     capture();
     const animation = ensure(), columns = Math.min(animation.frames.length, requestedColumns);
     const sheet = exportPixelArtAnimationSheet2D(animation, { columns, padding }), filename2 = host.filename();
@@ -1952,7 +3311,7 @@ function installPixelArtTimeline(host) {
       host.download(new Blob([JSON.stringify(manifest, null, 2)], { type: "application/json" }), filename2 + "-sheet.json");
     }).catch((error) => host.status(String(error), true));
   });
-  button2("save-animation-clip").onclick = () => attempt2(() => {
+  button4("save-animation-clip").onclick = () => attempt2(() => {
     capture();
     host.download(new Blob([JSON.stringify(exportPixelArtAnimationClip2D(ensure()))], { type: "application/json" }), host.filename() + ".sprite-clip.json");
   });
@@ -1969,11 +3328,11 @@ function installPixelArtTimeline(host) {
     }
   });
   function sync() {
-    el3("timeline-state").textContent = state ? `${state.frames.length} FRAMES` : "STILL IMAGE";
+    el5("timeline-state").textContent = state ? `${state.frames.length} FRAMES` : "STILL IMAGE";
     if (syncedVersion !== version) {
       syncedVersion = version;
-      const rows = new Map(Array.from(el3("frame-list").querySelectorAll("button")).map((row) => [row.dataset.frameId, row]));
-      el3("frame-list").replaceChildren(...(state?.frames ?? []).map((frame2, i) => {
+      const rows = new Map(Array.from(el5("frame-list").querySelectorAll("button")).map((row) => [row.dataset.frameId, row]));
+      el5("frame-list").replaceChildren(...(state?.frames ?? []).map((frame2, i) => {
         let row = rows.get(frame2.id);
         if (!row) {
           row = document.createElement("button");
@@ -1994,35 +3353,35 @@ function installPixelArtTimeline(host) {
       }));
       dirtyThumbnails.clear();
       const frame = state ? active(state) : void 0;
-      field3("frame-duration").value = String(frame?.durationMs ?? 100);
-      field3("frame-name").value = frame?.name ?? "Frame 1";
-      field3("animation-loop").checked = state?.loop ?? true;
+      field4("frame-duration").value = String(frame?.durationMs ?? 100);
+      field4("frame-name").value = frame?.name ?? "Frame 1";
+      field4("animation-loop").checked = state?.loop ?? true;
       select2("animation-direction").value = state?.direction ?? "forward";
       const index = state?.frames.findIndex((frame2) => frame2.id === state.activeFrameId) ?? 0;
-      button2("remove-frame").disabled = !state || state.frames.length <= 1;
-      button2("frame-left").disabled = !state || index === 0;
-      button2("frame-right").disabled = !state || index === state.frames.length - 1;
+      button4("remove-frame").disabled = !state || state.frames.length <= 1;
+      button4("frame-left").disabled = !state || index === 0;
+      button4("frame-right").disabled = !state || index === state.frames.length - 1;
       if (state && !playing) {
         draw(player, frameRaster(index));
-        el3("animation-playhead").textContent = `${index + 1} / ${state.frames.length}`;
+        el5("animation-playhead").textContent = `${index + 1} / ${state.frames.length}`;
       }
     }
-    const key = `${version}:${field3("onion-skin").checked}:${field3("onion-opacity").value}`;
+    const key = `${version}:${field4("onion-skin").checked}:${field4("onion-opacity").value}`;
     if (key !== onionVersion) {
       onionVersion = key;
-      onion.hidden = !state || !field3("onion-skin").checked;
+      onion.hidden = !state || !field4("onion-skin").checked;
       if (state && !onion.hidden) {
         const index = state.frames.findIndex((frame) => frame.id === state.activeFrameId);
         const neighbors = [], previous = Math.max(0, index - 1), next = Math.min(state.frames.length - 1, index + 1);
         for (let i = previous; i <= next; i++) neighbors.push(frameRaster(i));
-        draw(onion, createPixelArtOnionSkin2D(neighbors, index - previous, { previous: 1, next: 1, opacity: Number(field3("onion-opacity").value) }));
+        draw(onion, createPixelArtOnionSkin2D(neighbors, index - previous, { previous: 1, next: 1, opacity: Number(field4("onion-opacity").value) }));
       }
     }
     onion.style.width = result.style.width;
     onion.style.height = result.style.height;
     if (state) {
-      button2("undo").disabled = !history2.canUndo;
-      button2("redo").disabled = !history2.canRedo;
+      button4("undo").disabled = !history2.canUndo;
+      button4("redo").disabled = !history2.canRedo;
     }
   }
   return {
@@ -2071,7 +3430,7 @@ function installPixelArtTimeline(host) {
       version++;
       onionVersion = "";
       player.getContext("2d").clearRect(0, 0, player.width, player.height);
-      el3("animation-playhead").textContent = "\uD504\uB808\uC784\uC744 \uCD94\uAC00\uD558\uAC70\uB098 \uBCF5\uC81C\uD558\uC138\uC694";
+      el5("animation-playhead").textContent = "\uD504\uB808\uC784\uC744 \uCD94\uAC00\uD558\uAC70\uB098 \uBCF5\uC81C\uD558\uC138\uC694";
       host.refresh();
     },
     open(json) {
@@ -2390,8 +3749,8 @@ function slicePixelArtAnimationSheet2D(source, options) {
 }
 
 // gallery/png-import.ts
-function decodeLimits(input2) {
-  if (!input2 || typeof input2 !== "object" || Array.isArray(input2)) throw new RangeError("PNG decode limits must be an object.");
+function decodeLimits(input3) {
+  if (!input3 || typeof input3 !== "object" || Array.isArray(input3)) throw new RangeError("PNG decode limits must be an object.");
   const limit = (value, fallback, maximum, label) => {
     const resolved = value === void 0 ? fallback : value;
     if (!Number.isSafeInteger(resolved) || resolved < 1 || resolved > maximum)
@@ -2399,10 +3758,10 @@ function decodeLimits(input2) {
     return resolved;
   };
   return {
-    maxDimension: limit(input2.maxDimension, 512, 16384, "dimension"),
-    maxPixels: limit(input2.maxPixels, 262144, 16777216, "pixel"),
-    maxFileBytes: limit(input2.maxFileBytes, 16 * 1024 * 1024, 64 * 1024 * 1024, "file byte"),
-    maxInflatedBytes: limit(input2.maxInflatedBytes, 128 * 1024 * 1024, 128 * 1024 * 1024, "inflated byte")
+    maxDimension: limit(input3.maxDimension, 512, 16384, "dimension"),
+    maxPixels: limit(input3.maxPixels, 262144, 16777216, "pixel"),
+    maxFileBytes: limit(input3.maxFileBytes, 16 * 1024 * 1024, 64 * 1024 * 1024, "file byte"),
+    maxInflatedBytes: limit(input3.maxInflatedBytes, 128 * 1024 * 1024, 128 * 1024 * 1024, "inflated byte")
   };
 }
 var SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
@@ -2579,7 +3938,7 @@ async function decodePixelArtPNG(png, options = {}) {
     for (let y = 0; y < pass.h; y++) {
       const start = offset + y * (pass.rowBytes + 1) + 1;
       for (let x = 0; x < pass.w; x++) {
-        const input2 = start + x * channels;
+        const input3 = start + x * channels;
         let r, g, b, a;
         if (color === 3) {
           const bit = x * depth, index = raw[start + (bit >>> 3)] >>> 8 - depth - (bit & 7) & sampleMask;
@@ -2588,14 +3947,14 @@ async function decodePixelArtPNG(png, options = {}) {
           b = palette2[index * 3 + 2];
           a = transparency && index < transparency.length ? transparency[index] : 255;
         } else if (color === 0 || color === 4) {
-          const bit = x * depth, sample = depth < 8 ? raw[start + (bit >>> 3)] >>> 8 - depth - (bit & 7) & sampleMask : raw[input2];
+          const bit = x * depth, sample = depth < 8 ? raw[start + (bit >>> 3)] >>> 8 - depth - (bit & 7) & sampleMask : raw[input3];
           r = g = b = Math.round(sample * 255 / sampleMask);
-          a = color === 4 ? raw[input2 + 1] : keys && sample === keys[0] ? 0 : 255;
+          a = color === 4 ? raw[input3 + 1] : keys && sample === keys[0] ? 0 : 255;
         } else {
-          r = raw[input2];
-          g = raw[input2 + 1];
-          b = raw[input2 + 2];
-          a = color === 6 ? raw[input2 + 3] : keys && r === keys[0] && g === keys[1] && b === keys[2] ? 0 : 255;
+          r = raw[input3];
+          g = raw[input3 + 1];
+          b = raw[input3 + 2];
+          a = color === 6 ? raw[input3 + 3] : keys && r === keys[0] && g === keys[1] && b === keys[2] ? 0 : 255;
         }
         pixels[(pass.y + y * pass.dy) * w + pass.x + x * pass.dx] = (r | g << 8 | b << 16 | a << 24) >>> 0;
       }
@@ -2606,12 +3965,12 @@ async function decodePixelArtPNG(png, options = {}) {
 }
 
 // gallery/pixel-art-production.ts
-var el4 = (id) => document.getElementById(id);
-var field4 = (id) => el4(id);
-var select3 = (id) => el4(id);
-var button3 = (id) => el4(id);
+var el6 = (id) => document.getElementById(id);
+var field5 = (id) => el6(id);
+var select3 = (id) => el6(id);
+var button5 = (id) => el6(id);
 function numeric(id) {
-  const text = field4(id).value.trim(), value = Number(text);
+  const text = field5(id).value.trim(), value = Number(text);
   if (!text || !Number.isFinite(value)) throw new RangeError("\uC720\uD6A8\uD55C \uC218\uCE58\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694.");
   return value;
 }
@@ -2633,7 +3992,7 @@ function installPixelArtProduction(host) {
       return { ...next, layers: next.layers.map((layer) => layer.id === next.activeLayerId ? { ...layer, name: name2 } : layer) };
     };
     let changed2;
-    if (field4("color-all-frames").checked) changed2 = host.applyToFrames(operation);
+    if (field5("color-all-frames").checked) changed2 = host.applyToFrames(operation);
     if (changed2 === void 0) {
       const current = host.outputDocument(), next = operation(current);
       changed2 = Number(next !== current);
@@ -2645,36 +4004,36 @@ function installPixelArtProduction(host) {
     const material = document2.layers.filter((layer) => layer.kind === "material").at(-1);
     const protection = document2.protectedMask ?? material?.protectedMask;
     return {
-      ...field4("color-selection-only").checked ? { selection: document2.selection ?? material?.selection ?? Uint8Array.from(document2.pixels, (color, i) => (document2.mask?.[i] ?? 1) && color >>> 24 ? 1 : 0) } : {},
+      ...field5("color-selection-only").checked ? { selection: document2.selection ?? material?.selection ?? Uint8Array.from(document2.pixels, (color, i) => (document2.mask?.[i] ?? 1) && color >>> 24 ? 1 : 0) } : {},
       ...protection ? { protectedMask: protection } : {}
     };
   };
-  button3("color-use-picked").onclick = () => {
-    field4("color-from").value = field4("paint-color").value;
+  button5("color-use-picked").onclick = () => {
+    field5("color-from").value = field5("paint-color").value;
   };
-  button3("replace-exact-color").onclick = () => attempt2(() => {
-    const from = field4("color-from").value, to = field4("color-to").value;
+  button5("replace-exact-color").onclick = () => attempt2(() => {
+    const from = field5("color-from").value, to = field5("color-to").value;
     const replacements = [{ from, to }];
-    if (field4("color-swap").checked && from !== to) replacements.push({ from: to, to: from });
+    if (field5("color-swap").checked && from !== to) replacements.push({ from: to, to: from });
     const replacer = createPixelColorReplacer2D(replacements);
-    applyColor((source, document2) => replacer.replace(source, region(document2)), field4("color-swap").checked ? "\uB450 \uC0C9 \uB9DE\uAD50\uD658" : "\uC815\uD655\uD55C \uC0C9 \uAD50\uCCB4");
+    applyColor((source, document2) => replacer.replace(source, region(document2)), field5("color-swap").checked ? "\uB450 \uC0C9 \uB9DE\uAD50\uD658" : "\uC815\uD655\uD55C \uC0C9 \uAD50\uCCB4");
   });
-  button3("sort-working-palette").onclick = () => attempt2(() => {
+  button5("sort-working-palette").onclick = () => attempt2(() => {
     host.setPalette(sortPixelColorsByLightness2D(host.palette()));
     host.status("\uC791\uC5C5 \uD314\uB808\uD2B8\uB97C \uC5B4\uB450\uC6B4 \uC0C9\uBD80\uD130 \uC815\uB82C\uD588\uC2B5\uB2C8\uB2E4. \uADF8\uB9BC\uC758 \uC0C9\uC740 \uC801\uC6A9\uD560 \uB54C \uBC14\uB01D\uB2C8\uB2E4.");
   });
-  button3("reverse-working-palette").onclick = () => attempt2(() => {
+  button5("reverse-working-palette").onclick = () => attempt2(() => {
     host.setPalette([...host.palette()].reverse());
     host.status("\uC791\uC5C5 \uD314\uB808\uD2B8\uC758 \uC21C\uC11C\uB97C \uB4A4\uC9D1\uC5C8\uC2B5\uB2C8\uB2E4.");
   });
-  button3("gradient-fit-horizontal").onclick = () => {
+  button5("gradient-fit-horizontal").onclick = () => {
     const document2 = host.outputDocument();
-    field4("gradient-start-x").value = "0";
-    field4("gradient-start-y").value = "0";
-    field4("gradient-end-x").value = String(Math.max(1, document2.width - 1));
-    field4("gradient-end-y").value = "0";
+    field5("gradient-start-x").value = "0";
+    field5("gradient-start-y").value = "0";
+    field5("gradient-end-x").value = String(Math.max(1, document2.width - 1));
+    field5("gradient-end-y").value = "0";
   };
-  button3("apply-ramp-map").onclick = () => attempt2(() => {
+  button5("apply-ramp-map").onclick = () => attempt2(() => {
     const mode = select3("gradient-mode").value;
     const mapper = createPixelRampMapper2D(host.palette(), {
       mode,
@@ -2689,26 +4048,26 @@ function installPixelArtProduction(host) {
   });
   function gradientControls() {
     const value = select3("gradient-mode").value === "value";
-    el4("gradient-spatial-controls").hidden = value;
-    el4("gradient-value-controls").hidden = !value;
+    el6("gradient-spatial-controls").hidden = value;
+    el6("gradient-value-controls").hidden = !value;
   }
   select3("gradient-mode").onchange = gradientControls;
   gradientControls();
   let importing = false;
   function sheetControls() {
     const manifest = select3("sheet-import-mode").value === "manifest";
-    el4("sheet-grid-controls").hidden = manifest;
-    el4("sheet-manifest-control").hidden = !manifest;
+    el6("sheet-grid-controls").hidden = manifest;
+    el6("sheet-manifest-control").hidden = !manifest;
   }
   select3("sheet-import-mode").onchange = sheetControls;
   sheetControls();
-  button3("import-animation-sheet").onclick = () => {
+  button5("import-animation-sheet").onclick = () => {
     if (importing) return;
     void (async () => {
-      const file = field4("animation-sheet-file").files?.[0];
+      const file = field5("animation-sheet-file").files?.[0];
       if (!file) throw new Error("\uAC00\uC838\uC62C \uC2A4\uD504\uB77C\uC774\uD2B8\uC2DC\uD2B8 PNG\uB97C \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.");
       const manifestMode = select3("sheet-import-mode").value === "manifest";
-      const manifestFile = field4("animation-sheet-manifest").files?.[0];
+      const manifestFile = field5("animation-sheet-manifest").files?.[0];
       if (manifestMode && !manifestFile) throw new Error("PNG\uC640 \uD568\uAED8 \uB0B4\uBCF4\uB0B8 \uC2DC\uAC04 JSON\uC744 \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.");
       if (file.size > 64 * 1024 * 1024) throw new RangeError("\uC2DC\uD2B8 PNG\uB294 64 MiB \uC774\uD558\uB85C \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
       if (manifestMode && manifestFile && manifestFile.size > 4 * 1024 * 1024) throw new RangeError("\uC2DC\uD2B8 \uC2DC\uAC04 JSON\uC740 4 MiB \uC774\uD558\uB85C \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
@@ -2722,12 +4081,12 @@ function installPixelArtProduction(host) {
         order: select3("slice-order").value,
         start: numeric("slice-start"),
         ...numeric("slice-count") ? { count: numeric("slice-count") } : {},
-        skipEmpty: field4("slice-skip-empty").checked,
+        skipEmpty: field5("slice-skip-empty").checked,
         durationMs: numeric("slice-duration"),
         name: file.name.replace(/\.png$/i, "").slice(0, 160) || "Imported animation"
       };
       importing = true;
-      button3("import-animation-sheet").disabled = true;
+      button5("import-animation-sheet").disabled = true;
       host.status("\uC6D0\uBCF8 \uD53D\uC140\uC744 \uC77D\uACE0 \uD504\uB808\uC784 \uACBD\uACC4\uC640 \uC7AC\uC0DD \uC2DC\uAC04\uC744 \uD655\uC778\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4\u2026");
       try {
         const decoded = await decodePixelArtPNG(new Uint8Array(await file.arrayBuffer()), {
@@ -2743,11 +4102,11 @@ function installPixelArtProduction(host) {
         if (host.outputDocument() !== before) throw new Error("\uAC00\uC838\uC624\uB294 \uB3D9\uC548 \uC791\uC5C5\uC774 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4. \uD604\uC7AC \uC791\uC5C5\uC744 \uC720\uC9C0\uD588\uC2B5\uB2C8\uB2E4. \uC2DC\uD2B8 \uAC00\uC838\uC624\uAE30\uB97C \uB2E4\uC2DC \uB20C\uB7EC \uC8FC\uC138\uC694.");
         host.importAnimation(animation);
         const note = `${w} \xD7 ${h} \uC2DC\uD2B8 \u2192 ${animation.frames.length}\uAC1C \uD504\uB808\uC784 \xB7 ${animation.width} \xD7 ${animation.height} px. RGB\xB7\uC54C\uD30C\uC640 \uC7AC\uC0DD \uC2DC\uAC04\uC744 \uBCF4\uC874\uD588\uC2B5\uB2C8\uB2E4.`;
-        el4("sheet-import-note").textContent = note + (decoded.warnings.length ? " \uC0C9\uC0C1 \uD504\uB85C\uD30C\uC77C\uC740 \uC6D0\uBCF8 \uC218\uCE58\uB97C \uC720\uC9C0\uD558\uAE30 \uC704\uD574 \uBCC0\uD658\uD558\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4." : "");
+        el6("sheet-import-note").textContent = note + (decoded.warnings.length ? " \uC0C9\uC0C1 \uD504\uB85C\uD30C\uC77C\uC740 \uC6D0\uBCF8 \uC218\uCE58\uB97C \uC720\uC9C0\uD558\uAE30 \uC704\uD574 \uBCC0\uD658\uD558\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4." : "");
         host.status(note);
       } finally {
         importing = false;
-        button3("import-animation-sheet").disabled = false;
+        button5("import-animation-sheet").disabled = false;
       }
     })().catch((error) => host.status(error instanceof Error ? error.message : String(error), true));
   };
@@ -2755,10 +4114,10 @@ function installPixelArtProduction(host) {
 
 // gallery/pixel-art-lab.ts
 var element = (id) => document.getElementById(id);
-var input = (id) => element(id);
+var input2 = (id) => element(id);
 var select4 = (id) => element(id);
-var button4 = (id) => element(id);
-var number = (id) => Number(input(id).value);
+var button6 = (id) => element(id);
+var number2 = (id) => Number(input2(id).value);
 var canvas = (id) => element(id);
 var labels = { stone: "\uB3CC", metal: "\uAE08\uC18D", wood: "\uB098\uBB34", fabric: "\uCC9C", crystal: "\uC218\uC815" };
 var rangeIds = ["scale", "detail", "relief", "bevel", "roughness", "light-angle", "light-height", "ambient", "grain-angle", "ambient-occlusion", "cast-shadow"];
@@ -2793,6 +4152,7 @@ var analysisKey = "";
 var outputDocumentKey = "";
 var outputDocumentCache;
 var urls = [];
+var canvasFrames = /* @__PURE__ */ new Map();
 function status(message, error = false) {
   element("status").textContent = message;
   element("status").classList.toggle("error", error);
@@ -2827,52 +4187,52 @@ function settings() {
 function matchTilePeriodToCanvas() {
   if (project.width < 2 || project.height < 2) {
     delete workingOptions.tileSize;
-    input("seamless-material").checked = false;
+    input2("seamless-material").checked = false;
     element("tile-material-note").textContent = "\uBC18\uBCF5 \uC7AC\uC9C8\uC740 \uAC00\uB85C\xB7\uC138\uB85C\uAC00 \uBAA8\uB450 2\uD53D\uC140 \uC774\uC0C1\uC778 \uCE94\uBC84\uC2A4\uC5D0\uC11C \uC0AC\uC6A9\uD569\uB2C8\uB2E4.";
     return;
   }
   workingOptions = { ...workingOptions, tileSize: [project.width, project.height], bevel: 0 };
-  input("seamless-material").checked = true;
-  input("bevel").value = "0";
+  input2("seamless-material").checked = true;
+  input2("bevel").value = "0";
   element("tile-material-note").textContent = `${project.width} \xD7 ${project.height} px \uAC04\uACA9\uC73C\uB85C \uBB34\uB2AC\uAC00 \uBC18\uBCF5\uB429\uB2C8\uB2E4. \uC804\uCCB4\uB97C \uCC44\uC6B4 \uD0C0\uC77C\uC5D0\uC11C \uC0AC\uC6A9\uD558\uC138\uC694.`;
 }
 function loadSettings(options) {
   const p = createPixelMaterial2D(options).options;
   workingOptions = structuredClone(p);
-  for (const id of rangeIds) input(id).step = "any";
+  for (const id of rangeIds) input2(id).step = "any";
   select4("material").value = p.kind;
   for (const id of ["seed", "scale", "detail", "relief", "bevel", "roughness", "ambient"]) {
-    const control = input(id), value = Number(p[id]);
+    const control = input2(id), value = Number(p[id]);
     if (control.type === "range") {
       control.min = String(Math.min(Number(control.min), value));
       control.max = String(Math.max(Number(control.max), value));
     }
     control.value = String(value);
   }
-  input("light-angle").value = String(Math.atan2(p.light[1], p.light[0]) * 180 / Math.PI);
-  input("light-height").value = String(Math.atan2(p.light[2], Math.hypot(p.light[0], p.light[1])) * 180 / Math.PI);
-  input("grain-angle").value = String(((p.grainAngle * 180 / Math.PI + 180) % 360 + 360) % 360 - 180);
-  input("ambient-occlusion").value = String(p.ambientOcclusion);
-  input("cast-shadow").value = String(p.castShadow);
-  input("seamless-material").checked = !!p.tileSize;
+  input2("light-angle").value = String(Math.atan2(p.light[1], p.light[0]) * 180 / Math.PI);
+  input2("light-height").value = String(Math.atan2(p.light[2], Math.hypot(p.light[0], p.light[1])) * 180 / Math.PI);
+  input2("grain-angle").value = String(((p.grainAngle * 180 / Math.PI + 180) % 360 + 360) % 360 - 180);
+  input2("ambient-occlusion").value = String(p.ambientOcclusion);
+  input2("cast-shadow").value = String(p.castShadow);
+  input2("seamless-material").checked = !!p.tileSize;
   element("tile-material-note").textContent = p.tileSize ? `${p.tileSize[0]} \xD7 ${p.tileSize[1]} px \uAC04\uACA9\uC73C\uB85C \uBB34\uB2AC\uAC00 \uBC18\uBCF5\uB429\uB2C8\uB2E4. 3 \xD7 3 \uD0C0\uC77C \uBCF4\uAE30\uB85C \uACBD\uACC4\uB97C \uD655\uC778\uD558\uC138\uC694.` : "\uBC18\uBCF5 \uBB34\uB2AC\uB97C \uB9CC\uB4E4 \uB54C \uC0AC\uC6A9\uD569\uB2C8\uB2E4. \uCF1C\uBA74 \uAC00\uC7A5\uC790\uB9AC \uC785\uCCB4\uAC10\uC740 0\uC774 \uB429\uB2C8\uB2E4.";
   palette(p.palette);
 }
 function editSetting(id) {
-  if (input(id).type === "range") input(id).value = String(Math.round(number(id) * 1e3) / 1e3);
+  if (input2(id).type === "range") input2(id).value = String(Math.round(number2(id) * 1e3) / 1e3);
   if (id === "light-angle" || id === "light-height") {
-    const a = number("light-angle") * Math.PI / 180, e = number("light-height") * Math.PI / 180;
+    const a = number2("light-angle") * Math.PI / 180, e = number2("light-height") * Math.PI / 180;
     workingOptions.light = [Math.cos(a) * Math.cos(e), Math.sin(a) * Math.cos(e), Math.sin(e)];
-  } else if (id === "grain-angle") workingOptions.grainAngle = number(id) * Math.PI / 180;
-  else if (id === "ambient-occlusion") workingOptions.ambientOcclusion = number(id);
-  else if (id === "cast-shadow") workingOptions.castShadow = number(id);
+  } else if (id === "grain-angle") workingOptions.grainAngle = number2(id) * Math.PI / 180;
+  else if (id === "ambient-occlusion") workingOptions.ambientOcclusion = number2(id);
+  else if (id === "cast-shadow") workingOptions.castShadow = number2(id);
   else if (id === "seamless-material") {
-    if (input(id).checked) matchTilePeriodToCanvas();
+    if (input2(id).checked) matchTilePeriodToCanvas();
     else {
       delete workingOptions.tileSize;
       element("tile-material-note").textContent = "\uBC18\uBCF5 \uC7AC\uC9C8\uC744 \uAED0\uC2B5\uB2C8\uB2E4.";
     }
-  } else if (id !== "use-height") workingOptions = { ...workingOptions, [id]: number(id) };
+  } else if (id !== "use-height") workingOptions = { ...workingOptions, [id]: number2(id) };
   changed();
 }
 function pendingLayer() {
@@ -2880,14 +4240,14 @@ function pendingLayer() {
   return {
     kind: "material",
     id: editingMaterialId ?? nextPixelArtLayerId2D(project, "material"),
-    name: existing?.name ?? `${labels[select4("material").value]} \xB7 ${number("seed")}`,
+    name: existing?.name ?? `${labels[select4("material").value]} \xB7 ${number2("seed")}`,
     ...existing?.visible !== void 0 ? { visible: existing.visible } : {},
     ...existing?.locked !== void 0 ? { locked: existing.locked } : {},
     material: settings(),
     selection: Array.from(selection),
     protectedMask: Array.from(protectedMask),
     ...materialOrigin ? { origin: [...materialOrigin] } : {},
-    ...input("use-height").checked && authoredHeight ? { height: Array.from(authoredHeight) } : {}
+    ...input2("use-height").checked && authoredHeight ? existing?.kind === "material" && existing.heightSource !== "authored" ? { height: Array.from(authoredHeight) } : { heightSource: "authored" } : {}
   };
 }
 function canAddLayer() {
@@ -2921,6 +4281,8 @@ function resetHistory() {
   if (!project.layers.length) history = new PixelArtDocumentHistory2D(project);
 }
 function commitDocument(next) {
+  const workingPalette = workbench?.storedPalette();
+  if (workingPalette) next = { ...next, workingPalette: [...workingPalette] };
   if (timeline?.enabled) {
     timeline.commitFrame(next);
     return;
@@ -2965,10 +4327,12 @@ function sizeCanvases() {
   }
 }
 function paint(id, sprite, mode = "color", heatmap) {
-  const c = canvas(id);
-  c.width = sprite.w;
-  c.height = sprite.h;
-  const ctx = c.getContext("2d"), image = ctx.createImageData(c.width, c.height);
+  const c = canvas(id), overlays = id === "source" ? `${previewVersion}:${protectionVersion}` : "";
+  const cached = canvasFrames.get(id);
+  if (cached?.sprite === sprite && cached.mode === mode && cached.heatmap === heatmap && cached.overlays === overlays) return;
+  if (c.width !== sprite.w) c.width = sprite.w;
+  if (c.height !== sprite.h) c.height = sprite.h;
+  const ctx = c.getContext("2d"), image = cached?.image.width === sprite.w && cached.image.height === sprite.h ? cached.image : ctx.createImageData(c.width, c.height);
   const channels = sprite.channels;
   let low = Infinity, high = -Infinity;
   if (mode === "height" && channels) {
@@ -3007,6 +4371,7 @@ function paint(id, sprite, mode = "color", heatmap) {
     image.data.set([r, g, b, sprite.mask.data[i] ? packed2 >>> 24 : 0], j);
   }
   ctx.putImageData(image, 0, 0);
+  canvasFrames.set(id, { sprite, mode, heatmap, overlays, image });
 }
 function update() {
   queued = false;
@@ -3014,13 +4379,13 @@ function update() {
   attempt(() => {
     const hasLayerRoom = canAddLayer();
     if (!hasLayerRoom) draft = false;
-    for (const control of document.querySelectorAll(".inspector input,.inspector select,#new-seed,#reset-palette")) control.disabled = !hasLayerRoom;
+    for (const control of document.querySelectorAll(".inspector input,.inspector select,#new-seed,#reset-palette")) if (!control.closest(".relight-panel")) control.disabled = !hasLayerRoom;
     for (const control of document.querySelectorAll(".selection-bar input,.selection-bar select,.selection-bar button")) control.disabled = !canEditMasks();
-    input("use-height").disabled = !hasLayerRoom || !authoredHeight;
+    input2("use-height").disabled = !hasLayerRoom || !authoredHeight;
     canvas("source").setAttribute("aria-disabled", String(!canEditMasks()));
     canvas("source").style.cursor = canEditMasks() ? "crosshair" : "default";
     for (const id of rangeIds) {
-      const out = element(id + "-value"), value = number(id), rounded = Math.round(value * 1e3) / 1e3;
+      const out = element(id + "-value"), value = number2(id), rounded = Math.round(value * 1e3) / 1e3;
       out.textContent = (value !== rounded ? "\u2248" : "") + String(rounded) + (["light-angle", "light-height", "grain-angle"].includes(id) ? "\xB0" : id === "scale" || id === "bevel" ? " px" : "");
       out.title = String(value);
     }
@@ -3031,7 +4396,10 @@ function update() {
     }
     const nextOutputKey = `${revision}:${previewVersion}:${draft}:${editingMaterialId ?? ""}`;
     if (!cachedOutput || outputKey !== nextOutputKey) {
-      cachedOutput = draft ? editingMaterialId ? renderPixelArtDocument2D(outputProject()) : createPixelMaterial2D(settings()).shade(committed, pendingLayer()) : committed;
+      cachedOutput = draft ? editingMaterialId ? renderPixelArtDocument2D(outputProject()) : createPixelMaterial2D(settings()).shade(
+        committed,
+        { ...pendingLayer(), ...input2("use-height").checked && authoredHeight ? { height: authoredHeight } : {} }
+      ) : committed;
       outputKey = nextOutputKey;
     }
     rendered = paintPreview ?? cachedOutput;
@@ -3076,12 +4444,12 @@ function update() {
     element("layer-count").textContent = String(project.layers.length);
     workbench?.sync();
     element("empty-layers").hidden = project.layers.length > 0;
-    button4("undo").disabled = !history.canUndo;
-    button4("redo").disabled = !history.canRedo;
+    button6("undo").disabled = !history.canUndo;
+    button6("redo").disabled = !history.canRedo;
     timeline?.sync();
-    button4("apply-material").disabled = !draft || !count || !hasLayerRoom;
-    button4("apply-material").textContent = editingMaterialId ? "\uC218\uC815\uD55C \uC7AC\uC9C8 \uC801\uC6A9" : "\uC120\uD0DD \uC601\uC5ED\uC5D0 \uC7AC\uC9C8 \uC801\uC6A9";
-    button4("cancel-preview").disabled = !draft;
+    button6("apply-material").disabled = !draft || !count || !hasLayerRoom;
+    button6("apply-material").textContent = editingMaterialId ? "\uC218\uC815\uD55C \uC7AC\uC9C8 \uC801\uC6A9" : "\uC120\uD0DD \uC601\uC5ED\uC5D0 \uC7AC\uC9C8 \uC801\uC6A9";
+    button6("cancel-preview").disabled = !draft;
     if (!element("status").classList.contains("error")) status(hasLayerRoom ? `${paintPreview ? "\uD3B8\uC9D1 \uC911" : draft ? "\uBBF8\uB9AC\uBCF4\uAE30" : "\uC801\uC6A9 \uC644\uB8CC"} \xB7 ${Math.round(performance.now() - started)} ms \xB7 ${after.metrics.paletteSize}\uC0C9` : `\uC774 \uD574\uC0C1\uB3C4\uC758 \uB808\uC774\uC5B4 \uD55C\uB3C4 ${pixelArtLayerLimit2D(project.width, project.height)}\uAC1C \xB7 \uC2E4\uD589 \uCDE8\uC18C\uD558\uBA74 \uACC4\uC18D \uD3B8\uC9D1\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`);
     element("result").dataset.ready = "true";
     valid = true;
@@ -3101,12 +4469,18 @@ function changed() {
   draft = canAddLayer();
   schedule();
 }
+function masksChanged() {
+  element("status").classList.remove("error");
+  paintPreview = void 0;
+  previewVersion++;
+  schedule();
+}
 function study() {
   const shape = select4("shape").value;
   if (shape === "imported") return;
   timeline?.close();
   workbench?.restoreAuthoredPalette(void 0);
-  const result = createPixelArtStudy2D(shape, number("seed"), input("organic").checked);
+  const result = createPixelArtStudy2D(shape, number2("seed"), input2("organic").checked);
   project = { ...createPixelArtDocument2D(result.sprite, `POKU ${shape}`), authoredHeight: Array.from(result.height) };
   sourceAuthoredHeight = result.height;
   authoredHeight = result.height;
@@ -3118,14 +4492,14 @@ function study() {
   resetHistory();
   revision++;
   draft = true;
-  input("use-height").disabled = false;
-  input("use-height").checked = true;
-  input("organic").disabled = !["stone-path", "boulder"].includes(shape);
+  input2("use-height").disabled = false;
+  input2("use-height").checked = true;
+  input2("organic").disabled = !["stone-path", "boulder"].includes(shape);
   schedule();
 }
 function resetMaterial() {
   const kind = select4("material").value;
-  const seed = number("seed");
+  const seed = number2("seed");
   loadSettings({ kind, seed, roughness: kind === "metal" ? 0.25 : kind === "crystal" ? 0.3 : 0.65, scale: kind === "fabric" ? 12 : 15, light: [-0.67, -0.74, 0.8], ambient: 0.18 });
   changed();
 }
@@ -3168,53 +4542,53 @@ select4("shape").addEventListener("change", () => attempt(() => {
     study();
   }
 }));
-input("organic").addEventListener("change", () => attempt(study));
-button4("new-seed").onclick = () => attempt(() => {
-  input("seed").value = String(number("seed") + 1 >>> 0);
+input2("organic").addEventListener("change", () => attempt(study));
+button6("new-seed").onclick = () => attempt(() => {
+  input2("seed").value = String(number2("seed") + 1 >>> 0);
   editSetting("seed");
 });
-button4("reset-palette").onclick = () => attempt(() => {
+button6("reset-palette").onclick = () => attempt(() => {
   workingOptions.palette = [...PIXEL_MATERIAL_PALETTES_2D[select4("material").value]];
   delete workingOptions.thresholds;
   palette(workingOptions.palette);
   changed();
 });
-button4("select-all").onclick = () => {
+button6("select-all").onclick = () => {
   selection = Uint8Array.from(committed.pixels, (c, i) => committed.mask.data[i] && c >>> 24 ? 1 : 0);
-  changed();
+  masksChanged();
 };
-button4("clear-selection").onclick = () => {
+button6("clear-selection").onclick = () => {
   selection.fill(0);
-  changed();
+  masksChanged();
 };
-button4("clear-protection").onclick = () => {
+button6("clear-protection").onclick = () => {
   protectedMask.fill(0);
   protectionVersion++;
-  changed();
+  masksChanged();
 };
-button4("apply-material").onclick = () => attempt(() => {
+button6("apply-material").onclick = () => attempt(() => {
   if (draft) commitDocument(outputProject());
 });
-button4("cancel-preview").onclick = () => {
+button6("cancel-preview").onclick = () => {
   draft = false;
   editingMaterialId = void 0;
   paintPreview = void 0;
   schedule();
 };
-button4("undo").onclick = () => attempt(() => moveHistory("undo"));
-button4("redo").onclick = () => attempt(() => moveHistory("redo"));
-button4("save-png").onclick = () => attempt(savePNG);
-button4("save-project").onclick = () => attempt(() => {
+button6("undo").onclick = () => attempt(() => moveHistory("undo"));
+button6("redo").onclick = () => attempt(() => moveHistory("redo"));
+button6("save-png").onclick = () => attempt(savePNG);
+button6("save-project").onclick = () => attempt(() => {
   if (update()) addDownload(new Blob([timeline?.serialize() ?? serializePixelArtDocument2D(outputProject())], { type: "application/json" }), filename() + ".poku-pixel-art.json");
 });
-button4("focus-workspace").onclick = () => {
+button6("focus-workspace").onclick = () => {
   const enabled = document.body.classList.toggle("focus-mode");
-  button4("focus-workspace").setAttribute("aria-pressed", String(enabled));
-  button4("focus-workspace").textContent = enabled ? "\uBE44\uAD50 \uD654\uBA74\uC73C\uB85C" : "\uC791\uC5C5 \uD654\uBA74 \uD655\uB300";
+  button6("focus-workspace").setAttribute("aria-pressed", String(enabled));
+  button6("focus-workspace").textContent = enabled ? "\uBE44\uAD50 \uD654\uBA74\uC73C\uB85C" : "\uC791\uC5C5 \uD654\uBA74 \uD655\uB300";
   schedule();
 };
-button4("import-png").onclick = () => input("png-file").click();
-button4("open-project").onclick = () => input("project-file").click();
+button6("import-png").onclick = () => input2("png-file").click();
+button6("open-project").onclick = () => input2("project-file").click();
 function prepareImported(next, replaceHistory = true, preparedRaster) {
   if (next.width > 4096 || next.height > 4096) throw new RangeError("\uBE0C\uB77C\uC6B0\uC800 \uC791\uC5C5\uC2E4\uC5D0\uC11C\uB294 \uAC00\uB85C\xB7\uC138\uB85C 4096\uD53D\uC140 \uC774\uD558\uC758 \uD504\uB85C\uC81D\uD2B8\uB97C \uC0AC\uC6A9\uD574 \uC8FC\uC138\uC694.");
   serializePixelArtDocument2D(next);
@@ -3222,14 +4596,14 @@ function prepareImported(next, replaceHistory = true, preparedRaster) {
   element("status").classList.remove("error");
   project = next;
   select4("shape").value = "imported";
-  input("organic").disabled = true;
+  input2("organic").disabled = true;
   workbench?.restoreAuthoredPalette(next.workingPalette);
   const last = project.layers.filter((layer) => layer.kind === "material").at(-1);
   sourceAuthoredHeight = next.authoredHeight ? Float32Array.from(next.authoredHeight) : last?.height ? Float32Array.from(last.height) : void 0;
   authoredHeight = renderPixelArtAuthoredHeight2D(sourceAuthoredHeight && !next.authoredHeight ? { ...next, authoredHeight: Array.from(sourceAuthoredHeight) } : next);
   materialOrigin = last?.origin ? [...last.origin] : void 0;
-  input("use-height").checked = !!authoredHeight;
-  input("use-height").disabled = !authoredHeight;
+  input2("use-height").checked = !!authoredHeight;
+  input2("use-height").disabled = !authoredHeight;
   selection = next.selection ? Uint8Array.from(next.selection) : last?.selection ? Uint8Array.from(last.selection) : Uint8Array.from(project.pixels, (c, i) => (project.mask?.[i] ?? 1) && c >>> 24 ? 1 : 0);
   protectedMask = next.protectedMask ? Uint8Array.from(next.protectedMask) : last?.protectedMask ? Uint8Array.from(last.protectedMask) : new Uint8Array(selection.length);
   protectionVersion++;
@@ -3246,8 +4620,8 @@ function prepareImported(next, replaceHistory = true, preparedRaster) {
   paintPreview = void 0;
   schedule();
 }
-input("project-file").onchange = async () => {
-  const file = input("project-file").files?.[0];
+input2("project-file").onchange = async () => {
+  const file = input2("project-file").files?.[0];
   if (!file || busy) return;
   busy = true;
   try {
@@ -3265,11 +4639,11 @@ input("project-file").onchange = async () => {
     status(String(error), true);
   } finally {
     busy = false;
-    input("project-file").value = "";
+    input2("project-file").value = "";
   }
 };
-input("png-file").onchange = async () => {
-  const file = input("png-file").files?.[0];
+input2("png-file").onchange = async () => {
+  const file = input2("png-file").files?.[0];
   if (!file || busy) return;
   busy = true;
   let bitmap;
@@ -3298,7 +4672,7 @@ input("png-file").onchange = async () => {
   } finally {
     bitmap?.close();
     busy = false;
-    input("png-file").value = "";
+    input2("png-file").value = "";
   }
 };
 function point(event) {
@@ -3310,7 +4684,7 @@ function connected(x, y, add) {
   if (x < 0 || y < 0 || x >= w || y >= h) return;
   const start = y * w + x, reference = committed.pixels[start];
   if (!(reference >>> 24) || !committed.mask.data[start]) return;
-  const tolerance = Math.max(0, Math.min(100, number("tolerance"))), seen = new Uint8Array(w * h), queue = new Uint32Array(w * h);
+  const tolerance = Math.max(0, Math.min(100, number2("tolerance"))), seen = new Uint8Array(w * h), queue = new Uint32Array(w * h);
   let head = 0, tail = 0;
   queue[tail++] = start;
   seen[start] = 1;
@@ -3327,7 +4701,7 @@ function connected(x, y, add) {
   }
 }
 function brush(x, y) {
-  const tool = select4("selection-tool").value, r = Math.max(1, Math.min(32, number("brush-size"))) / 2;
+  const tool = select4("selection-tool").value, r = Math.max(1, Math.min(32, number2("brush-size"))) / 2;
   const target = tool === "protect" || tool === "unprotect" ? protectedMask : selection, value = tool === "erase" || tool === "unprotect" ? 0 : 1;
   if (target === protectedMask) protectionVersion++;
   for (let py = Math.max(0, Math.floor(y - r)); py <= Math.min(project.height - 1, Math.ceil(y + r)); py++) for (let px = Math.max(0, Math.floor(x - r)); px <= Math.min(project.width - 1, Math.ceil(x + r)); px++) {
@@ -3343,21 +4717,21 @@ canvas("source").onpointerdown = (event) => {
   event.preventDefault();
   if (select4("selection-tool").value === "connected") {
     connected(x, y, event.shiftKey);
-    changed();
+    masksChanged();
     return;
   }
   pointer = event.pointerId;
   lastPoint = [x, y];
   canvas("source").setPointerCapture(pointer);
   brush(x, y);
-  changed();
+  masksChanged();
 };
 canvas("source").onpointermove = (event) => {
   if (pointer !== event.pointerId || !lastPoint || !canEditMasks()) return;
   const next = point(event), dx = next[0] - lastPoint[0], dy = next[1] - lastPoint[1], steps = Math.max(1, Math.abs(dx), Math.abs(dy));
   for (let i = 1; i <= steps; i++) brush(Math.round(lastPoint[0] + dx * i / steps), Math.round(lastPoint[1] + dy * i / steps));
   lastPoint = next;
-  changed();
+  masksChanged();
 };
 var endStroke = () => {
   pointer = void 0;
@@ -3412,6 +4786,13 @@ workbench = installPixelArtWorkbench({
   status,
   download: addDownload,
   filename,
+  discardPreview: () => {
+    draft = false;
+    editingMaterialId = void 0;
+    paintPreview = void 0;
+    previewVersion++;
+    schedule();
+  },
   editMaterial: (id) => attempt(() => {
     const layer = project.layers.find((layer2) => layer2.id === id && layer2.kind === "material");
     if (!layer || layer.locked) return;
@@ -3420,9 +4801,9 @@ workbench = installPixelArtWorkbench({
     selection = layer.selection ? Uint8Array.from(layer.selection) : new Uint8Array(project.width * project.height).fill(1);
     protectedMask = layer.protectedMask ? Uint8Array.from(layer.protectedMask) : new Uint8Array(selection.length);
     protectionVersion++;
-    authoredHeight = layer.height ? Float32Array.from(layer.height) : void 0;
+    authoredHeight = layer.heightSource === "authored" ? renderPixelArtAuthoredHeight2D({ ...project, layers: project.layers.slice(0, project.layers.indexOf(layer)) }) : layer.height ? Float32Array.from(layer.height) : void 0;
     materialOrigin = layer.origin ? [...layer.origin] : void 0;
-    input("use-height").checked = !!authoredHeight;
+    input2("use-height").checked = !!authoredHeight;
     previewVersion++;
     draft = true;
     schedule();

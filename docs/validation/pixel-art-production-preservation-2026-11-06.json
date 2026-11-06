@@ -3031,7 +3031,7 @@
     }
   ],
   "aggregateSHA256": "99f028c377f0d2f74aeb8ed87a9fd951661fa61fbe2598f2cc15789518d5818a",
-  "elapsedSeconds": 24.274538237,
+  "elapsedSeconds": 21.918487016,
   "baselineCommit": "ad18d8a34427416696910634a28d830251fbfaa4",
   "scope": "Five deterministic sample times per effect at default settings, with opt-in HDR enabled; samples compare native color, packed light, HDR light and composite RGBA. This is preservation evidence, not aesthetic certification or exhaustive all-frame/all-option proof."
 }

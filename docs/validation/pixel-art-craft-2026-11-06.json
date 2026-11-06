@@ -1,0 +1,43 @@
+{
+  "schema": "poku-pixel-art-craft-validation/v1",
+  "recordedAt": "2026-11-06T14:57:58.677498+00:00",
+  "baselineCommit": "ad18d8a34427416696910634a28d830251fbfaa4",
+  "sourceHash": "60a22e514a8ded3ebc558e147c7d2570a77625b40c77de8c778c9be4dbf0908c",
+  "build": {
+    "command": "npm run build",
+    "result": "passed"
+  },
+  "node": {
+    "command": "node --test tests/*.test.mjs",
+    "tests": 1035,
+    "passed": 1035,
+    "failed": 0,
+    "skipped": 0
+  },
+  "preparedAssets": {
+    "command": "node site/scripts/prepare-engine.mjs --check",
+    "result": "passed"
+  },
+  "preservation": {
+    "report": "pixel-art-craft-preservation-2026-11-06.json",
+    "effects": 274,
+    "sampledFrames": 1370,
+    "bufferComparisons": 10960,
+    "mismatches": 0,
+    "errors": 0
+  },
+  "browser": {
+    "local": "unavailable: Chromium Unix socket creation is denied by the execution environment; browser sandbox remains enabled",
+    "ci": "pending; required Craft harness added to browser-studio job",
+    "newHarness": "tools/pixel-art-craft-browser-harness.mjs"
+  },
+  "visualReview": {
+    "observer": "assistant",
+    "actualViews": [
+      "docs/previews/pixel-art-craft/comparison-native.png",
+      "docs/previews/pixel-art-craft/comparison-3x.png"
+    ],
+    "observed": "Top study reads as a teal leaf-shaped feather ornament; lower study reads as a blue embroidered banner. Relighting makes the raised ridge and cloth folds legible while the native edges remain discrete. The colors, sculpted heights and derived normals are shown separately.",
+    "scope": "Authored examples of the new tools, not changes to catalog effects or a claim of user approval, aesthetic certification, exhaustive all-frame preservation or GPU speed."
+  }
+}

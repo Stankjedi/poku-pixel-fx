@@ -80,6 +80,11 @@ function documentFootprint(document: PixelArtDocument2D): { stored: number; rend
       stored += arrayLength(value);
       if (object(value)) for (const option of Object.values(value as Record<string, unknown>)) stored += arrayLength(option);
     }
+    // Path anchors contain nested coordinate pairs, unlike the flat native arrays.
+    // Count their actual stored coordinates before validation copies the path.
+    if (layer.kind === 'path' && Array.isArray(layer.nodes)) for (const node of layer.nodes) {
+      if (object(node)) stored += arrayLength(node.point) + arrayLength(node.in) + arrayLength(node.out);
+    }
   }
   return { stored, render: document.width * document.height * (1 + document.layers.length) };
 }

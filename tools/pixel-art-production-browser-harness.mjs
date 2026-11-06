@@ -43,6 +43,9 @@ try {
     const project = async () => JSON.parse(await download('save-project', '.poku-pixel-art.json'));
     const png = async () => Buffer.from(decodePNG(await download('save-png', '.png')).rgba);
     const chooseFrame = async index => { await evaluate(`document.querySelectorAll('#frame-list button')[${index}].click()`); await ready(); };
+    const editLayer = async (id, type) => {
+      await evaluate(`(()=>{const row=[...document.querySelectorAll('#layer-list li')].find(r=>r.dataset.layerId===${JSON.stringify(id)}),button=row&&[...row.querySelectorAll('button')].find(b=>b.title.endsWith(${JSON.stringify(type + ' 수정')}));if(!button)throw new Error('Missing layer edit control');button.click();})()`); await ready();
+    };
     const importSheet = async () => {
       await click('import-animation-sheet');
       await waitFor("!document.getElementById('import-animation-sheet').disabled"); await ready();
@@ -99,6 +102,57 @@ try {
     await change('paint-color', '#ffffff'); await check('lock-paint-color', true); await change('palette-count', 3);
     await click('extract-palette'); await ready();
     assert(equal((await project()).workingPalette, [color(0, 0, 0), color(128, 128, 128), color(255, 255, 255)]), 'A locked highlight stays exact but no longer appears before black in an extracted shade ramp');
+
+    phase = 'animation palette-layer re-edit and swatch persistence';
+    const originalDark = color(8, 12, 24), editedDark = color(24, 35, 52), highlight = color(225, 242, 220);
+    const originalSwatches = [originalDark, highlight], editedSwatches = [editedDark, highlight];
+    const paletteCelPixels = [
+      [originalDark, color(225, 242, 220, 128), color(8, 12, 24, 1)],
+      [highlight, originalDark, color(225, 242, 220, 1)],
+    ];
+    const paletteAnimation = {
+      schema: 'poku-pixel-art/v3', name: 'Palette re-edit proof', width: 3, height: 1,
+      activeFrameId: 'palette-cel-0', loop: true, direction: 'forward',
+      frames: paletteCelPixels.map((pixels, index) => ({
+        id: `palette-cel-${index}`, name: `Palette cel ${index}`, durationMs: 80 + index * 40,
+        document: fixture(`Palette cel ${index}`, 3, 1, pixels, {
+          workingPalette: [...originalSwatches], activeLayerId: 'palette-reedit',
+          layers: [{ kind: 'palette', id: 'palette-reedit', name: 'Independent cel palette',
+            palette: [...originalSwatches], dither: 'none', strength: 1, origin: [2.5, -1.5] }],
+        }),
+      })),
+    };
+    await upload(paletteAnimation);
+    const beforePaletteReedit = await project();
+    await editLayer('palette-reedit', '팔레트');
+    await evaluate("(()=>{const swatch=document.querySelector('#workbench-palette input');swatch.value='#182334';swatch.dispatchEvent(new Event('input',{bubbles:true}));})()"); await ready();
+    await click('apply-palette'); await ready();
+    const reeditedAnimation = await project(), editedCel = reeditedAnimation.frames[0].document;
+    assert(editedCel.layers.length === 1 && editedCel.layers[0].id === 'palette-reedit'
+      && equal(editedCel.layers[0].palette, editedSwatches) && equal(editedCel.workingPalette, editedSwatches),
+    'Re-editing a v3 palette layer keeps the same layer and saves its edited colors as the current working swatches');
+    assert(equal(editedCel.pixels, paletteCelPixels[0]) && equal(editedCel.layers[0].origin, [2.5, -1.5])
+      && equal(reeditedAnimation.frames[1], beforePaletteReedit.frames[1]),
+    'A palette re-edit preserves original pixels, palette coordinates and the untouched animation cel');
+    const editedPalettePixels = [editedDark, color(225, 242, 220, 128), color(24, 35, 52, 1)];
+    assert((await png()).equals(rgba(editedPalettePixels)), 'The re-edited palette exports exact new colors while retaining alpha 1 and 128');
+    await click('undo'); await ready();
+    const undonePalette = (await project()).frames[0].document;
+    assert(equal(undonePalette.workingPalette, originalSwatches) && equal(undonePalette.layers[0].palette, originalSwatches)
+      && (await png()).equals(rgba(paletteCelPixels[0])), 'Undo restores the animation cel palette, authoring swatches and native PNG together');
+    await click('redo'); await ready();
+    assert(equal((await project()).frames[0].document, editedCel), 'Redo restores the edited layer and its matching saved working palette');
+    await chooseFrame(1);
+    assert(await evaluate("document.querySelector('#workbench-palette input').value==='#080c18'")
+      && (await png()).equals(rgba(paletteCelPixels[1])), 'Switching to the untouched cel restores its own swatches and exact image');
+    await chooseFrame(0);
+    assert(await evaluate("document.querySelector('#workbench-palette input').value==='#182334'")
+      && (await png()).equals(rgba(editedPalettePixels)), 'Returning to the edited cel retains the new working palette and native colors');
+    const savedPaletteAnimation = await project(); await upload(savedPaletteAnimation);
+    const reopenedPaletteAnimation = await project();
+    assert(equal(reopenedPaletteAnimation.frames, savedPaletteAnimation.frames)
+      && await evaluate("document.querySelector('#workbench-palette input').value==='#182334'")
+      && (await png()).equals(rgba(editedPalettePixels)), 'Saving and reopening the v3 project retains both independent palettes and the edited cel output');
 
     phase = 'batch color edits and frame metadata';
     const frames = [40, 100, 160].map((durationMs, i) => ({ id: `cel-${i}`, name: `Cel ${i}`, durationMs,
