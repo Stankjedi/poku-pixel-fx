@@ -1,0 +1,155 @@
+{
+  "status": "passed",
+  "checks": [
+    "Physical rectangle selection includes every dragged endpoint cell without adding a paint/material layer",
+    "Selection and grid overlays do not enter the exact straight-RGBA PNG, including alpha 1 and 128",
+    "Dragging creates a replayable transform layer, moves exact source bytes, follows the object with the selection, and leaves source artwork intact",
+    "The horizontal flip reverses the selected native color order without altering alpha",
+    "A non-square 3×2 selection rotates into 2×3 cells about its top-left anchor without half-cell filtering",
+    "Undo removes a complete transform and restores its exact predecessor",
+    "Redo restores exact transform output",
+    "Saving and reopening retains every transform layer and the byte-exact result",
+    "A transform collision with protected detail reports an error through the actual UI",
+    "Rejected protected collisions leave saved artwork and layer history unchanged",
+    "Default canvas-boundary rejection does not silently clip the selection",
+    "Rejected off-canvas movement leaves the exact previous output",
+    "Explicit tile wrapping uses the canvas period and retains protected neighbors",
+    "A physical concave lasso preserves its narrow arm and does not paint or recolor the source",
+    "Shift-drag adds a disconnected rectangle to the existing lasso selection",
+    "Alt-drag subtracts exactly the specified native cells",
+    "A retraced shade gesture advances one authored ramp step, preserves protected/off-ramp colors, and never applies layer opacity twice",
+    "Shade undo restores raw and visible ink alpha",
+    "Shade editing survives saving and reopening with exact layer opacity",
+    "Forty physical arrow-key nudges retain one editable transform and restore the lower artwork at intermediate positions",
+    "A coalesced transform still has one complete undo step per individual nudge",
+    "Redo restores the fortieth nudge without appending another layer",
+    "Selecting a different object starts a separate transform instead of modifying the earlier object’s movement",
+    "An intervening paint layer prevents later translations from being folded into an earlier transform",
+    "A drag rejected at the layer limit clears its transient preview and leaves both visible and saved artwork unchanged",
+    "Adjusting isolated relight directions, ambient, roughness, occlusion, shadows and wrapping leaves imported artwork and material controls unchanged before applying",
+    "Applying imported-albedo relighting adds only one relight layer and preserves exact source RGB, independent mask, geometry, authored height, selection and protection metadata",
+    "Saved relight options come from the dedicated controls, including the intended light direction and independent repeating geometry",
+    "Relighting changes selected visible color while every alpha byte, protected cell, unselected cell and hidden RGB remains exact",
+    "Color-only relighting leaves independently exported normal and height maps unchanged",
+    "One undo removes the relight operation and restores the original multicolor albedo without a hidden material replacement",
+    "Relight layers reopen with exact options, geometry metadata and native PNG output",
+    "Enabling seamless material stores the current canvas period and removes the silhouette bevel before committing",
+    "Importing a different-size unlayered canvas while seamless mode is enabled updates its period to the new dimensions and preserves full coverage",
+    "The visible 3×3 tile proof contains nine exact native copies of the committed tile",
+    "A saved seamless material restores its period, zero-bevel controls and exact PNG after reopening",
+    "Importing a one-cell-wide canvas exits incompatible seamless mode without invalidating or changing the artwork",
+    "Attempting canvas-sized tiling on a one-cell axis explains the minimum size and never stores an invalid tile period",
+    "Duplicating a still image creates independent editable v3 cels with identical native artwork",
+    "A new two-frame animation exports immediately with the default sheet-column controls",
+    "Painting the duplicated cel changes the actual second-frame artwork",
+    "Switching to the first cel proves duplicate painting did not mutate its source",
+    "Switching back retains the complete edited second cel",
+    "Per-cel names, unequal durations and independently authored pixel layers are saved in the v3 project",
+    "Frame-order controls move the selected cel without losing its identity",
+    "Animation undo restores the original cel order",
+    "Adding a cel creates a blank editable frame at the same native dimensions",
+    "Deleting the blank cel preserves the other three frames",
+    "Neighbor cels appear on an independent onion canvas while native PNG output excludes ghosts, selection and grid",
+    "Sheet JSON records the authored ping-pong order and exact unequal-duration boundaries",
+    "Every decoded sheet cell equals its independently authored native frame bytes, including hidden RGB and partial alpha",
+    "Atlas padding and unused grid cells stay transparent instead of inheriting editor overlays",
+    "The runtime SpriteClip RLE decodes to the same native cels and explicitly includes the ping-pong return leg",
+    "The v3 file picker round trip retains all cels, active selection, names, durations, playback settings and editable layers",
+    "Real requestAnimationFrame playback visits forward, return and wrap cels in the visible ping-pong order",
+    "Non-loop playback displays its final cel and valid playhead even when a whole 3ms animation fits between browser frames",
+    "Common-palette extraction considers every frame, persists the active cel working palette, and preserves the animation fallback and every other project field",
+    "Common-palette extraction preserves every native PNG byte before palette application",
+    "Applying the common palette adds the same editable palette layer to every cel",
+    "Shared-palette cel 1 uses only selected colors while preserving every authored alpha byte",
+    "Shared-palette cel 2 uses only selected colors while preserving every authored alpha byte",
+    "Shared-palette cel 3 uses only selected colors while preserving every authored alpha byte",
+    "An unchanged color remains exactly the same across frames after common-palette mapping",
+    "Selection transforms and animation controls remain inside a 390px viewport with scrollable frame cards",
+    "Selection, transforms, shade brushes, timelines and file exports produce no uncaught browser exceptions"
+  ],
+  "mobile": {
+    "viewport": 390,
+    "document": 390,
+    "panels": [
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      }
+    ]
+  },
+  "selection": {
+    "width": 16,
+    "height": 12,
+    "transformedRGBA_SHA256": "2dcf3f7bac310564f9a1013047dbf12c4b19157efa452a1cc1c8db48b02894b9",
+    "layerCount": 3
+  },
+  "shade": {
+    "width": 6,
+    "height": 2,
+    "rgbaSHA256": "8435fed86a074314067cb8d8cf930142fd6cb381825fbbf447ce774c1bf9a7ae",
+    "rawAlpha": 128,
+    "displayedAlpha": 64
+  },
+  "relight": {
+    "width": 8,
+    "height": 6,
+    "rgbaSHA256": "7ed6269f2ec797fd147a8e95202921e6f12a7d76e9437f1c3c3b2ba097a2387e",
+    "layers": [
+      "relight"
+    ],
+    "preservedGeometry": true
+  },
+  "seamless": {
+    "width": 12,
+    "height": 10,
+    "tileSize": [
+      12,
+      10
+    ],
+    "rgbaSHA256": "258a451b1de4e60baa1fba72bb1ed084a253be17b9db97eba4d12e0b346f2d96"
+  },
+  "animation": {
+    "width": 12,
+    "height": 10,
+    "frames": 3,
+    "durationsMs": [
+      120,
+      180,
+      240
+    ],
+    "observedPlayback": [
+      1,
+      2,
+      3,
+      2,
+      1
+    ],
+    "sheet": {
+      "width": 28,
+      "height": 24,
+      "rgbaSHA256": "e870c9ba0bcf67deb3b116301e486eceb84f7233e5536fb9a92cb8691975c887"
+    },
+    "commonPalette": [
+      "#4874df",
+      "#e1392b",
+      "#48c488"
+    ]
+  },
+  "scope": "Actual bundled DOM controls, physical CDP pointer gestures, real browser playback, file inputs and decoded export bytes. Native pixel/alpha preservation, independent editable cels, common palettes and responsive layout; no aesthetic or hardware GPU performance certification."
+}

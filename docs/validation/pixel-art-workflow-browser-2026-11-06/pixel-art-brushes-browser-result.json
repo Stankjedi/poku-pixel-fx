@@ -1,0 +1,92 @@
+{
+  "status": "passed",
+  "checks": [
+    "The initial hand-authored leaf brush stamps visible native pixels and exports valid unsigned packed colors",
+    "Selection capture uses the true source row stride and preserves partial alpha, hidden RGB, selected transparent cells and excluded mask cells",
+    "Capturing, naming and exporting a brush leaves the project pixels and layer history unchanged",
+    "Brush file picker round trips preserve every native color, mask byte, name and local anchor",
+    "A physical stamp replaces exact RGBA including alpha 1, while transparent and hidden donor cells leave the existing artwork untouched",
+    "Cluster painting stores sparse replacements and preserves the imported source layer",
+    "A non-square brush flip followed by a quarter turn moves cells and its anchor exactly, while reusing the active top paint layer",
+    "Undo removes exactly one complete transformed stamping gesture",
+    "Redo restores the same transformed native pixels",
+    "Saving and reopening cluster-painted projects preserves the exact image and editable sparse paint layer",
+    "A 14-cell stroke places stamps at distances 0, 5 and 10 without adding an off-phase endpoint",
+    "Dense and sparse physical pointer samples produce identical stamp spacing",
+    "Diagonal cluster spacing follows the actual continuous pointer path before converting stamp centers to native cells",
+    "Intermediate fractional pointer positions do not turn a straight diagonal into a longer staircase or shift its stamp phase",
+    "Selection, protected detail and alpha lock constrain the destination, retaining its exact alpha and leaving hidden or empty cells untouched",
+    "Alt-click selects a clone donor cell without modifying any project pixels or layers",
+    "An overlapping clone stroke reads the fixed pre-stroke donor and does not recursively smear newly written pixels",
+    "Aligned clone gestures retain the same source-to-destination offset across separate strokes",
+    "Turning alignment off restarts each clone gesture at the explicitly chosen source cell",
+    "The touch-accessible source-pick button chooses a new donor without painting",
+    "Cloning the visible result of a half-opacity layer creates a new top layer and does not reduce the copied alpha a second time",
+    "A full 32-layer document can still stamp into its selected visible top paint layer",
+    "The tile-edit action exposes an interactive repeated canvas and enables supported wrapped painting",
+    "A physical gesture crossing from x=14 to x=18 in the 3×3 canvas paints both edges and leaves the middle untouched",
+    "One wrapped tile gesture remains one undo step",
+    "Rectangle editing explicitly disables unsupported wrap and marks the repeated surface as read-only",
+    "Ellipse editing also explicitly disables unsupported wrap",
+    "Wrapped clone picking and painting use the same donor for repeated copies and fold donor coordinates only after the continuous stroke",
+    "An authored multicolor cluster wraps its complete footprint across both tile axes with exact partial alpha",
+    "The same repeated canvas supports wrapped erasure without damaging neighboring copied cells",
+    "Escape cancels a physical in-progress cluster gesture without leaving a preview or sparse paint override",
+    "Saving during an active gesture first commits exactly the visible cluster stroke",
+    "Duplicated animation cels keep their own independent cluster-painted sparse layers",
+    "Returning to the original cel restores its exact pre-duplication PNG",
+    "Expanded cluster, clone and recovery controls fit a 390px viewport while large repeated canvases scroll inside their own panel",
+    "Brush capture, clone gestures, tile editing, canceled previews, file exports and cel switches produce no uncaught browser exceptions"
+  ],
+  "mobile": {
+    "viewport": 390,
+    "document": 390,
+    "panels": [
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      }
+    ]
+  },
+  "cluster": {
+    "width": 3,
+    "height": 2,
+    "alpha": [
+      255,
+      128,
+      0,
+      1,
+      255,
+      199
+    ],
+    "exactRGBA_SHA256": "6d7f7be2692166b9fb266a3c1872a21c5b3a18e6b445fc6d8f17a6374a0073b2"
+  },
+  "tile": {
+    "width": 16,
+    "height": 12,
+    "unwrappedGesture": [
+      [
+        14,
+        5
+      ],
+      [
+        18,
+        5
+      ]
+    ],
+    "rgbaSHA256": "417199a288545c59ea7aa8d94c3e22d7e9c1dda81fd363e4716b1fa8aede7005"
+  },
+  "scope": "Actual bundled UI, physical CDP pointer input on native and repeated canvases, file pickers and independent exact-RGBA expectations. No artistic-quality score or physical-GPU performance claim."
+}

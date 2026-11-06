@@ -58,3 +58,7 @@ v3 최상위의 공통 `workingPalette`를 기본값으로 사용할 수 있습�
 두 번째 저장 요청에 주입한 실패의 트랜잭션 원자성, 외부 저장 연결의 삭제 후 재저장,
 저장 중 자동 저장을 끈 뒤의 편집, 잘못된 복구본, 여러 cel의 독립 팔레트와 공통 기본값, 390px 화면을 확인합니다.
 이 검사는 실제 사용자의 모든 브라우저 저장 정책이나 종료 시점을 보장하는 시험은 아닙니다.
+
+실제 Chrome에서 복구 관련 32개 검사가 통과했습니다. [복구 완료 화면](previews/pixel-art-workflow/recovery-workbench.png),
+[원본 검사 목록](validation/pixel-art-workflow-browser-2026-11-06/pixel-art-recovery-browser-result.json),
+[통합 검증 기록](validation/pixel-art-workflow-2026-11-06.json)에 실행 환경과 범위를 기록했습니다.

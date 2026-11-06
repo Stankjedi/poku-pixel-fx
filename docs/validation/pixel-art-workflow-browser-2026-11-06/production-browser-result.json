@@ -1,0 +1,45 @@
+{
+  "status": "passed",
+  "checks": [
+    "First palette-lock action converts unrestricted emission to an allowed stepped policy",
+    "Studio exposes ordered palette color dithering and clustered dot patterns",
+    "Duration control retimes choreography and contact timing together",
+    "Sequence conversion explains coordinate-bound paint restrictions instead of silently dropping hand edits",
+    "Conversion preserves the object transform, crop, original source layers, margin and camera policy",
+    "Converting an effect preserves its authored seed",
+    "Sequence cue creation, timing edits and undo/redo use the actual Studio controls",
+    "Worker deduplicates identical cels while preserving four frame durations and exported ZIP",
+    "Atlas settings persist from project to browser asset manifest",
+    "Production workflow has no uncaught UI/worker errors",
+    "GPU Lab loads its bundled entry and produces an actual WebGPU or explicitly labelled worker CPU frame",
+    "GPU Lab initial presentation has no uncaught errors"
+  ],
+  "bundle": {
+    "frames": 4,
+    "pages": 1,
+    "rects": [
+      "{\"x\":2,\"y\":2,\"w\":1,\"h\":1}",
+      "{\"x\":2,\"y\":2,\"w\":1,\"h\":1}",
+      "{\"x\":2,\"y\":2,\"w\":1,\"h\":1}",
+      "{\"x\":2,\"y\":2,\"w\":1,\"h\":1}"
+    ],
+    "duration": 400,
+    "atlas": {
+      "maxTextureSize": 256,
+      "padding": 2,
+      "extrude": 1,
+      "trim": true,
+      "deduplicate": true
+    },
+    "size": [
+      5,
+      5
+    ],
+    "zip": true
+  },
+  "lab": {
+    "backend": "CPU 기준 정지화면",
+    "status": "WebGPU 대체 표시 · WebGPU is unavailable or no adapter was granted"
+  },
+  "scope": "Actual Studio sequence/palette/retiming/worker-export/GPU-Lab UI. Adapter availability is reported separately from correctness."
+}

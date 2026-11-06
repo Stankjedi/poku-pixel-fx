@@ -40,17 +40,79 @@
     "aggregateSHA256": "99f028c377f0d2f74aeb8ed87a9fd951661fa61fbe2598f2cc15789518d5818a"
   },
   "browser": {
-    "status": "pending",
-    "requiredHarnesses": [
-      "tools/pixel-art-browser-harness.mjs",
-      "tools/pixel-workbench-browser-harness.mjs",
-      "tools/pixel-art-pro-browser-harness.mjs",
-      "tools/pixel-art-production-browser-harness.mjs",
-      "tools/pixel-art-craft-browser-harness.mjs",
-      "tools/pixel-art-brushes-browser-harness.mjs",
-      "tools/pixel-art-recovery-browser-harness.mjs"
+    "status": "passed",
+    "run": "https://github.com/Stankjedi/poku-pixel-fx/actions/runs/42246388269",
+    "head": "c38173cd3a7ec3d82f285a499e85ceac268075d2",
+    "artifactId": 13519720181,
+    "pixelEditorChecks": 301,
+    "studioChecks": 37,
+    "productionChecks": 12,
+    "newBrushChecks": 36,
+    "newRecoveryChecks": 32,
+    "reports": [
+      {
+        "report": "docs/validation/pixel-art-workflow-browser-2026-11-06/gpu-browser-result.json",
+        "status": "partial",
+        "checks": 3
+      },
+      {
+        "report": "docs/validation/pixel-art-workflow-browser-2026-11-06/pixel-art-browser-result.json",
+        "status": "passed",
+        "checks": 30
+      },
+      {
+        "report": "docs/validation/pixel-art-workflow-browser-2026-11-06/pixel-art-brushes-browser-result.json",
+        "status": "passed",
+        "checks": 36
+      },
+      {
+        "report": "docs/validation/pixel-art-workflow-browser-2026-11-06/pixel-art-craft-browser-result.json",
+        "status": "passed",
+        "checks": 37
+      },
+      {
+        "report": "docs/validation/pixel-art-workflow-browser-2026-11-06/pixel-art-pro-browser-result.json",
+        "status": "passed",
+        "checks": 65
+      },
+      {
+        "report": "docs/validation/pixel-art-workflow-browser-2026-11-06/pixel-art-production-browser-result.json",
+        "status": "passed",
+        "checks": 50
+      },
+      {
+        "report": "docs/validation/pixel-art-workflow-browser-2026-11-06/pixel-art-recovery-browser-result.json",
+        "status": "passed",
+        "checks": 32
+      },
+      {
+        "report": "docs/validation/pixel-art-workflow-browser-2026-11-06/pixel-workbench-browser-result.json",
+        "status": "passed",
+        "checks": 51
+      },
+      {
+        "report": "docs/validation/pixel-art-workflow-browser-2026-11-06/production-browser-result.json",
+        "status": "passed",
+        "checks": 12
+      },
+      {
+        "report": "docs/validation/pixel-art-workflow-browser-2026-11-06/studio-browser-result.json",
+        "status": "passed",
+        "checks": 37
+      }
     ],
-    "localEnvironment": "Chromium Unix socket creation is restricted. The existing browser sandbox is retained; required CI provides actual browser validation."
+    "screenshots": [
+      {
+        "path": "docs/previews/pixel-art-workflow/brushes-workbench.png",
+        "sha256": "23e07d086258ed8c62784071061c71a64a13cdf8c13cc371f81b9359e5508144"
+      },
+      {
+        "path": "docs/previews/pixel-art-workflow/recovery-workbench.png",
+        "sha256": "2d77100566d03b3adeab4edc519a4c1359e1869244a86acfddf40410f3213a61"
+      }
+    ],
+    "localEnvironment": "Chromium Unix socket creation is restricted. The browser sandbox was retained; required CI ran actual Chromium UI, files, physical pointer input and IndexedDB.",
+    "gpuScope": "Browser WebGL2 parity checks passed; WebGPU adapter was unavailable (partial capability report). Native wgpu is a separate CI job. No physical GPU throughput is claimed."
   },
   "scope": "Native editor, exact brush/clone operations, explicit tile painting, workspace swatches and browser-local recovery. No existing catalog artwork or renderer default is intentionally changed.",
   "integration": {
@@ -58,5 +120,31 @@
     "preserved": "Precision color editing, independent cel palettes, exact Adam7 input, sheet import and import-race protection.",
     "palettePolicy": "Explicit cel workingPalette takes priority over optional animation fallback; simply displaying fallback does not materialize metadata or add an Undo step. Exact packed RGBA, including alpha 0 and partial alpha, is normalized unsigned and retained.",
     "pointerPolicy": "Validated document replacement releases the previous source-selection pointer before installing the new document."
+  },
+  "visualReview": {
+    "observer": "assistant",
+    "viewed": [
+      "docs/previews/pixel-art-craft/comparison-native.png",
+      "docs/previews/pixel-art-workflow/brushes-workbench.png",
+      "docs/previews/pixel-art-workflow/recovery-workbench.png"
+    ],
+    "observed": "Native teal ornament and embroidered banner retain crisp cell silhouettes; authored height and derived normals produce visible ridges and folds under relighting. The actual browser screenshots show expanded cluster and clone controls, the editable banner, and the successful recovery selector/status without overlapping controls.",
+    "mobile": "Actual UI checks at 390px report no horizontal overflow, including expanded brush controls and long recovery labels.",
+    "scope": "Actual renderer/browser evidence; no synthetic screenshot, artistic-quality certification or claim of exhaustive browser/storage-policy coverage."
+  },
+  "ci": {
+    "run": "https://github.com/Stankjedi/poku-pixel-fx/actions/runs/42246388269",
+    "head": "c38173cd3a7ec3d82f285a499e85ceac268075d2",
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": {
+      "verify": "success",
+      "windows-package": "success",
+      "site-build": "success",
+      "browser-studio": "success",
+      "native-wgpu": "success"
+    },
+    "sourceHash": "e67072143b462fc7c7094762a8b41e244bb59283c43e84db1dd9e5d4467096b4",
+    "evidenceScope": "Reports and screenshots were added after the successful run. Product source and prepared assets retain this exact fingerprint."
   }
 }
