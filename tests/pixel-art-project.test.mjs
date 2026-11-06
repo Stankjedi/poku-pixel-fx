@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { hex } from '../build/core/color.js';
 import {
   createPixelArtProject2D, validatePixelArtProject2D, pixelArtSource2D,
-  renderPixelArtProject2D, serializePixelArtProject2D, parsePixelArtProject2D,
+  renderPixelArtProject2D, serializePixelArtProject2D, parsePixelArtProject2D, pixelArtLayerLimit2D,
 } from '../build/authoring/pixel-art-project.js';
 import { createPixelArtStudy2D } from '../build/examples/pixel-art-study.js';
 
@@ -165,6 +165,22 @@ test('defined but invalid material selections, origins and authored heights cann
     ...[null, [0], [0, 0, 0, 2], Array(4)].map(protectedMask => ({ ...layer, protectedMask })),
   ];
   for (const badLayer of invalid) assert.throws(() => validatePixelArtProject2D({ ...base, layers: [badLayer] }));
+});
+
+test('authoring layer capacity uses the same count and total-cell limits as project validation', () => {
+  assert.equal(pixelArtLayerLimit2D(8, 8), 32);
+  assert.equal(pixelArtLayerLimit2D(1024, 512), 32);
+  assert.equal(pixelArtLayerLimit2D(1025, 512), 31);
+  assert.equal(pixelArtLayerLimit2D(1024, 768), 21);
+  assert.equal(pixelArtLayerLimit2D(1024, 1024), 16);
+  const project = {
+    schema: 'poku-pixel-art/v1', name: 'Cell budget boundary', width: 1024, height: 1024,
+    pixels: Array(1024 * 1024).fill(0),
+    layers: Array.from({ length: 16 }, (_, i) => ({ name: `Layer ${i + 1}`, material: { kind: 'stone' } })),
+  };
+  assert.equal(validatePixelArtProject2D(project).layers.length, 16, 'the exact cell budget remains valid without rendering it');
+  project.layers.push({ name: 'One layer too many', material: { kind: 'stone' } });
+  assert.throws(() => validatePixelArtProject2D(project), /layer budget/);
 });
 
 test('project imports enforce the material shader origin range before rendering', () => {

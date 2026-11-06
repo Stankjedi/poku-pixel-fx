@@ -84,11 +84,16 @@ function createPixelArtStudy2D(shape = "stone-path", seed = 41, organic = true) 
 
 // src/authoring/pixel-art-project.ts
 var MAX_CELLS = 1048576;
+var MAX_LAYERS = 32;
+var MAX_LAYER_CELLS = 16777216;
 var MAX_JSON_BYTES = 64 * 1024 * 1024;
 function rasterSize(width, height) {
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1 || width * height > MAX_CELLS)
     throw new RangeError("Pixel art projects need positive native dimensions and at most 1,048,576 cells");
   return width * height;
+}
+function pixelArtLayerLimit2D(width, height) {
+  return Math.min(MAX_LAYERS, Math.floor(MAX_LAYER_CELLS / rasterSize(width, height)));
 }
 function name(value) {
   return typeof value === "string" && value.length > 0 && value.length <= 160;
@@ -111,7 +116,7 @@ function validatePixelArtProject2D(input2) {
   for (const c of p.pixels) if (!Number.isInteger(c) || c < 0 || c > 4294967295)
     throw new RangeError("Pixel art pixels must be packed unsigned ABGR values matching the native size");
   const sourceMask = mask(p.mask, n, "Source silhouette");
-  if (!Array.isArray(p.layers) || p.layers.length > 32 || p.layers.length * n > 16777216)
+  if (!Array.isArray(p.layers) || p.layers.length > pixelArtLayerLimit2D(p.width, p.height))
     throw new RangeError("Pixel art material layer budget exceeded");
   const layers = Array.from(p.layers, (layer) => {
     if (!layer || !name(layer.name) || !layer.material || typeof layer.material !== "object")
@@ -270,8 +275,11 @@ function pendingLayer() {
     ...input("use-height").checked && authoredHeight ? { height: Array.from(authoredHeight) } : {}
   };
 }
+function canAddLayer() {
+  return !project || project.layers.length < pixelArtLayerLimit2D(project.width, project.height);
+}
 function outputProject() {
-  return draft ? { ...project, layers: [...project.layers, pendingLayer()] } : project;
+  return draft && canAddLayer() ? { ...project, layers: [...project.layers, pendingLayer()] } : project;
 }
 function sizeCanvases() {
   const dpr = window.devicePixelRatio || 1, requested = select("zoom").value;
@@ -333,6 +341,12 @@ function update() {
   queued = false;
   let valid = false;
   attempt(() => {
+    const hasLayerRoom = canAddLayer();
+    if (!hasLayerRoom) draft = false;
+    for (const control of document.querySelectorAll(".inspector input,.inspector select,#new-seed,#reset-palette,.selection-bar input,.selection-bar select,.selection-bar button")) control.disabled = !hasLayerRoom;
+    input("use-height").disabled = !hasLayerRoom || !authoredHeight;
+    canvas("source").setAttribute("aria-disabled", String(!hasLayerRoom));
+    canvas("source").style.cursor = hasLayerRoom ? "crosshair" : "default";
     for (const id of rangeIds) {
       const out = element(id + "-value"), value = number(id), rounded = Math.round(value * 1e3) / 1e3;
       out.textContent = (value !== rounded ? "\u2248" : "") + String(rounded) + (["light-angle", "light-height", "grain-angle"].includes(id) ? "\xB0" : id === "scale" || id === "bevel" ? " px" : "");
@@ -368,7 +382,7 @@ function update() {
     const count = selection.reduce((n, v, i) => n + Number(v > 0 && !protectedMask[i] && committed.mask.data[i] > 0 && committed.pixels[i] >>> 24 > 0), 0);
     element("selection-count").textContent = `\uC120\uD0DD ${count.toLocaleString()} px \xB7 \uBCF4\uD638 ${protectedMask.reduce((n, v) => n + Number(v > 0), 0).toLocaleString()} px`;
     element("render-state").textContent = draft ? "PREVIEW" : "APPLIED";
-    element("result-caption").textContent = draft ? "\uC124\uC815\uC744 \uBC14\uAFD4 \uBE44\uAD50\uD55C \uB4A4, \uC120\uD0DD \uC601\uC5ED\uC5D0 \uC7AC\uC9C8\uC744 \uC801\uC6A9\uD558\uC138\uC694." : "\uC801\uC6A9\uD55C \uB808\uC774\uC5B4\uB97C \uC6D0\uBCF8\uC5D0\uC11C \uB2E4\uC2DC \uACC4\uC0B0\uD55C \uACB0\uACFC\uC785\uB2C8\uB2E4.";
+    element("result-caption").textContent = !hasLayerRoom ? "\uC801\uC6A9\uD55C \uACB0\uACFC\uB97C \uD45C\uC2DC\uD569\uB2C8\uB2E4. \uC2E4\uD589 \uCDE8\uC18C\uB85C \uB808\uC774\uC5B4\uB97C \uC904\uC774\uBA74 \uC7AC\uC9C8 \uD3B8\uC9D1\uC744 \uACC4\uC18D\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4." : draft ? "\uC124\uC815\uC744 \uBC14\uAFD4 \uBE44\uAD50\uD55C \uB4A4, \uC120\uD0DD \uC601\uC5ED\uC5D0 \uC7AC\uC9C8\uC744 \uC801\uC6A9\uD558\uC138\uC694." : "\uC801\uC6A9\uD55C \uB808\uC774\uC5B4\uB97C \uC6D0\uBCF8\uC5D0\uC11C \uB2E4\uC2DC \uACC4\uC0B0\uD55C \uACB0\uACFC\uC785\uB2C8\uB2E4.";
     element("layer-count").textContent = String(project.layers.length);
     element("layer-list").replaceChildren(...project.layers.map((layer) => {
       const li = document.createElement("li");
@@ -378,8 +392,8 @@ function update() {
     element("empty-layers").hidden = project.layers.length > 0;
     button("undo").disabled = !project.layers.length;
     button("redo").disabled = !redo.length;
-    button("apply-material").disabled = !draft || !count || project.layers.length >= 32;
-    status(`${draft ? "\uBBF8\uB9AC\uBCF4\uAE30" : "\uC801\uC6A9 \uC644\uB8CC"} \xB7 ${Math.round(performance.now() - started)} ms \xB7 ${after.metrics.paletteSize}\uC0C9`);
+    button("apply-material").disabled = !draft || !count || !hasLayerRoom;
+    status(hasLayerRoom ? `${draft ? "\uBBF8\uB9AC\uBCF4\uAE30" : "\uC801\uC6A9 \uC644\uB8CC"} \xB7 ${Math.round(performance.now() - started)} ms \xB7 ${after.metrics.paletteSize}\uC0C9` : `\uC774 \uD574\uC0C1\uB3C4\uC758 \uB808\uC774\uC5B4 \uD55C\uB3C4 ${pixelArtLayerLimit2D(project.width, project.height)}\uAC1C \xB7 \uC2E4\uD589 \uCDE8\uC18C\uD558\uBA74 \uACC4\uC18D \uD3B8\uC9D1\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`);
     element("result").dataset.ready = "true";
     valid = true;
   });
@@ -392,7 +406,7 @@ function schedule() {
   }
 }
 function changed() {
-  draft = true;
+  draft = canAddLayer();
   schedule();
 }
 function study() {
@@ -604,7 +618,7 @@ function brush(x, y) {
 var pointer;
 var lastPoint;
 canvas("source").onpointerdown = (event) => {
-  if (event.button !== 0) return;
+  if (event.button !== 0 || !canAddLayer()) return;
   const [x, y] = point(event);
   event.preventDefault();
   if (select("selection-tool").value === "connected") {
@@ -619,7 +633,7 @@ canvas("source").onpointerdown = (event) => {
   changed();
 };
 canvas("source").onpointermove = (event) => {
-  if (pointer !== event.pointerId || !lastPoint) return;
+  if (pointer !== event.pointerId || !lastPoint || !canAddLayer()) return;
   const next = point(event), dx = next[0] - lastPoint[0], dy = next[1] - lastPoint[1], steps = Math.max(1, Math.abs(dx), Math.abs(dy));
   for (let i = 1; i <= steps; i++) brush(Math.round(lastPoint[0] + dx * i / steps), Math.round(lastPoint[1] + dy * i / steps));
   lastPoint = next;

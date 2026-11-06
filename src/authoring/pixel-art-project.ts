@@ -23,11 +23,17 @@ export interface PixelArtProject2D {
 }
 
 const MAX_CELLS = 1_048_576;
+const MAX_LAYERS = 32;
+const MAX_LAYER_CELLS = 16_777_216;
 const MAX_JSON_BYTES = 64 * 1024 * 1024;
 function rasterSize(width: number, height: number): number {
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1 || width * height > MAX_CELLS)
     throw new RangeError('Pixel art projects need positive native dimensions and at most 1,048,576 cells');
   return width * height;
+}
+/** Maximum material operations for this native raster, shared by validation and authoring UIs. */
+export function pixelArtLayerLimit2D(width: number, height: number): number {
+  return Math.min(MAX_LAYERS, Math.floor(MAX_LAYER_CELLS / rasterSize(width, height)));
 }
 function name(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 160; }
 function mask(value: unknown, size: number, label: string): number[] | undefined {
@@ -50,7 +56,7 @@ export function validatePixelArtProject2D(input: unknown): PixelArtProject2D {
   for (const c of p.pixels) if (!Number.isInteger(c) || c < 0 || c > 0xffffffff)
     throw new RangeError('Pixel art pixels must be packed unsigned ABGR values matching the native size');
   const sourceMask = mask(p.mask, n, 'Source silhouette');
-  if (!Array.isArray(p.layers) || p.layers.length > 32 || p.layers.length * n > 16_777_216)
+  if (!Array.isArray(p.layers) || p.layers.length > pixelArtLayerLimit2D(p.width, p.height))
     throw new RangeError('Pixel art material layer budget exceeded');
   const layers = Array.from(p.layers, layer => {
     if (!layer || !name(layer.name) || !layer.material || typeof layer.material !== 'object')

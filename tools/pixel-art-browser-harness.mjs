@@ -212,6 +212,42 @@ try {
     assert(isDeepStrictEqual(pending.material, expectedSettings) && isDeepStrictEqual(pending.origin, stressLayer.origin),
       'Changing only seed preserves imported precise ranges, vertical negative light, grain angle, ramp thresholds, material ID and object origin');
 
+    // A tiny raster exercises the real apply/save boundary without rendering millions of layer-cells.
+    const bounded = {
+      schema: 'poku-pixel-art/v1', name: 'Layer capacity', width: 8, height: 8,
+      pixels: Array(64).fill(0xff806040),
+      layers: Array.from({ length: 31 }, (_, i) => ({ name: `Layer ${i + 1}`,
+        material: { kind: 'stone', seed: i, palette: ['#bada55'], detail: 0, relief: 0, bevel: 0 } })),
+    };
+    const boundedPath = join(temporary, 'layer-capacity.poku-pixel-art.json');
+    await writeFile(boundedPath, JSON.stringify(bounded));
+    await upload('project-file', boundedPath); await ready();
+    await change('material', 'metal');
+    const lastSlotPreview = await readCanvas();
+    await click('apply-material'); await ready("document.getElementById('layer-count').textContent==='32'");
+    assert(await evaluate(() => document.getElementById('render-state').textContent === 'APPLIED'
+      && ['apply-material', 'material', 'seed', 'new-seed', 'scale', 'clear-selection', 'selection-tool'].every(id => document.getElementById(id).disabled)
+      && !document.getElementById('save-project').disabled && !document.getElementById('save-png').disabled
+      && document.getElementById('source').getAttribute('aria-disabled') === 'true'
+      && document.getElementById('status').textContent.includes('한도 32개')
+      && document.getElementById('status').textContent.includes('실행 취소')),
+    'Reaching the layer limit keeps APPLIED output, disables further material/selection edits, and explains that undo restores editing');
+    await click('new-seed'); await click('clear-selection'); await mouseCell(4, 4);
+    const boundedSave = await exportProject(), boundedPNG = decodePNG((await exportFile('save-png', '.png')).bytes);
+    assert(boundedSave.layers.length === 32 && (await readCanvas()).rgba.equals(lastSlotPreview.rgba)
+      && Buffer.from(boundedPNG.rgba).equals(lastSlotPreview.rgba),
+    'At capacity, attempted editing creates no unsaveable draft and native PNG/project saves retain the visible applied result');
+    await writeFile(boundedPath, JSON.stringify(boundedSave));
+    await upload('project-file', boundedPath); await ready();
+    assert((await readCanvas()).rgba.equals(lastSlotPreview.rgba) && isDeepStrictEqual(await exportProject(), boundedSave),
+      'A project saved at the exact layer boundary reopens with the same output and no extra layer');
+    await click('undo'); await ready("document.getElementById('layer-count').textContent==='31'&&!document.getElementById('material').disabled");
+    await change('material', 'wood');
+    const resumedPreview = await readCanvas();
+    assert(await evaluate("document.getElementById('render-state').textContent==='PREVIEW'&&!document.getElementById('apply-material').disabled")
+      && (await exportProject()).layers.length === 32 && !resumedPreview.rgba.equals(lastSlotPreview.rgba),
+    'Undo frees capacity so material editing and saving the final available preview work again');
+
     // Restore a useful authoring view for the optional screenshot and viewport checks.
     await change('shape', 'stone-path'); await change('zoom', '2');
     const zoom = await evaluate(() => {

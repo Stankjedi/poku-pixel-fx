@@ -3,7 +3,7 @@ import { diagnosePixelArt2D } from '../src/core/pixel-art-analysis.js';
 import type { EditableSprite2D } from '../src/core/sprite-edit.js';
 import type { MaterialChannels2D } from '../src/core/material-surface.js';
 import { createPixelArtStudy2D, type PixelArtStudyShape2D } from '../src/examples/pixel-art-study.js';
-import { createPixelArtProject2D, renderPixelArtProject2D, parsePixelArtProject2D, serializePixelArtProject2D, type PixelArtLayer2D, type PixelArtProject2D } from '../src/authoring/pixel-art-project.js';
+import { createPixelArtProject2D, renderPixelArtProject2D, parsePixelArtProject2D, serializePixelArtProject2D, pixelArtLayerLimit2D, type PixelArtLayer2D, type PixelArtProject2D } from '../src/authoring/pixel-art-project.js';
 
 const element = (id: string) => document.getElementById(id)!;
 const input = (id: string) => element(id) as HTMLInputElement;
@@ -71,8 +71,11 @@ function pendingLayer(): PixelArtLayer2D {
     ...(materialOrigin ? {origin:[...materialOrigin] as [number,number]} : {}),
     ...(input('use-height').checked && authoredHeight ? {height:Array.from(authoredHeight)} : {})};
 }
+function canAddLayer(): boolean {
+  return !project || project.layers.length < pixelArtLayerLimit2D(project.width,project.height);
+}
 function outputProject(): PixelArtProject2D {
-  return draft ? {...project,layers:[...project.layers,pendingLayer()]} : project;
+  return draft && canAddLayer() ? {...project,layers:[...project.layers,pendingLayer()]} : project;
 }
 function sizeCanvases() {
   const dpr = window.devicePixelRatio || 1, requested = select('zoom').value;
@@ -110,6 +113,12 @@ function update() {
   queued=false;
   let valid=false;
   attempt(() => {
+    const hasLayerRoom=canAddLayer();
+    if(!hasLayerRoom)draft=false;
+    for(const control of document.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('.inspector input,.inspector select,#new-seed,#reset-palette,.selection-bar input,.selection-bar select,.selection-bar button'))control.disabled=!hasLayerRoom;
+    input('use-height').disabled=!hasLayerRoom||!authoredHeight;
+    canvas('source').setAttribute('aria-disabled',String(!hasLayerRoom));
+    canvas('source').style.cursor=hasLayerRoom?'crosshair':'default';
     for (const id of rangeIds) {
       const out=element(id+'-value'),value=number(id),rounded=Math.round(value*1000)/1000;
       out.textContent=(value!==rounded?'≈':'')+String(rounded)+(['light-angle','light-height','grain-angle'].includes(id)?'°':id==='scale'||id==='bevel'?' px':'');
@@ -135,20 +144,20 @@ function update() {
     const count=selection.reduce((n,v,i)=>n+Number(v>0&&!protectedMask[i]&&committed.mask.data[i]>0&&(committed.pixels[i]>>>24)>0),0);
     element('selection-count').textContent=`선택 ${count.toLocaleString()} px · 보호 ${protectedMask.reduce((n,v)=>n+Number(v>0),0).toLocaleString()} px`;
     element('render-state').textContent=draft?'PREVIEW':'APPLIED';
-    element('result-caption').textContent=draft?'설정을 바꿔 비교한 뒤, 선택 영역에 재질을 적용하세요.':'적용한 레이어를 원본에서 다시 계산한 결과입니다.';
+    element('result-caption').textContent=!hasLayerRoom?'적용한 결과를 표시합니다. 실행 취소로 레이어를 줄이면 재질 편집을 계속할 수 있습니다.':draft?'설정을 바꿔 비교한 뒤, 선택 영역에 재질을 적용하세요.':'적용한 레이어를 원본에서 다시 계산한 결과입니다.';
     element('layer-count').textContent=String(project.layers.length);
     element('layer-list').replaceChildren(...project.layers.map(layer=>{const li=document.createElement('li');li.textContent=layer.name;return li;}));
     element('empty-layers').hidden=project.layers.length>0;
     button('undo').disabled=!project.layers.length;button('redo').disabled=!redo.length;
-    button('apply-material').disabled=!draft||!count||project.layers.length>=32;
-    status(`${draft?'미리보기':'적용 완료'} · ${Math.round(performance.now()-started)} ms · ${after.metrics.paletteSize}색`);
+    button('apply-material').disabled=!draft||!count||!hasLayerRoom;
+    status(hasLayerRoom?`${draft?'미리보기':'적용 완료'} · ${Math.round(performance.now()-started)} ms · ${after.metrics.paletteSize}색`:`이 해상도의 레이어 한도 ${pixelArtLayerLimit2D(project.width,project.height)}개 · 실행 취소하면 계속 편집할 수 있습니다.`);
     element('result').dataset.ready='true';
     valid=true;
   });
   return valid;
 }
 function schedule() {if(!queued){queued=true;requestAnimationFrame(update);}}
-function changed() {draft=true;schedule();}
+function changed() {draft=canAddLayer();schedule();}
 function study() {
   const shape=select('shape').value;
   if(shape==='imported')return;
@@ -256,12 +265,12 @@ function brush(x:number,y:number) {
 }
 let pointer:number|undefined,lastPoint:[number,number]|undefined;
 canvas('source').onpointerdown=event=>{
-  if(event.button!==0)return;const [x,y]=point(event);event.preventDefault();
+  if(event.button!==0||!canAddLayer())return;const [x,y]=point(event);event.preventDefault();
   if(select('selection-tool').value==='connected'){connected(x,y,event.shiftKey);changed();return;}
   pointer=event.pointerId;lastPoint=[x,y];canvas('source').setPointerCapture(pointer);brush(x,y);changed();
 };
 canvas('source').onpointermove=event=>{
-  if(pointer!==event.pointerId||!lastPoint)return;const next=point(event),dx=next[0]-lastPoint[0],dy=next[1]-lastPoint[1],steps=Math.max(1,Math.abs(dx),Math.abs(dy));
+  if(pointer!==event.pointerId||!lastPoint||!canAddLayer())return;const next=point(event),dx=next[0]-lastPoint[0],dy=next[1]-lastPoint[1],steps=Math.max(1,Math.abs(dx),Math.abs(dy));
   for(let i=1;i<=steps;i++)brush(Math.round(lastPoint[0]+dx*i/steps),Math.round(lastPoint[1]+dy*i/steps));lastPoint=next;changed();
 };
 const endStroke=()=>{pointer=undefined;lastPoint=undefined;};

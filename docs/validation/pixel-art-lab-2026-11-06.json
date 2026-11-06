@@ -3,8 +3,13 @@
   "date": "2026-11-06",
   "baseCommit": "a7c02b1503ec9a2915284a41045d323030dff5b8",
   "build": "passed",
-  "nodeRegression": {"tests": 865, "passed": 865, "failed": 0, "skipped": 0},
-  "newPixelArtTests": 45,
+  "nodeRegression": {
+    "tests": 866,
+    "passed": 866,
+    "failed": 0,
+    "skipped": 0
+  },
+  "newPixelArtTests": 46,
   "preservation": {
     "existingEffectSourcesUnchanged": true,
     "existing3DEffectSourcesUnchanged": true,
@@ -16,11 +21,17 @@
     "status": "unavailable",
     "reason": "Chromium startup failed at process_singleton_posix socket() with Operation not permitted; no browser assertions ran locally.",
     "sandboxSettingsChanged": false,
-    "requiredFollowUp": "The browser-studio CI job runs tools/pixel-art-browser-harness.mjs with PIXEL_ART_REQUIRED=1. Use the PR check result as browser execution evidence."
+    "requiredFollowUp": "Final head browser execution is tracked by the browser-studio check on PR #20, including the layer-capacity regression."
   },
   "visualObservation": {
-    "files": ["docs/previews/pixel-art-lab/material-studies.png", "docs/previews/pixel-art-lab/stone-comparison.png"],
-    "nativeStudySize": [192, 112],
+    "files": [
+      "docs/previews/pixel-art-lab/material-studies.png",
+      "docs/previews/pixel-art-lab/stone-comparison.png"
+    ],
+    "nativeStudySize": [
+      192,
+      112
+    ],
     "observed": [
       "Stone has connected curved value groups, intermittent crevices and selective edge highlights.",
       "Metal highlights follow the authored ridge; wood grain is directional.",
@@ -30,5 +41,36 @@
     "artisticQualityCertifiedByTests": false,
     "scope": "New material authoring studies on explicit input shapes, not a redesign of existing effects or a claim of automatic finished character art."
   },
-  "metrics": "docs/previews/pixel-art-lab/metrics.json"
+  "metrics": "docs/previews/pixel-art-lab/metrics.json",
+  "remoteBrowserCheckpoint": {
+    "status": "passed",
+    "commit": "e468047fe88971ee285305f069690c4dab8a1e14",
+    "checks": 26,
+    "workflowRun": "https://github.com/Stankjedi/poku-pixel-fx/actions/runs/42213503475",
+    "evidence": "docs/validation/pixel-art-browser-checkpoint-2026-11-06.json",
+    "screenshot": "docs/previews/pixel-art-lab/workbench.png"
+  },
+  "layerCapacityFix": "Project validation and browser editing share the 32-layer / 16,777,216 layer-cell budget. At capacity, applied output remains saveable and Undo restores editing.",
+  "legacyOutputComparison": {
+    "baselineCommit": "a7c02b1503ec9a2915284a41045d323030dff5b8",
+    "effects": 274,
+    "frames": 1370,
+    "comparedChannels": [
+      "native color",
+      "packed light",
+      "HDR light",
+      "composited RGBA"
+    ],
+    "variants": [
+      "baseline library",
+      "candidate library",
+      "candidate prepared public bundle"
+    ],
+    "aggregateSHA256": "99f028c377f0d2f74aeb8ed87a9fd951661fa61fbe2598f2cc15789518d5818a",
+    "scope": "Five deterministic sample times per effect at default settings, with opt-in HDR enabled; samples compare native color, packed light, HDR light and composite RGBA. This is preservation evidence, not aesthetic certification or exhaustive all-frame/all-option proof.",
+    "mismatches": 0,
+    "errors": 0,
+    "evidence": "docs/validation/pixel-art-preservation-2026-11-06.json"
+  },
+  "finalPullRequest": "https://github.com/Stankjedi/poku-pixel-fx/pull/20"
 }
