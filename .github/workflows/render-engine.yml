@@ -156,6 +156,12 @@ jobs:
           PIXEL_ART_PRO_REPORT_PATH: pixel-art-pro-browser-result.json
           PIXEL_ART_PRO_SCREENSHOT_PATH: pixel-art-pro-browser.png
         run: node tools/pixel-art-pro-browser-harness.mjs
+      - name: Exercise sculpted height, editable curves and adjustment reediting
+        env:
+          PIXEL_ART_CRAFT_REQUIRED: "1"
+          PIXEL_ART_CRAFT_REPORT_PATH: pixel-art-craft-browser-result.json
+          PIXEL_ART_CRAFT_SCREENSHOT_PATH: pixel-art-craft-browser.png
+        run: node tools/pixel-art-craft-browser-harness.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -172,6 +178,8 @@ jobs:
             pixel-workbench-browser.png
             pixel-art-pro-browser-result.json
             pixel-art-pro-browser.png
+            pixel-art-craft-browser-result.json
+            pixel-art-craft-browser.png
 
   native-wgpu:
     runs-on: ubuntu-latest

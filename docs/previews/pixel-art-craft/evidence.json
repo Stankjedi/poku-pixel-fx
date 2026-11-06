@@ -1,0 +1,76 @@
+{
+  "schema": "poku.pixel-craft-studies/v1",
+  "columns": [
+    "Authored color",
+    "Sculpted height",
+    "Derived normals",
+    "Relit native art"
+  ],
+  "note": "Standalone editable authoring studies. Height is painted explicitly; no depth is inferred from RGB. These are not changed legacy effects or an artistic-quality score.",
+  "studies": [
+    {
+      "kind": "plume",
+      "layers": 23,
+      "sourceColors": 11,
+      "coveragePreserved": true,
+      "files": [
+        {
+          "name": "plume-color.png",
+          "width": 160,
+          "height": 192,
+          "rgbaSHA256": "89b32fefa93d4d2115e841dfeea4b51d5576df33c9229ddb6ab06d9428deee90"
+        },
+        {
+          "name": "plume-sculpt.png",
+          "width": 160,
+          "height": 192,
+          "rgbaSHA256": "74b79cd358bb7ae4cf0b7ad9a5f3eec66dc226fdefa5ec4c869dadbaea582b47"
+        },
+        {
+          "name": "plume-normal.png",
+          "width": 160,
+          "height": 192,
+          "rgbaSHA256": "f093e8fca07a2cac0c33b21363760fa1406847d20e2c368504e6f8a1ab4659ba"
+        },
+        {
+          "name": "plume-lit.png",
+          "width": 160,
+          "height": 192,
+          "rgbaSHA256": "cf3120b4147aa523b5100e0dc3eddc296bd98c60294104c97597d1a967dabf96"
+        }
+      ]
+    },
+    {
+      "kind": "folds",
+      "layers": 13,
+      "sourceColors": 11,
+      "coveragePreserved": true,
+      "files": [
+        {
+          "name": "folds-color.png",
+          "width": 160,
+          "height": 192,
+          "rgbaSHA256": "07d0651e7924b978dffc3dc941a4f4a1d8f5f624684668ba41f49039a959451d"
+        },
+        {
+          "name": "folds-sculpt.png",
+          "width": 160,
+          "height": 192,
+          "rgbaSHA256": "bda13c989faab0fbe231f479f405f41a49241a4b2c5e869c1370bc6c6c64620a"
+        },
+        {
+          "name": "folds-normal.png",
+          "width": 160,
+          "height": 192,
+          "rgbaSHA256": "dbe5e33e75b9643c1f7f606193a3e32c096e715cdfb328af76cdaad9f082c386"
+        },
+        {
+          "name": "folds-lit.png",
+          "width": 160,
+          "height": 192,
+          "rgbaSHA256": "adbdd4634cbc5e5f4ecbb5287322ab6a17b163072b09d1cb14039f553e5fed50"
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import {
   catalogEntries,
   loadCatalogEffect
-} from "./chunks/chunk-DOXVECUC.js";
+} from "./chunks/chunk-D75EL7BP.js";
 import {
   copyAtlasFrame,
   encodeRGBAPNG
@@ -10,7 +10,7 @@ import {
   FrameRenderer,
   defineRestorationTiming2D,
   effectExampleCode2D
-} from "./chunks/chunk-SRKY5KGN.js";
+} from "./chunks/chunk-X6RE4KHI.js";
 import {
   BACKDROPS,
   actBounds,
@@ -36,7 +36,7 @@ import {
 } from "./chunks/chunk-LCIPQSGQ.js";
 import "./chunks/chunk-MIW2CWC4.js";
 import "./chunks/chunk-JQMAFXP4.js";
-import "./chunks/chunk-7OMNYR2P.js";
+import "./chunks/chunk-X2UOCPCM.js";
 import {
   PAL
 } from "./chunks/chunk-MBWWV6CB.js";

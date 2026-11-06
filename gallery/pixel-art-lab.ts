@@ -38,6 +38,7 @@ let previewVersion=0,outputKey='',cachedOutput:EditableSprite2D|undefined;
 let afterAnalysis:ReturnType<typeof diagnosePixelArt2D>|undefined,analysisSource:EditableSprite2D|undefined,analysisKey='';
 let outputDocumentKey='',outputDocumentCache:PixelArtDocument2D|undefined;
 const urls: string[] = [];
+const canvasFrames = new Map<string, { sprite: EditableSprite2D; mode: string; heatmap?: Uint8Array; overlays: string; image: ImageData }>();
 
 function status(message: string, error = false) {
   element('status').textContent = message; element('status').classList.toggle('error', error);
@@ -109,7 +110,9 @@ function pendingLayer(): PixelArtMaterialLayer2D {
     ...(existing?.visible!==undefined?{visible:existing.visible}:{}),...(existing?.locked!==undefined?{locked:existing.locked}:{}),material:settings(),
     selection:Array.from(selection), protectedMask:Array.from(protectedMask),
     ...(materialOrigin ? {origin:[...materialOrigin] as [number,number]} : {}),
-    ...(input('use-height').checked && authoredHeight ? {height:Array.from(authoredHeight)} : {})};
+    ...(input('use-height').checked && authoredHeight ?
+      existing?.kind === 'material' && existing.heightSource !== 'authored' ? {height:Array.from(authoredHeight)} : {heightSource:'authored' as const}
+      : {})};
 }
 function canAddLayer(): boolean {
   return !!editingMaterialId || !project || project.layers.length < pixelArtLayerLimit2D(project.width,project.height);
@@ -157,8 +160,11 @@ function sizeCanvases() {
   }
 }
 function paint(id: string, sprite: EditableSprite2D, mode = 'color', heatmap?: Uint8Array) {
-  const c = canvas(id); c.width = sprite.w; c.height = sprite.h;
-  const ctx = c.getContext('2d')!, image = ctx.createImageData(c.width,c.height);
+  const c = canvas(id), overlays = id === 'source' ? `${previewVersion}:${protectionVersion}` : '';
+  const cached = canvasFrames.get(id);
+  if (cached?.sprite === sprite && cached.mode === mode && cached.heatmap === heatmap && cached.overlays === overlays) return;
+  if(c.width!==sprite.w)c.width=sprite.w;if(c.height!==sprite.h)c.height=sprite.h;
+  const ctx = c.getContext('2d')!, image = cached?.image.width === sprite.w && cached.image.height === sprite.h ? cached.image : ctx.createImageData(c.width,c.height);
   const channels = (sprite as EditableSprite2D & {channels?:MaterialChannels2D}).channels;
   let low = Infinity, high = -Infinity;
   if (mode === 'height' && channels) for (let i=0;i<sprite.pixels.length;i++) if (sprite.pixels[i]>>>24) {low=Math.min(low,channels.height[i]);high=Math.max(high,channels.height[i]);}
@@ -176,6 +182,7 @@ function paint(id: string, sprite: EditableSprite2D, mode = 'color', heatmap?: U
     image.data.set([r,g,b,sprite.mask.data[i]?packed>>>24:0],j);
   }
   ctx.putImageData(image,0,0);
+  canvasFrames.set(id,{sprite,mode,heatmap,overlays,image});
 }
 function update() {
   queued=false;
@@ -183,7 +190,7 @@ function update() {
   attempt(() => {
     const hasLayerRoom=canAddLayer();
     if(!hasLayerRoom)draft=false;
-    for(const control of document.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('.inspector input,.inspector select,#new-seed,#reset-palette'))control.disabled=!hasLayerRoom;
+    for(const control of document.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('.inspector input,.inspector select,#new-seed,#reset-palette'))if(!control.closest('.relight-panel'))control.disabled=!hasLayerRoom;
     for(const control of document.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('.selection-bar input,.selection-bar select,.selection-bar button'))control.disabled=!canEditMasks();
     input('use-height').disabled=!hasLayerRoom||!authoredHeight;
     canvas('source').setAttribute('aria-disabled',String(!canEditMasks()));
@@ -196,7 +203,8 @@ function update() {
     const started=performance.now();
     if(renderedRevision!==revision){committed=renderPixelArtDocument2D(project);renderedRevision=revision;}
     const nextOutputKey=`${revision}:${previewVersion}:${draft}:${editingMaterialId??''}`;
-    if(!cachedOutput||outputKey!==nextOutputKey){cachedOutput=draft?(editingMaterialId?renderPixelArtDocument2D(outputProject()):createPixelMaterial2D(settings()).shade(committed,pendingLayer())):committed;outputKey=nextOutputKey;}
+    if(!cachedOutput||outputKey!==nextOutputKey){cachedOutput=draft?(editingMaterialId?renderPixelArtDocument2D(outputProject()):createPixelMaterial2D(settings()).shade(committed,
+      {...pendingLayer(),...(input('use-height').checked&&authoredHeight?{height:authoredHeight}:{})})):committed;outputKey=nextOutputKey;}
     rendered=paintPreview??cachedOutput;
     const style=select('expected-style').value as 'organic'|'cel-shaded'|'geometric';
     const options={expectedStyle:style,protected:protectedMask};
@@ -238,6 +246,7 @@ function update() {
 }
 function schedule() {if(!queued){queued=true;requestAnimationFrame(update);}}
 function changed() {element('status').classList.remove('error');paintPreview=undefined;previewVersion++;draft=canAddLayer();schedule();}
+function masksChanged() {element('status').classList.remove('error');paintPreview=undefined;previewVersion++;schedule();}
 function study() {
   const shape=select('shape').value;
   if(shape==='imported')return;
@@ -284,9 +293,9 @@ select('shape').addEventListener('change',()=>attempt(()=>{
 input('organic').addEventListener('change',()=>attempt(study));
 button('new-seed').onclick=()=>attempt(()=>{input('seed').value=String((number('seed')+1)>>>0);editSetting('seed');});
 button('reset-palette').onclick=()=>attempt(()=>{workingOptions.palette=[...PIXEL_MATERIAL_PALETTES_2D[select('material').value as PixelMaterialKind2D]];delete workingOptions.thresholds;palette(workingOptions.palette);changed();});
-button('select-all').onclick=()=>{selection=Uint8Array.from(committed.pixels,(c,i)=>committed.mask.data[i]&&c>>>24?1:0);changed();};
-button('clear-selection').onclick=()=>{selection.fill(0);changed();};
-button('clear-protection').onclick=()=>{protectedMask.fill(0);protectionVersion++;changed();};
+button('select-all').onclick=()=>{selection=Uint8Array.from(committed.pixels,(c,i)=>committed.mask.data[i]&&c>>>24?1:0);masksChanged();};
+button('clear-selection').onclick=()=>{selection.fill(0);masksChanged();};
+button('clear-protection').onclick=()=>{protectedMask.fill(0);protectionVersion++;masksChanged();};
 button('apply-material').onclick=()=>attempt(()=>{if(draft)commitDocument(outputProject());});
 button('cancel-preview').onclick=()=>{draft=false;editingMaterialId=undefined;paintPreview=undefined;schedule();};
 button('undo').onclick=()=>attempt(()=>moveHistory('undo'));
@@ -378,12 +387,12 @@ function brush(x:number,y:number) {
 let pointer:number|undefined,lastPoint:[number,number]|undefined;
 canvas('source').onpointerdown=event=>{
   if(event.button!==0||!canEditMasks())return;const [x,y]=point(event);event.preventDefault();
-  if(select('selection-tool').value==='connected'){connected(x,y,event.shiftKey);changed();return;}
-  pointer=event.pointerId;lastPoint=[x,y];canvas('source').setPointerCapture(pointer);brush(x,y);changed();
+  if(select('selection-tool').value==='connected'){connected(x,y,event.shiftKey);masksChanged();return;}
+  pointer=event.pointerId;lastPoint=[x,y];canvas('source').setPointerCapture(pointer);brush(x,y);masksChanged();
 };
 canvas('source').onpointermove=event=>{
   if(pointer!==event.pointerId||!lastPoint||!canEditMasks())return;const next=point(event),dx=next[0]-lastPoint[0],dy=next[1]-lastPoint[1],steps=Math.max(1,Math.abs(dx),Math.abs(dy));
-  for(let i=1;i<=steps;i++)brush(Math.round(lastPoint[0]+dx*i/steps),Math.round(lastPoint[1]+dy*i/steps));lastPoint=next;changed();
+  for(let i=1;i<=steps;i++)brush(Math.round(lastPoint[0]+dx*i/steps),Math.round(lastPoint[1]+dy*i/steps));lastPoint=next;masksChanged();
 };
 const endStroke=()=>{pointer=undefined;lastPoint=undefined;};
 canvas('source').onpointerup=endStroke;canvas('source').onpointercancel=endStroke;
@@ -400,13 +409,14 @@ workbench=installPixelArtWorkbench({
   newCanvas:next=>{if(timeline?.enabled){timeline.newDocument(next);return;}history.commit(outputProject());prepareImported(next,false);history.commit(project);},
   preview:sprite=>{paintPreview=sprite;if(sprite)element('status').classList.remove('error');schedule();},
   refresh:schedule, status, download:addDownload, filename,
+  discardPreview:()=>{draft=false;editingMaterialId=undefined;paintPreview=undefined;previewVersion++;schedule();},
   editMaterial:id=>attempt(()=>{
     const layer=project.layers.find((layer):layer is PixelArtMaterialLayer2D=>layer.id===id&&layer.kind==='material');
     if(!layer||layer.locked)return;
     editingMaterialId=id;loadSettings(layer.material);
     selection=layer.selection?Uint8Array.from(layer.selection):new Uint8Array(project.width*project.height).fill(1);
     protectedMask=layer.protectedMask?Uint8Array.from(layer.protectedMask):new Uint8Array(selection.length);protectionVersion++;
-    authoredHeight=layer.height?Float32Array.from(layer.height):undefined;materialOrigin=layer.origin?[...layer.origin]:undefined;
+    authoredHeight=layer.heightSource==='authored'?renderPixelArtAuthoredHeight2D({...project,layers:project.layers.slice(0,project.layers.indexOf(layer))}):layer.height?Float32Array.from(layer.height):undefined;materialOrigin=layer.origin?[...layer.origin]:undefined;
     input('use-height').checked=!!authoredHeight;previewVersion++;draft=true;schedule();
   }),
 });
