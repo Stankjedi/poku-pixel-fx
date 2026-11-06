@@ -208,3 +208,45 @@ test('invalid brush, shape, paint and selection inputs reject before changing ar
   assert.throws(() => combinePixelSelections2D(all, [1]), RangeError);
   assert.deepEqual(source, before);
 });
+
+test('wrapped pencil interpolates unwrapped coordinates before crossing the canvas seam', () => {
+  const points = [{ x: 6, y: 3 }, { x: 9, y: 3 }], mask = rasterizePixelBrush2D(8, 6, points, { wrap: true });
+  for (let y = 0; y < 6; y++) for (let x = 0; x < 8; x++)
+    assert.equal(cell(mask, 8, x, y), Number(y === 3 && [6, 7, 0, 1].includes(x)));
+  assert.deepEqual(mask, rasterizePixelBrush2D(8, 6, points.slice().reverse(), { wrap: true }));
+  assert.deepEqual(mask, rasterizePixelBrush2D(8, 6, [{ x: 1, y: 3 }, { x: -2, y: 3 }], { wrap: true }));
+  assert.deepEqual(mask, rasterizePixelShape2D(8, 6, 'line', [6, 3], [9, 3], { wrap: true }));
+});
+
+test('wrapped brush tips carry their full footprint over both seams and degenerate tile axes', () => {
+  const mask = rasterizePixelBrush2D(8, 6, [{ x: 0, y: 0 }], { wrap: true, size: 3, tip: 'square' });
+  assert.equal(area(mask), 9);
+  for (let y = 0; y < 6; y++) for (let x = 0; x < 8; x++)
+    assert.equal(cell(mask, 8, x, y), Number([7, 0, 1].includes(x) && [5, 0, 1].includes(y)));
+  const thin = rasterizePixelBrush2D(1, 5, [{ x: 0, y: 4 }, { x: 0, y: 7 }], { wrap: true, size: 4, tip: 'square' });
+  assert.equal(area(thin), 5);
+  assert.equal(area(rasterizePixelBrush2D(1, 1, [{ x: -100, y: 100, pressure: 0 }], { wrap: true, size: 256 })), 0);
+});
+
+test('wrapped raster equals folding the original continuous stroke, including pressure and pixel-perfect cleanup', () => {
+  const points = [{ x: -3, y: -2, pressure: .3 }, { x: 4, y: 3, pressure: 1 }, { x: 13, y: 9, pressure: .5 }];
+  for (const size of [1, 4]) {
+    const options = { size, pixelPerfect: true }, wrapped = rasterizePixelBrush2D(10, 7, points, { ...options, wrap: true });
+    const wide = rasterizePixelBrush2D(96, 72, points.map(p => ({ ...p, x: p.x + 32, y: p.y + 28 })), options), expected = new Uint8Array(70);
+    for (let y = 0; y < 72; y++) for (let x = 0; x < 96; x++) if (wide[y * 96 + x]) {
+      const xx = ((x - 32) % 10 + 10) % 10, yy = ((y - 28) % 7 + 7) % 7;
+      expected[yy * 10 + xx] = 1;
+    }
+    assert.deepEqual(wrapped, expected);
+  }
+});
+
+test('wrap has explicit validation and workload limits while omitted defaults retain the ordinary pencil', () => {
+  const points = [{ x: -4, y: 2 }, { x: 13, y: 6 }];
+  for (const options of [{}, { size: 4 }, { size: 1, pixelPerfect: true, symmetry: 'xy' }])
+    assert.deepEqual(rasterizePixelBrush2D(10, 8, points, options), rasterizePixelBrush2D(10, 8, points, { ...options, wrap: false }));
+  for (const wrap of [null, 1, 'yes']) assert.throws(() => rasterizePixelBrush2D(8, 8, points, { wrap }), /boolean/);
+  assert.throws(() => rasterizePixelBrush2D(8, 8, [{ x: -1_000_000, y: 2 }, { x: 1_000_000, y: 2 }], { wrap: true }), /262144/);
+  assert.throws(() => rasterizePixelBrush2D(256, 256, [{ x: 0, y: 0 }, { x: 257, y: 0 }], { wrap: true, size: 256, tip: 'square' }), /stamp-cell budget/);
+  assert.throws(() => rasterizePixelShape2D(8, 8, 'ellipse', [0, 0], [6, 6], { wrap: true }), /Wrapped shapes/);
+});

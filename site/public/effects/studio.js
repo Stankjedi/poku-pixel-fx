@@ -2,7 +2,7 @@ import {
   createProjectRuntime,
   createSequenceSpec,
   projectCinematicOptions
-} from "./chunks/chunk-BM7RBBEE.js";
+} from "./chunks/chunk-NG2BE6QA.js";
 import {
   RECIPE_KINDS,
   RECIPE_LAYERS,
@@ -14,7 +14,7 @@ import {
   catalogEntries,
   loadCatalogEffect,
   searchEffects
-} from "./chunks/chunk-PTSQK6RI.js";
+} from "./chunks/chunk-OVDOKNBB.js";
 import "./chunks/chunk-BTOTHK6M.js";
 import {
   cloneJSON,

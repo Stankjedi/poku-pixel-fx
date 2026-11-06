@@ -1,0 +1,125 @@
+{
+  "status": "passed",
+  "checks": [
+    "New-canvas controls create an untouched native 16×16 transparent artwork and enable the pencil",
+    "Undoing new-canvas creation restores the previous dimensions and the actual material preview that was visible",
+    "Redoing new-canvas creation restores the transparent 16×16 canvas without carrying old geometry into it",
+    "The drawing canvas keeps integer device-pixel cells at fractional 1.5 DPR",
+    "Two sparse physical pointer events produce all eleven native cells in one paint layer without holes",
+    "One undo removes the complete pointer stroke",
+    "One redo restores the exact complete pointer stroke",
+    "Actual canvas painting mirrors around the correct half-cell axis of an even 16-cell canvas",
+    "The eraser removes native color and coverage without consuming another layer",
+    "Undo restores the erased pixel and its coverage",
+    "Redo reapplies the exact erased result",
+    "Alpha lock prevents painting into the transparent background",
+    "The line tool accepts actual drag endpoints and paints a complete native line",
+    "One undo removes the dragged shape without touching previous brush work",
+    "Rectangle drag paints the inclusive 7×5 outline while leaving its interior empty",
+    "Filled ellipse drag follows a curved native shape instead of filling the rectangular bounds",
+    "The eyedropper reads the clicked native color without changing artwork or history",
+    "Bucket fill reaches connected transparent background, preserves painted cells, and edits the existing paint layer",
+    "Bucket fill is a single reversible edit",
+    "Bucket redo is byte-identical to the completed fill",
+    "A new independent paint layer can override a lower authored pixel",
+    "Layer name edits are stored in the document through the actual name input",
+    "Hiding the upper layer reveals the unmodified lower artwork",
+    "Showing the layer restores its authored pixel exactly",
+    "Moving a layer down changes compositing order as well as the displayed layer list",
+    "Moving the layer back up restores the same visible result",
+    "Perceptual palette extraction creates two editable swatches without altering pixels or adding an adjustment layer",
+    "Applying the edited two-color palette creates a reversible adjustment layer with exact palette colors and original coverage",
+    "Undoing palette remapping recovers the original authored colors",
+    "Palette redo reproduces the same native raster",
+    "The v2 document retains its untouched transparent source and separately stores paint and palette layers",
+    "A v2 document opened through the real file input reproduces both its pixels and serialized edit state",
+    "Pixel grid and the 3×3 tile proof remain display overlays; native PNG stays at the authored dimensions and pixels",
+    "Native PNG preserves non-endpoint RGB at alpha 1/7/19/63/127/128/193/254 and hidden RGB from original v2 data without Canvas premultiplication loss",
+    "Diagnostic view and display zoom cannot contaminate exact straight-RGBA PNG export",
+    "Partial-alpha original and painted pixels survive a save/reopen cycle without channel drift",
+    "The actual PNG file input preserves low-alpha and hidden RGB bytes from an exported PNG instead of round-tripping through Canvas",
+    "Alpha-locked recoloring edits the raw 128-alpha layer while preserving its 50% opacity and 64-alpha visible result, without applying opacity twice",
+    "Reopening the edited half-opacity layer preserves its raw and visible coverage",
+    "Erasing an original cell outside the active sparse paint entries records a deliberate zero override and leaves the original source intact",
+    "Undoing a sparse erasure restores the original artwork under the edit layer",
+    "Saving while a stroke is held commits every interpolated preview cell before serializing, without losing the pointer endpoint",
+    "Normal downloads agree with the independently authored plane slope; OpenGL and DirectX invert only the green axis",
+    "Both normal conventions preserve exact source coverage, including a nontrivial partial-alpha cell",
+    "Height PNG encodes explicit saved native heights into the advertised 8-bit range, with exact coverage",
+    "A tilted plane has no false ambient cavity or shadow under overhead light, and visibility PNGs retain partial alpha",
+    "Surface-map JSON describes actual dimensions, convention, native units and height range without mutating the authored project",
+    "Editing an existing material can turn authored height OFF, remove the layer height field, and export flat geometry with unchanged coverage",
+    "Undo restores the material’s original authored geometry after turning height off",
+    "The drawing toolbar, palette controls, editable layer rows and inspector stay inside a 390-pixel mobile viewport",
+    "Drawing, layers, palette changes, v2 imports, exact PNG and surface-map downloads produce no uncaught browser errors"
+  ],
+  "sizing": {
+    "x": 12,
+    "y": 12,
+    "rendering": "pixelated"
+  },
+  "mobile": {
+    "viewport": 390,
+    "document": 390,
+    "body": 390,
+    "panels": [
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      }
+    ]
+  },
+  "authored": {
+    "width": 16,
+    "height": 16,
+    "layers": 3,
+    "rgbaSHA256": "17d941e7f10fb65ae72c3786c58e929ea40f0dcbc19979338e8551e2d46260f3"
+  },
+  "straightAlpha": {
+    "width": 5,
+    "height": 3,
+    "rgbaSHA256": "ce3b36d255e667b48c8ba31f61427b19f78af597bb0f3f09f8967c51c9138887"
+  },
+  "surfaceMaps": {
+    "width": 8,
+    "height": 8,
+    "heightRange": [
+      -4.5,
+      6
+    ],
+    "normalOpenGL": [
+      85,
+      212,
+      212,
+      255
+    ],
+    "normalDirectX": [
+      85,
+      43,
+      212,
+      255
+    ],
+    "heightRGBA_SHA256": "934b412c09cf79dc6287e53f91e2c05f85b9427f7e6d1ffed7ff590e01e6a44d"
+  },
+  "scope": "Actual bundled browser controls and physical pointer events for native painting, history, editable layers, palettes, v2 file round trips, exact straight-RGBA PNG, authored geometry maps and responsive layout. No artistic-quality certification."
+}

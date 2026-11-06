@@ -28,16 +28,26 @@
   },
   "browser": {
     "local": "unavailable: Chromium Unix socket creation is denied by the execution environment; browser sandbox remains enabled",
-    "ci": "pending; required Craft harness added to browser-studio job",
-    "newHarness": "tools/pixel-art-craft-browser-harness.mjs"
+    "ci": "passed",
+    "newHarness": "tools/pixel-art-craft-browser-harness.mjs",
+    "run": "https://github.com/Stankjedi/poku-pixel-fx/actions/runs/42239182689",
+    "head": "2b1fe34e724ace4d753669c8b31b6760195ffef4",
+    "craftChecks": 37,
+    "pixelArtChecks": 182,
+    "studioChecks": 37,
+    "productionChecks": 12,
+    "report": "pixel-art-craft-browser-2026-11-06.json",
+    "screenshot": "../previews/pixel-art-craft/workbench.png"
   },
   "visualReview": {
     "observer": "assistant",
     "actualViews": [
       "docs/previews/pixel-art-craft/comparison-native.png",
-      "docs/previews/pixel-art-craft/comparison-3x.png"
+      "docs/previews/pixel-art-craft/comparison-3x.png",
+      "docs/previews/pixel-art-craft/workbench.png"
     ],
     "observed": "Top study reads as a teal leaf-shaped feather ornament; lower study reads as a blue embroidered banner. Relighting makes the raised ridge and cloth folds legible while the native edges remain discrete. The colors, sculpted heights and derived normals are shown separately.",
-    "scope": "Authored examples of the new tools, not changes to catalog effects or a claim of user approval, aesthetic certification, exhaustive all-frame preservation or GPU speed."
+    "scope": "Authored examples of the new tools, not changes to catalog effects or a claim of user approval, aesthetic certification, exhaustive all-frame preservation or GPU speed.",
+    "browserObservation": "Viewed the actual CI screenshot: both native canvases, tapered curve, anchor/handle overlay and Korean controls are visible without overlapping layout."
   }
 }

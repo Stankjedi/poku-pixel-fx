@@ -34,6 +34,7 @@ export interface PixelArtPaletteLayer2D extends PixelArtLayerIdentity2D {
   kind: 'palette';
   palette: (string | number)[];
   dither?: 'none' | 'bayer4' | 'bayer8';
+  /** Ordered-dither amount. Zero still maps to the nearest palette color. */
   strength?: number;
   origin?: [number, number];
   selection?: number[];
@@ -107,6 +108,15 @@ function binary(input: unknown, n: number, label: string): number[] | undefined 
 }
 const packed = (v: number) => Number.isInteger(v) && v >= 0 && v <= 0xffffffff;
 const float = (v: number) => Number.isFinite(v) && Number.isFinite(Math.fround(v));
+/** Preserve ordered editor swatches, accepting packed engine colors and normalizing
+ * signed JavaScript bitwise colors to the same unsigned bytes used in saved documents. */
+export function validatePixelArtWorkingPalette2D(input: unknown): number[] | undefined {
+  if (input === undefined) return undefined;
+  if (!Array.isArray(input) || input.length < 1 || input.length > 256
+    || !Array.from(input).every(v => Number.isInteger(v) && v >= -0x80000000 && v <= 0xffffffff))
+    throw new RangeError('Working palette needs 1..256 packed RGBA colors');
+  return input.map(value => value >>> 0);
+}
 function origin(input: unknown): [number, number] | undefined {
   if (input === undefined) return undefined;
   if (!Array.isArray(input) || input.length !== 2 || !Array.from(input).every(v => Number.isFinite(v) && Math.abs(v) <= 1e9)) throw new RangeError('Origin needs two finite coordinates within ±1e9');
@@ -198,11 +208,10 @@ export function validatePixelArtDocument2D(input: unknown): PixelArtDocument2D {
       height: values(p.channels.height, n, 'Source height', float), normal: values(p.channels.normal, n * 3, 'Source normals', float) };
   }
   if (p.activeLayerId !== undefined && !ids.has(p.activeLayerId)) throw new RangeError('Active layer must exist in the document');
-  if (p.workingPalette !== undefined && (!Array.isArray(p.workingPalette) || p.workingPalette.length < 1 || p.workingPalette.length > 256
-    || !Array.from(p.workingPalette).every(value => packed(value) && value >>> 24 === 255))) throw new RangeError('Working palette needs 1..256 opaque packed colors');
+  const workingPalette = validatePixelArtWorkingPalette2D(p.workingPalette);
   return { schema: 'poku-pixel-art/v2', name: p.name, width: p.width, height: p.height, pixels, ...(sourceMask ? { mask: sourceMask } : {}), layers,
+    ...(workingPalette ? { workingPalette } : {}),
     ...(channels ? { channels } : {}), ...optionalMasks(p, n), ...(p.authoredHeight !== undefined ? { authoredHeight: values(p.authoredHeight, n, 'Document height', float) } : {}),
-    ...(p.workingPalette ? { workingPalette: p.workingPalette.slice() } : {}),
     ...(p.activeLayerId !== undefined ? { activeLayerId: p.activeLayerId } : {}) };
 }
 

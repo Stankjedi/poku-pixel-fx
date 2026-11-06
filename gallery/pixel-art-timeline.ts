@@ -18,6 +18,8 @@ interface TimelineHost {
   finishStroke(): void;
   palette(): readonly number[];
   setPalette(colors: number[]): void;
+  workingPalette(): number[] | undefined;
+  restorePalette(colors?: readonly number[], fallback?: readonly number[]): void;
   refresh(): void;
   status(message: string, error?: boolean): void;
   download(blob: Blob, filename: string): void;
@@ -81,7 +83,11 @@ export function installPixelArtTimeline(host: TimelineHost) {
   function showActive(raster?: PixelArtDocumentRaster2D) {
     if (!state) return;
     const frame = active(state);
-    host.restore(frame.document, raster ?? rasterForFrame(frame)); version++; clock = undefined; host.refresh();
+    host.restore(frame.document, raster ?? rasterForFrame(frame));
+    // A cel's authored swatches take priority. Merely viewing the animation fallback
+    // must not copy it into a cel or create an otherwise empty navigation Undo step.
+    host.restorePalette(frame.document.workingPalette, state.workingPalette);
+    version++; clock = undefined; host.refresh();
   }
   function ensure() {
     if (!state) {
@@ -250,6 +256,7 @@ export function installPixelArtTimeline(host: TimelineHost) {
   }
   return {
     get enabled() { return !!state; },
+    get frameCount() { return state?.frames.length ?? 1; },
     sync, stop,
     /** One transaction for every cel; a failed mapping never commits a partial sequence. */
     editDocuments(edit:(document:PixelArtDocument2D)=>PixelArtDocument2D):number|undefined {
@@ -282,7 +289,11 @@ export function installPixelArtTimeline(host: TimelineHost) {
       stop(); playbackFrames=undefined;state = next; history = nextHistory;
       cache.clear(); cacheBytes = 0; for (const frame of state.frames) dirtyThumbnails.add(frame.id); showActive(raster);
     },
-    serialize() { return state ? serializePixelArtAnimation2D(replacePixelArtAnimationFrame2D(state, host.outputDocument())) : undefined; },
+    serialize() {
+      if (!state) return undefined;
+      // Keep the stored animation fallback independent of the active cel's palette.
+      return serializePixelArtAnimation2D(replacePixelArtAnimationFrame2D(state, host.outputDocument()));
+    },
     undo() { if (history) { stop(); playbackFrames=undefined;state = history.undo(); for (const frame of state.frames) dirtyThumbnails.add(frame.id); showActive(); } },
     redo() { if (history) { stop(); playbackFrames=undefined;state = history.redo(); for (const frame of state.frames) dirtyThumbnails.add(frame.id); showActive(); } },
   };

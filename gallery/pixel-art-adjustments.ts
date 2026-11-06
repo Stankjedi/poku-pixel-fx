@@ -25,9 +25,10 @@ export function installPixelArtAdjustments(host: PixelArtWorkbenchHost, palette:
     const cancel = document.createElement('button'); cancel.id = `cancel-${kind}-edit`; cancel.textContent = '수정 취소'; cancel.hidden = true;
     button(`apply-${kind}`).after(cancel); cancel.onclick = () => cancelEdit(); return cancel;
   });
-  const strengthLabel = document.createElement('label'); strengthLabel.textContent = '적용 강도 ';
+  const strengthLabel = document.createElement('label'); strengthLabel.textContent = '디더링 강도 ';
   const strength = document.createElement('input'); strength.id = 'palette-strength'; strength.type = 'number'; strength.min = '0'; strength.max = '1'; strength.step = '0.05'; strength.value = '1';
   strengthLabel.append(strength); button('apply-palette').before(strengthLabel);
+  choice('palette-dither').addEventListener('change', () => syncLabels());
 
   function cancelEdit(clearPreview = true) {
     if (queued) cancelAnimationFrame(queued); queued = 0;
@@ -158,6 +159,8 @@ export function installPixelArtAdjustments(host: PixelArtWorkbenchHost, palette:
   button('apply-palette').onclick = () => attempt(() => apply('palette'));
   button('apply-relight').onclick = () => attempt(() => apply('relight'));
   function syncLabels() {
+    strength.disabled = choice('palette-dither').value === 'none';
+    strength.title = '규칙 디더링에서 보조 팔레트색을 배치하는 양입니다.';
     note.hidden = !editing;
     if (editing && !editing.changed.size) note.textContent = `${editing.layer.name} 설정 · 값을 바꾼 뒤 적용하거나 취소하세요.`;
     for (const kind of ['palette', 'relight'] as const) {

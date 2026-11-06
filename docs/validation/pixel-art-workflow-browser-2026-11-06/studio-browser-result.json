@@ -1,0 +1,82 @@
+{
+  "status": "passed",
+  "browser": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+  "checks": [
+    "The bundled Korean UI font loads without an operating-system CJK font or an external font service",
+    "Studio boots all six recipe buttons using real bundled modules",
+    "All Korean recipe titles and descriptions fit their cards after the bundled font loads",
+    "Recipe 1 resolves into an editable project: thrown-blade",
+    "Recipe 2 resolves into an editable project: ribbon-slash",
+    "Recipe 3 resolves into an editable project: lightning",
+    "Recipe 4 resolves into an editable project: explosion",
+    "Recipe 5 resolves into an editable project: flame",
+    "Recipe 6 resolves into an editable project: portal",
+    "Each recipe seeks exactly one frame without accumulating playback time",
+    "ACT second contact marker includes negative windup and the first hit-stop",
+    "ACT marker click seeks its first displayed contact frame",
+    "Character creation honors the selected native height",
+    "Explicit null equipment overrides the base cape and remains empty in the UI",
+    "Equipped layers are offered as distinct edit targets",
+    "Key-pose hold/linear interpolation control persists the selected policy",
+    "Paused timeline displays frame 2",
+    "Timeline contact insertion persists a distinct event",
+    "Pointer checks exercise a real HiDPI CSS/backing-store size difference",
+    "Actual pointer brush uses the displayed cel and inverse flip/rotation under HiDPI",
+    "Undo and redo preserve the exact cel edit revision",
+    "Project save preserves the actual cel edit",
+    "No uncaught errors before project reload",
+    "Paused timeline displays frame 2",
+    "File reopens after a fresh module load and the second stroke on the same cell receives a new UUID",
+    "Semantic-mask add/remove operations persist on the selected layer",
+    "Paused timeline displays frame 1",
+    "Alpha, outline and dither edits preserve an imported palette",
+    "Actual saved PNG respects the final palette after composition",
+    "Unavailable WebGPU API falls back to a rendered CPU frame while retaining the requested backend",
+    "Default-finishing export starts from an applied and autosaved project with its mode omitted",
+    "Worker export produces a decodable atlas and integrity-checked project/manifest ZIP",
+    "Worker ZIP retains the imported palette and both reopened cel edits",
+    "Worker manifest explicitly declares legacy finishing for an omitted project mode (sourceOmitted=true, project=legacy, manifest=legacy, profile=legacy)",
+    "Studio completed without uncaught JavaScript errors or rejected promises",
+    "Shipped hosted entry includes the exact-pixel and Studio controls required by app.js",
+    "Hosted catalog and exact-pixel control work without uncaught errors; absent community API is reported separately"
+  ],
+  "export": {
+    "schema": "poku-asset/v1",
+    "frames": 2,
+    "files": [
+      "atlas-0.png",
+      "project.json",
+      "asset.json"
+    ],
+    "pageSize": [
+      82,
+      68
+    ],
+    "expectedSize": [
+      82,
+      68
+    ],
+    "zipBytes": 129966,
+    "palette": [
+      4279312947,
+      4286028219,
+      4292735471
+    ],
+    "projectPalette": [
+      4279312947,
+      4286028219,
+      4292735471
+    ],
+    "celEdits": 2,
+    "renderMode": "legacy",
+    "profileMode": "legacy",
+    "expectedMode": "legacy",
+    "sourceModeOmitted": true
+  },
+  "hosted": {
+    "catalogCount": 272,
+    "offlineNotice": "공유 작품을 불러오지 못했습니다.",
+    "communityAPI": "Unavailable in this static-only harness; an offline notice is expected"
+  },
+  "scope": "Real HiDPI browser UI/file-reopen/worker/hosted-entry smoke; fallback API absence injected explicitly; no aesthetic judgement or physical GPU claim"
+}

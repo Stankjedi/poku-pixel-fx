@@ -444,9 +444,11 @@ try {
     const paletteRGB = new Set(extractedPalette.map(value => value & 0xffffff));
     const expectedExtraction = structuredClone(animationSaved);
     expectedExtraction.frames.find(frame => frame.id === expectedExtraction.activeFrameId).document.workingPalette = extractedPalette;
+    // Extracting a shared candidate edits this cel's working swatches. The stored
+    // animation fallback and every other cel stay unchanged until explicit apply.
     assert(paletteValues.length === 3 && isDeepStrictEqual((await exportProject()), expectedExtraction)
       && await evaluate("document.getElementById('palette-note').textContent.includes('3개 프레임')"),
-    'Common-palette extraction considers every frame, persists the active cel working palette, and preserves every other project field');
+    'Common-palette extraction considers every frame, persists the active cel working palette, and preserves the animation fallback and every other project field');
     assert(beforePaletteExtraction.bytes.equals((await exportFile('save-png', '.png')).bytes),
       'Common-palette extraction preserves every native PNG byte before palette application');
     await change('palette-dither', 'none'); await click('apply-animation-palette'); await ready();

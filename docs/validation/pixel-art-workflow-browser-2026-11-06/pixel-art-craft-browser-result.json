@@ -1,0 +1,84 @@
+{
+  "status": "passed",
+  "checks": [
+    "A color-only imported drawing starts without fabricated height or normals",
+    "A physical sculpt stroke creates one editable height layer while preserving original RGB, partial alpha and independent silhouette",
+    "Height writes respect the selected band and protected detail, with one height increment per stroke rather than per pointer event",
+    "Height authoring enables relighting and surface maps without changing a single exported color or alpha byte",
+    "A second gesture adds to the same top height layer instead of consuming another layer",
+    "Undo restores the height before the second complete gesture",
+    "Redo restores the exact accumulated height",
+    "The actual Normal PNG exporter consumes the manually authored geometry",
+    "Saving and reopening retains exact sculpt deltas, edit masks and source RGBA",
+    "Canceling height-layer strength preview leaves the stored sculpt layer unchanged",
+    "Saving an active height-strength preview updates the same layer and keeps its authored delta values",
+    "Painting the left tile boundary also raises its neighboring right-edge cells without painting across the middle",
+    "The flatten brush uses the explicitly authored target height",
+    "The smooth-height brush changes geometry locally while leaving the color image untouched",
+    "Physical click-drag gestures create three anchors with independently displayed Bézier handles",
+    "Save commits the editable curve draft with taper, full control points and explicit partial alpha",
+    "The exported curve uses only the authored native RGBA, excludes guide colors and leaves the source layer untouched",
+    "Reopening a saved cubic path exactly reproduces its pixels and editable handles",
+    "Cancel discards a dragged-anchor preview and restores the previously applied curve",
+    "Re-editing moves an anchor together with its handles, preserves partial alpha and updates the existing path ID",
+    "Curve re-editing is one reversible document change",
+    "Curve redo restores the edited native result",
+    "Reopening a closed path displays its effective width and saved alpha instead of reverting to opaque default-width ink",
+    "A numeric anchor edit preserves effective closed widths, partial alpha and the saved selection/protection constraints",
+    "Disabling the selection constraint removes the saved path selection when re-editing an existing layer",
+    "Duplicated animation cels retain independently editable curve layers",
+    "Returning to the first cel reproduces its exact pre-duplication image",
+    "A saved two-anchor closed cubic shape remains editable and exports its exact partial alpha without an artificial three-anchor requirement",
+    "Saving an edited light updates the same layer while preserving all three independent directions, colors, distances and unexposed specular controls",
+    "Canceling an in-place relight preview restores the previously applied lighting",
+    "A full 32-layer document still permits editing an existing light",
+    "Applying a light edit at the layer limit does not allocate a new layer",
+    "A full 32-layer document still permits editing its existing palette",
+    "Palette re-editing updates the same layer and preserves its stored object coordinates and protected cells",
+    "Canceling a changed palette swatch restores the applied palette without touching the source image",
+    "Expanded sculpt and Bézier controls fit a 390px mobile viewport",
+    "Sculpting, curve edits, cel navigation, adjustment previews and exports produce no uncaught browser exceptions"
+  ],
+  "mobile": {
+    "viewport": 390,
+    "document": 390,
+    "panels": [
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      }
+    ]
+  },
+  "height": {
+    "width": 24,
+    "height": 20,
+    "sculptedCells": 57,
+    "exactSourceRGBA_SHA256": "8d21f32a633d109b1f1bfc6c2a6fb4500306469feee496c1d301bf14208b0dbd",
+    "wrappedHeight": 3
+  },
+  "curve": {
+    "width": 64,
+    "height": 48,
+    "nativeInkCells": 239,
+    "anchors": 3,
+    "alpha": 128,
+    "rgbaSHA256": "15d4665cc065fe863c206d16c2aee3fc0c18482e151aa3a58a82e67bc35a0fa2"
+  },
+  "scope": "Actual bundled controls, physical CDP pointer editing, file picker round trips, exact PNG bytes, editable layer identity and responsive layout. No artistic-quality score or physical-GPU performance claim."
+}

@@ -43,10 +43,31 @@ test('new blank cels inherit a copy of working swatches and v3 retains each fram
   assert.deepEqual(restored.frames.map(frame => frame.document.workingPalette), [colors, [0xffffffff, ...colors.slice(1)], [0xffffffff, ...colors.slice(1)]]);
 });
 
+test('blank and duplicated cels inherit exact active RGBA swatches independently of the animation fallback palette', () => {
+  const authored = [0xff193757 | 0, 0x80123456 | 0, 0x01112233, 0x00446688, 0xffabcdef];
+  const expected = authored.map(value => value >>> 0), before = authored.slice(), fallback = [0xff102030];
+  const original = createPixelArtAnimation2D({ ...fixture(), workingPalette: authored });
+  original.workingPalette = fallback.slice();
+  const blank = addPixelArtAnimationFrame2D(original), duplicate = duplicatePixelArtAnimationFrame2D(blank);
+  const restored = parsePixelArtAnimation2D(serializePixelArtAnimation2D(duplicate));
+  assert.deepEqual(restored.workingPalette, fallback, 'the optional animation fallback does not replace explicit cel swatches');
+  assert.deepEqual(restored.frames.map(frame => frame.document.workingPalette), [expected, expected, expected]);
+  assert.deepEqual([...renderPixelArtDocument2D(restored.frames[0].document).pixels], fixture().pixels);
+  assert(restored.frames[1].document.pixels.every(value => value === 0), 'inheriting swatches does not paint a new blank cel');
+  assert.notEqual(blank.frames[1].document.workingPalette, original.frames[0].document.workingPalette);
+  assert.notEqual(duplicate.frames[2].document.workingPalette, duplicate.frames[1].document.workingPalette);
+  restored.frames[1].document.workingPalette[3] = 0;
+  assert.deepEqual(restored.frames[0].document.workingPalette, expected);
+  assert.deepEqual(restored.frames[2].document.workingPalette, expected);
+  assert.deepEqual(original.frames[0].document.workingPalette, expected);
+  assert.deepEqual(authored, before, 'normalizing signed input must not rewrite the caller palette');
+});
+
 test('invalid working palette metadata is rejected and old documents stay unchanged', () => {
   const empty = createBlankPixelArtDocument2D(1, 1);
   assert.equal('workingPalette' in validatePixelArtDocument2D(empty), false);
-  for (const workingPalette of [[], [0x00112233], [NaN], [1.5], new Array(257).fill(0xffffffff), { length: 1, 0: 0xffffffff }, Array(1)]) {
+  for (const workingPalette of [null, [], [NaN], [Infinity], [1.5], [-0x80000001], [0x100000000], ['#abcdef'],
+    new Array(257).fill(0xffffffff), { length: 1, 0: 0xffffffff }, Array(1)]) {
     assert.throws(() => validatePixelArtDocument2D({ ...empty, workingPalette }), /Working palette/);
   }
   assert.deepEqual(validatePixelArtDocument2D({ ...empty, workingPalette: [0xffffffff, 0xffffffff] }).workingPalette, [0xffffffff, 0xffffffff]);

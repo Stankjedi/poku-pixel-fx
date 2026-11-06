@@ -1,0 +1,84 @@
+{
+  "status": "passed",
+  "checks": [
+    "Pixel Art Lab loads the bundled native study with actual opaque material colors and transparent exterior",
+    "Displayed color analysis describes the actual native raster",
+    "Both native canvases occupy integer device-pixel scales at fractional 1.5 DPR",
+    "The local Korean font loads and is used without an operating-system CJK font requirement",
+    "Changing material changes the preview while leaving the committed source unchanged",
+    "The light control changes native shading without changing silhouette coverage",
+    "Material preview remains within the selected authored palette",
+    "Native PNG export decodes to the exact visible palette, alpha and source dimensions, independent of zoom",
+    "Applying a preview creates one layer without changing its native pixels",
+    "Layer undo restores the original native source",
+    "Layer redo reproduces the exact applied material",
+    "A project opened through the actual file input preserves original pixels, authored settings and applied output exactly",
+    "Importing a PNG preserves it unchanged until an explicit material or selection edit",
+    "The imported project retains the original native RGBA source without a hidden material layer",
+    "An empty selection leaves every source cell unchanged and disables material application",
+    "Connected color selection and an actual pointer protection brush record the intended native cells at 1.5 DPR",
+    "Selected cells receive the material while unselected colors, protected details, transparency and partial alpha remain intact",
+    "Applying a selected material keeps original source pixels and reproduces its preview exactly",
+    "PNG export contains color pixels and exact coverage even while the diagnostic normal view is displayed",
+    "Selected/protected masks and the native source survive a project save/reopen round trip",
+    "Malformed project input reports an error without replacing the last valid source, layers or visible output",
+    "Independent source masks hide stored opaque pixels in both canvases and PNG while project JSON retains the original raw pixel",
+    "Changing only seed preserves imported precise ranges, vertical negative light, grain angle, ramp thresholds, material ID and object origin",
+    "Reaching the layer limit keeps APPLIED output, disables further material/selection edits, and explains that undo restores editing",
+    "At capacity, attempted editing creates no unsaveable draft and native PNG/project saves retain the visible applied result",
+    "A project saved at the exact layer boundary reopens with the same output and no extra layer",
+    "Undo frees capacity so material editing and saving the final available preview work again",
+    "Explicit 2× display zoom also maps to integer native-cell device pixels at 1.5 DPR",
+    "The mobile authoring layout has no horizontal page overflow and keeps its panels in the viewport",
+    "Material editing, import/export and responsive presentation have no uncaught browser errors"
+  ],
+  "sizing": [
+    {
+      "id": "source",
+      "scaleX": 3,
+      "scaleY": 3,
+      "dpr": 1.5,
+      "rendering": "pixelated"
+    },
+    {
+      "id": "result",
+      "scaleX": 3,
+      "scaleY": 3,
+      "dpr": 1.5,
+      "rendering": "pixelated"
+    }
+  ],
+  "mobile": {
+    "viewport": 390,
+    "document": 390,
+    "body": 390,
+    "panels": [
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      },
+      {
+        "width": 354,
+        "right": 372
+      }
+    ]
+  },
+  "nativePNG": {
+    "width": 192,
+    "height": 112,
+    "paletteColors": 12,
+    "rgbaSHA256": "6ff8f0cfa7b2aef3ecb460e3db2c4acb0770798834f2a9a69618483a1074816f"
+  },
+  "selectedPNG": {
+    "width": 24,
+    "height": 16,
+    "changedCells": 106,
+    "protectedCells": 1,
+    "rgbaSHA256": "38e737cba07b1a3794c34b13f00bc9e62a3abaad9f317b4fc1c5b60a8a80796f"
+  },
+  "scope": "Actual native Canvas UI, material/light controls, layer history, pointer selections/protection, PNG and project file round trips, fractional DPR and mobile layout. These checks do not certify artistic quality."
+}
