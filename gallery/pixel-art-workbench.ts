@@ -235,10 +235,11 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
   });
 
   function showAuthoredPalette(colors:readonly number[] | undefined) {
-    authoredPalette=colors ? [...colors] : undefined;
+    // Core hex() returns a signed bitwise color; document metadata stores uint32.
+    authoredPalette=colors ? colors.map(color=>color>>>0) : undefined;
     el('workbench-palette').replaceChildren(...(authoredPalette??[]).map((color,i)=>{
       const swatch=document.createElement('input');swatch.type='color';swatch.value=cssColor(color);swatch.setAttribute('aria-label',`작업 팔레트 ${i+1}`);
-      swatch.oninput=()=>{authoredPalette![i]=hex(swatch.value);host.workingPaletteChanged();};
+      swatch.oninput=()=>{authoredPalette![i]=hex(swatch.value)>>>0;host.workingPaletteChanged();};
       swatch.ondblclick=()=>{field('paint-color').value=swatch.value;};return swatch;
     }));
   }

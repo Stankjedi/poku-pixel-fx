@@ -44,6 +44,21 @@ const canvasFrames = new Map<string, { sprite: EditableSprite2D; mode: string; h
 function status(message: string, error = false) {
   element('status').textContent = message; element('status').classList.toggle('error', error);
 }
+function beginImport(): boolean {
+  // All readers share this gate: an older file must never replace a newer import.
+  if(busy){status('다른 파일을 가져오는 중입니다. 완료한 뒤 다시 시도해 주세요.',true);return false;}
+  busy=true;
+  for(const id of ['import-png','open-project','import-animation-sheet'])button(id).disabled=true;
+  return true;
+}
+function endImport() {
+  busy=false;
+  for(const id of ['import-png','open-project','import-animation-sheet'])button(id).disabled=false;
+}
+function requireUnchangedImport(before: PixelArtDocument2D) {
+  workbench?.finishStroke();
+  if(outputProject()!==before)throw new Error('가져오는 동안 작업이 변경되었습니다. 현재 작업을 유지했습니다. 파일을 다시 열어 주세요.');
+}
 function attempt(fn: () => void) { try { fn(); } catch (error) { status(error instanceof Error ? error.message : String(error), true); } }
 function colorHex(c: string | number): string {
   return typeof c === 'string' ? c : '#' + [c & 255, (c >>> 8) & 255, (c >>> 16) & 255].map(v => v.toString(16).padStart(2,'0')).join('');
@@ -340,24 +355,31 @@ function prepareImported(next: PixelArtDocument2D,replaceHistory=true,preparedRa
   if(replaceHistory)resetHistory();revision++;committed=raster;renderedRevision=revision;draft=false;editingMaterialId=undefined;paintPreview=undefined;schedule();
 }
 input('project-file').onchange=async()=>{
-  const file=input('project-file').files?.[0];if(!file||busy)return;busy=true;
+  const file=input('project-file').files?.[0];if(!file)return;
+  if(!beginImport()){input('project-file').value='';return;}
   try{
     if(file.size>64*1024*1024)throw new RangeError('프로젝트는 64 MiB 이하로 열어 주세요.');
+    workbench?.finishStroke();const before=outputProject();
+    status('프로젝트의 픽셀과 편집 정보를 읽고 있습니다…');
     const json=await file.text(),header=JSON.parse(json);
-    if(header?.schema==='poku-pixel-art/v3')timeline!.open(json);
+    if(header?.schema==='poku-pixel-art/v3'){requireUnchangedImport(before);timeline!.open(json);}
     else {
       const next=parsePixelArtDocument2D(json);
       if(next.width>4096||next.height>4096)throw new RangeError('브라우저 작업실에서는 가로·세로 4096픽셀 이하의 프로젝트를 사용해 주세요.');
-      const raster=renderPixelArtDocument2D(next);timeline?.close();prepareImported(next,true,raster);
+      const raster=renderPixelArtDocument2D(next);requireUnchangedImport(before);timeline?.close();prepareImported(next,true,raster);
     }
+    status('프로젝트를 불러왔습니다.');
   }
-  catch(error){status(String(error),true);}finally{busy=false;input('project-file').value='';}
+  catch(error){status(String(error),true);}finally{input('project-file').value='';endImport();}
 };
 input('png-file').onchange=async()=>{
-  const file=input('png-file').files?.[0];if(!file||busy)return;busy=true;
+  const file=input('png-file').files?.[0];if(!file)return;
+  if(!beginImport()){input('png-file').value='';return;}
   let bitmap:ImageBitmap|undefined;
   try{
     if(file.size>16*1024*1024)throw new RangeError('PNG는 16 MiB 이하로 열어 주세요.');
+    workbench?.finishStroke();const before=outputProject();
+    status('PNG 원본 픽셀을 읽고 있습니다…');
     const decoded=await decodePixelArtPNG(new Uint8Array(await file.arrayBuffer())),{w,h}=decoded;
     let pixels:Uint32Array;
     if(decoded.kind==='decoded')pixels=decoded.pixels;
@@ -367,11 +389,12 @@ input('png-file').onchange=async()=>{
       for(let i=0;i<pixels.length;i++)pixels[i]=(rgba[i*4]|rgba[i*4+1]<<8|rgba[i*4+2]<<16|rgba[i*4+3]<<24)>>>0;
     }
     const next=createPixelArtDocument2D({w,h,pixels,mask:{w,h,data:Uint8Array.from(pixels,p=>p>>>24?1:0)}},file.name.replace(/\.png$/i,''));
-    timeline?.close();prepareImported(next);
+    requireUnchangedImport(before);timeline?.close();prepareImported(next);
     element('import-note').textContent=decoded.kind==='decoded'
       ?`PNG 원본 RGB·알파를 그대로 가져왔습니다.${decoded.warnings.length?' 색상 프로파일은 원본 수치 보존을 위해 변환하지 않았습니다.':''}`
       :`${decoded.reason==='16-bit'?'16비트':'Adam7 인터레이스'} PNG를 브라우저에서 변환했습니다. 원본 수치를 그대로 편집하려면 비인터레이스 8비트 PNG를 사용하세요.`;
-  }catch(error){status(String(error),true);}finally{bitmap?.close();busy=false;input('png-file').value='';}
+    status('PNG를 불러왔습니다.');
+  }catch(error){status(String(error),true);}finally{bitmap?.close();input('png-file').value='';endImport();}
 };
 
 function point(event: PointerEvent): [number,number] {
@@ -444,6 +467,6 @@ installPixelArtProduction({
   palette:()=>workbench!.palette(),setPalette:colors=>workbench!.setAuthoredPalette(colors),
   applyToFrames:edit=>timeline!.editDocuments(edit),
   importAnimation:animation=>timeline!.importAnimation(animation),
-  status,
+  beginImport,endImport,status,
 });
 attempt(()=>{resetMaterial();study();});

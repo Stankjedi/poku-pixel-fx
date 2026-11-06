@@ -2405,14 +2405,14 @@ function installPixelArtWorkbench(host) {
     host.setSelection(resizePixelSelection2D(doc.width, doc.height, host.selection(), radius));
   });
   function showAuthoredPalette(colors) {
-    authoredPalette = colors ? [...colors] : void 0;
+    authoredPalette = colors ? colors.map((color) => color >>> 0) : void 0;
     el4("workbench-palette").replaceChildren(...(authoredPalette ?? []).map((color, i) => {
       const swatch = document.createElement("input");
       swatch.type = "color";
       swatch.value = cssColor3(color);
       swatch.setAttribute("aria-label", `\uC791\uC5C5 \uD314\uB808\uD2B8 ${i + 1}`);
       swatch.oninput = () => {
-        authoredPalette[i] = hex(swatch.value);
+        authoredPalette[i] = hex(swatch.value) >>> 0;
         host.workingPaletteChanged();
       };
       swatch.ondblclick = () => {
@@ -4053,7 +4053,6 @@ function installPixelArtProduction(host) {
   }
   select3("gradient-mode").onchange = gradientControls;
   gradientControls();
-  let importing = false;
   function sheetControls() {
     const manifest = select3("sheet-import-mode").value === "manifest";
     el6("sheet-grid-controls").hidden = manifest;
@@ -4062,33 +4061,31 @@ function installPixelArtProduction(host) {
   select3("sheet-import-mode").onchange = sheetControls;
   sheetControls();
   button5("import-animation-sheet").onclick = () => {
-    if (importing) return;
+    if (!host.beginImport()) return;
     void (async () => {
-      const file = field5("animation-sheet-file").files?.[0];
-      if (!file) throw new Error("\uAC00\uC838\uC62C \uC2A4\uD504\uB77C\uC774\uD2B8\uC2DC\uD2B8 PNG\uB97C \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.");
-      const manifestMode = select3("sheet-import-mode").value === "manifest";
-      const manifestFile = field5("animation-sheet-manifest").files?.[0];
-      if (manifestMode && !manifestFile) throw new Error("PNG\uC640 \uD568\uAED8 \uB0B4\uBCF4\uB0B8 \uC2DC\uAC04 JSON\uC744 \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.");
-      if (file.size > 64 * 1024 * 1024) throw new RangeError("\uC2DC\uD2B8 PNG\uB294 64 MiB \uC774\uD558\uB85C \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
-      if (manifestMode && manifestFile && manifestFile.size > 4 * 1024 * 1024) throw new RangeError("\uC2DC\uD2B8 \uC2DC\uAC04 JSON\uC740 4 MiB \uC774\uD558\uB85C \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
-      host.finishStroke();
-      const before = host.outputDocument();
-      const options = manifestMode ? void 0 : {
-        frameWidth: numeric("slice-width"),
-        frameHeight: numeric("slice-height"),
-        margin: [numeric("slice-margin-x"), numeric("slice-margin-y")],
-        gap: [numeric("slice-gap-x"), numeric("slice-gap-y")],
-        order: select3("slice-order").value,
-        start: numeric("slice-start"),
-        ...numeric("slice-count") ? { count: numeric("slice-count") } : {},
-        skipEmpty: field5("slice-skip-empty").checked,
-        durationMs: numeric("slice-duration"),
-        name: file.name.replace(/\.png$/i, "").slice(0, 160) || "Imported animation"
-      };
-      importing = true;
-      button5("import-animation-sheet").disabled = true;
-      host.status("\uC6D0\uBCF8 \uD53D\uC140\uC744 \uC77D\uACE0 \uD504\uB808\uC784 \uACBD\uACC4\uC640 \uC7AC\uC0DD \uC2DC\uAC04\uC744 \uD655\uC778\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4\u2026");
       try {
+        const file = field5("animation-sheet-file").files?.[0];
+        if (!file) throw new Error("\uAC00\uC838\uC62C \uC2A4\uD504\uB77C\uC774\uD2B8\uC2DC\uD2B8 PNG\uB97C \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.");
+        const manifestMode = select3("sheet-import-mode").value === "manifest";
+        const manifestFile = field5("animation-sheet-manifest").files?.[0];
+        if (manifestMode && !manifestFile) throw new Error("PNG\uC640 \uD568\uAED8 \uB0B4\uBCF4\uB0B8 \uC2DC\uAC04 JSON\uC744 \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.");
+        if (file.size > 64 * 1024 * 1024) throw new RangeError("\uC2DC\uD2B8 PNG\uB294 64 MiB \uC774\uD558\uB85C \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
+        if (manifestMode && manifestFile && manifestFile.size > 4 * 1024 * 1024) throw new RangeError("\uC2DC\uD2B8 \uC2DC\uAC04 JSON\uC740 4 MiB \uC774\uD558\uB85C \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
+        host.finishStroke();
+        const before = host.outputDocument();
+        const options = manifestMode ? void 0 : {
+          frameWidth: numeric("slice-width"),
+          frameHeight: numeric("slice-height"),
+          margin: [numeric("slice-margin-x"), numeric("slice-margin-y")],
+          gap: [numeric("slice-gap-x"), numeric("slice-gap-y")],
+          order: select3("slice-order").value,
+          start: numeric("slice-start"),
+          ...numeric("slice-count") ? { count: numeric("slice-count") } : {},
+          skipEmpty: field5("slice-skip-empty").checked,
+          durationMs: numeric("slice-duration"),
+          name: file.name.replace(/\.png$/i, "").slice(0, 160) || "Imported animation"
+        };
+        host.status("\uC6D0\uBCF8 \uD53D\uC140\uC744 \uC77D\uACE0 \uD504\uB808\uC784 \uACBD\uACC4\uC640 \uC7AC\uC0DD \uC2DC\uAC04\uC744 \uD655\uC778\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4\u2026");
         const decoded = await decodePixelArtPNG(new Uint8Array(await file.arrayBuffer()), {
           maxDimension: 16384,
           maxPixels: 16777216,
@@ -4105,8 +4102,7 @@ function installPixelArtProduction(host) {
         el6("sheet-import-note").textContent = note + (decoded.warnings.length ? " \uC0C9\uC0C1 \uD504\uB85C\uD30C\uC77C\uC740 \uC6D0\uBCF8 \uC218\uCE58\uB97C \uC720\uC9C0\uD558\uAE30 \uC704\uD574 \uBCC0\uD658\uD558\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4." : "");
         host.status(note);
       } finally {
-        importing = false;
-        button5("import-animation-sheet").disabled = false;
+        host.endImport();
       }
     })().catch((error) => host.status(error instanceof Error ? error.message : String(error), true));
   };
@@ -4156,6 +4152,23 @@ var canvasFrames = /* @__PURE__ */ new Map();
 function status(message, error = false) {
   element("status").textContent = message;
   element("status").classList.toggle("error", error);
+}
+function beginImport() {
+  if (busy) {
+    status("\uB2E4\uB978 \uD30C\uC77C\uC744 \uAC00\uC838\uC624\uB294 \uC911\uC785\uB2C8\uB2E4. \uC644\uB8CC\uD55C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.", true);
+    return false;
+  }
+  busy = true;
+  for (const id of ["import-png", "open-project", "import-animation-sheet"]) button6(id).disabled = true;
+  return true;
+}
+function endImport() {
+  busy = false;
+  for (const id of ["import-png", "open-project", "import-animation-sheet"]) button6(id).disabled = false;
+}
+function requireUnchangedImport(before) {
+  workbench?.finishStroke();
+  if (outputProject() !== before) throw new Error("\uAC00\uC838\uC624\uB294 \uB3D9\uC548 \uC791\uC5C5\uC774 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4. \uD604\uC7AC \uC791\uC5C5\uC744 \uC720\uC9C0\uD588\uC2B5\uB2C8\uB2E4. \uD30C\uC77C\uC744 \uB2E4\uC2DC \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
 }
 function attempt(fn) {
   try {
@@ -4622,33 +4635,49 @@ function prepareImported(next, replaceHistory = true, preparedRaster) {
 }
 input2("project-file").onchange = async () => {
   const file = input2("project-file").files?.[0];
-  if (!file || busy) return;
-  busy = true;
+  if (!file) return;
+  if (!beginImport()) {
+    input2("project-file").value = "";
+    return;
+  }
   try {
     if (file.size > 64 * 1024 * 1024) throw new RangeError("\uD504\uB85C\uC81D\uD2B8\uB294 64 MiB \uC774\uD558\uB85C \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
+    workbench?.finishStroke();
+    const before = outputProject();
+    status("\uD504\uB85C\uC81D\uD2B8\uC758 \uD53D\uC140\uACFC \uD3B8\uC9D1 \uC815\uBCF4\uB97C \uC77D\uACE0 \uC788\uC2B5\uB2C8\uB2E4\u2026");
     const json = await file.text(), header = JSON.parse(json);
-    if (header?.schema === "poku-pixel-art/v3") timeline.open(json);
-    else {
+    if (header?.schema === "poku-pixel-art/v3") {
+      requireUnchangedImport(before);
+      timeline.open(json);
+    } else {
       const next = parsePixelArtDocument2D(json);
       if (next.width > 4096 || next.height > 4096) throw new RangeError("\uBE0C\uB77C\uC6B0\uC800 \uC791\uC5C5\uC2E4\uC5D0\uC11C\uB294 \uAC00\uB85C\xB7\uC138\uB85C 4096\uD53D\uC140 \uC774\uD558\uC758 \uD504\uB85C\uC81D\uD2B8\uB97C \uC0AC\uC6A9\uD574 \uC8FC\uC138\uC694.");
       const raster = renderPixelArtDocument2D(next);
+      requireUnchangedImport(before);
       timeline?.close();
       prepareImported(next, true, raster);
     }
+    status("\uD504\uB85C\uC81D\uD2B8\uB97C \uBD88\uB7EC\uC654\uC2B5\uB2C8\uB2E4.");
   } catch (error) {
     status(String(error), true);
   } finally {
-    busy = false;
     input2("project-file").value = "";
+    endImport();
   }
 };
 input2("png-file").onchange = async () => {
   const file = input2("png-file").files?.[0];
-  if (!file || busy) return;
-  busy = true;
+  if (!file) return;
+  if (!beginImport()) {
+    input2("png-file").value = "";
+    return;
+  }
   let bitmap;
   try {
     if (file.size > 16 * 1024 * 1024) throw new RangeError("PNG\uB294 16 MiB \uC774\uD558\uB85C \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
+    workbench?.finishStroke();
+    const before = outputProject();
+    status("PNG \uC6D0\uBCF8 \uD53D\uC140\uC744 \uC77D\uACE0 \uC788\uC2B5\uB2C8\uB2E4\u2026");
     const decoded = await decodePixelArtPNG(new Uint8Array(await file.arrayBuffer())), { w, h } = decoded;
     let pixels;
     if (decoded.kind === "decoded") pixels = decoded.pixels;
@@ -4664,15 +4693,17 @@ input2("png-file").onchange = async () => {
       for (let i = 0; i < pixels.length; i++) pixels[i] = (rgba[i * 4] | rgba[i * 4 + 1] << 8 | rgba[i * 4 + 2] << 16 | rgba[i * 4 + 3] << 24) >>> 0;
     }
     const next = createPixelArtDocument2D({ w, h, pixels, mask: { w, h, data: Uint8Array.from(pixels, (p) => p >>> 24 ? 1 : 0) } }, file.name.replace(/\.png$/i, ""));
+    requireUnchangedImport(before);
     timeline?.close();
     prepareImported(next);
     element("import-note").textContent = decoded.kind === "decoded" ? `PNG \uC6D0\uBCF8 RGB\xB7\uC54C\uD30C\uB97C \uADF8\uB300\uB85C \uAC00\uC838\uC654\uC2B5\uB2C8\uB2E4.${decoded.warnings.length ? " \uC0C9\uC0C1 \uD504\uB85C\uD30C\uC77C\uC740 \uC6D0\uBCF8 \uC218\uCE58 \uBCF4\uC874\uC744 \uC704\uD574 \uBCC0\uD658\uD558\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4." : ""}` : `${decoded.reason === "16-bit" ? "16\uBE44\uD2B8" : "Adam7 \uC778\uD130\uB808\uC774\uC2A4"} PNG\uB97C \uBE0C\uB77C\uC6B0\uC800\uC5D0\uC11C \uBCC0\uD658\uD588\uC2B5\uB2C8\uB2E4. \uC6D0\uBCF8 \uC218\uCE58\uB97C \uADF8\uB300\uB85C \uD3B8\uC9D1\uD558\uB824\uBA74 \uBE44\uC778\uD130\uB808\uC774\uC2A4 8\uBE44\uD2B8 PNG\uB97C \uC0AC\uC6A9\uD558\uC138\uC694.`;
+    status("PNG\uB97C \uBD88\uB7EC\uC654\uC2B5\uB2C8\uB2E4.");
   } catch (error) {
     status(String(error), true);
   } finally {
     bitmap?.close();
-    busy = false;
     input2("png-file").value = "";
+    endImport();
   }
 };
 function point(event) {
@@ -4829,6 +4860,8 @@ installPixelArtProduction({
   setPalette: (colors) => workbench.setAuthoredPalette(colors),
   applyToFrames: (edit) => timeline.editDocuments(edit),
   importAnimation: (animation) => timeline.importAnimation(animation),
+  beginImport,
+  endImport,
   status
 });
 attempt(() => {

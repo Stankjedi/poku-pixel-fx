@@ -50,6 +50,10 @@ try {
       await click('import-animation-sheet');
       await waitFor("!document.getElementById('import-animation-sheet').disabled"); await ready();
     };
+    const holdImportRead = async filename => {
+      await evaluate(`(()=>{const arrayBuffer=File.prototype.arrayBuffer,text=File.prototype.text;const hold=window.__productionImportHold={reads:[]};File.prototype.arrayBuffer=function(){hold.reads.push(['arrayBuffer',this.name]);if(this.name!==${JSON.stringify(filename)})return arrayBuffer.call(this);const file=this;return new Promise(resolve=>{hold.resume=()=>resolve(arrayBuffer.call(file));});};File.prototype.text=function(){hold.reads.push(['text',this.name]);return text.call(this);};hold.restore=()=>{File.prototype.arrayBuffer=arrayBuffer;File.prototype.text=text;};})()`);
+    };
+    const releaseImportRead = async () => evaluate('window.__productionImportHold.resume();window.__productionImportHold.restore();');
 
     await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false });
     await browser.navigate('/gallery/pixel-art-lab.html'); await ready();
@@ -214,6 +218,64 @@ try {
     assert(await evaluate("document.getElementById('status').classList.contains('error')&&document.getElementById('status').textContent.includes('작업이 변경')"),'A stroke started during asynchronous decoding cancels the stale sheet import');
     const afterRace=await project(),raceFrame=afterRace.frames.find(frame=>frame.id===afterRace.activeFrameId);
     assert(raceFrame.document.layers.some(layer=>layer.kind==='paint')&&(await png()).equals(Buffer.from(gridFrames[1].flatMap((c,i)=>i===174?[255,0,255,255]:[c&255,c>>>8&255,c>>>16&255,c>>>24]))),'The in-progress native stroke remains committed and exportable after import cancellation');
+
+    phase = 'ordinary PNG import blocks a competing sheet import';
+    const gatePixels = [color(17, 33, 65, 1), color(250, 127, 3, 0), color(90, 120, 150)];
+    const gatePNGPath = join(temporary, 'gate-held.png'); await writeFile(gatePNGPath, encodePNG(3, 1, rgba(gatePixels)));
+    const beforePNGImport = await project();
+    await holdImportRead('gate-held.png');
+    try {
+      await uploadFile('png-file', gatePNGPath);
+      await waitFor('typeof window.__productionImportHold.resume===\"function\"');
+      assert(await evaluate("['import-png','open-project','import-animation-sheet'].every(id=>document.getElementById(id).disabled)"),
+        'A pending ordinary PNG import disables every competing import entry point');
+      await click('import-animation-sheet'); await ready(true);
+      assert(equal(await evaluate('window.__productionImportHold.reads'), [['arrayBuffer', 'gate-held.png']])
+        && equal(await project(), beforePNGImport),
+      'Clicking sheet import during a held PNG read starts no second read and leaves the current animation intact');
+      await releaseImportRead();
+      await waitFor("document.getElementById('png-file').value===''"); await ready();
+      const completedPNG = await project();
+      assert(completedPNG.schema === 'poku-pixel-art/v2' && completedPNG.name === 'gate-held'
+        && equal(completedPNG.pixels, gatePixels) && (await png()).equals(rgba(gatePixels))
+        && await evaluate("['import-png','open-project','import-animation-sheet'].every(id=>!document.getElementById(id).disabled)"),
+      'Only the original PNG import completes with exact hidden RGB and alpha, then releases every import control');
+    } finally { await evaluate('window.__productionImportHold.restore()'); }
+
+    phase = 'sheet import blocks PNG and project file changes';
+    await upload(beforePNGImport);
+    const beforeSheetGate = await project(), rejectedProjectPath = join(temporary, 'gate-rejected-project.json');
+    await writeFile(rejectedProjectPath, JSON.stringify(fixture('Must not replace the pending sheet', 1, 1, [color(255, 0, 255)])));
+    await holdImportRead('large-grid.png');
+    try {
+      await click('import-animation-sheet');
+      await waitFor('typeof window.__productionImportHold.resume===\"function\"');
+      assert(await evaluate("['import-png','open-project','import-animation-sheet'].every(id=>document.getElementById(id).disabled)"),
+        'A pending sheet import disables the ordinary PNG and project import controls');
+      // An already-open native file picker can still produce a change event after its
+      // launch button is disabled. Exercise the handlers through the real file inputs.
+      await uploadFile('png-file', gatePNGPath);
+      await waitFor("document.getElementById('png-file').value===''"); await ready(true);
+      assert(await evaluate("document.getElementById('status').classList.contains('error')&&document.getElementById('status').textContent.includes('다른 파일을 가져오는 중')"),
+        'A late PNG file-picker result is rejected while the sheet owns the import gate');
+      await uploadFile('project-file', rejectedProjectPath);
+      await waitFor("document.getElementById('project-file').value===''"); await ready(true);
+      assert(await evaluate("document.getElementById('status').classList.contains('error')&&document.getElementById('status').textContent.includes('다른 파일을 가져오는 중')")
+        && equal(await evaluate('window.__productionImportHold.reads'), [['arrayBuffer', 'large-grid.png']])
+        && equal(await project(), beforeSheetGate),
+      'A late project picker is also rejected before reading data, without replacing any current frame or edit');
+      await releaseImportRead();
+      await waitFor("!document.getElementById('import-animation-sheet').disabled"); await ready();
+      const completedSheet = await project();
+      assert(completedSheet.schema === 'poku-pixel-art/v3'
+        && equal(completedSheet.frames.map(frame => frame.document.pixels), gridFrames)
+        && await evaluate("document.getElementById('png-file').value===''&&document.getElementById('project-file').value===''"),
+      'Only the original sheet import completes; rejected ordinary file changes cannot close its timeline');
+      await click('undo'); await ready();
+      assert(equal(await project(), beforeSheetGate), 'One undo after the gated sheet import restores the prior animation, active cel and painted edits');
+      await click('redo'); await ready();
+      assert(equal((await project()).frames, completedSheet.frames), 'Redo restores the complete imported sheet after competing inputs were rejected');
+    } finally { await evaluate('window.__productionImportHold.restore()'); }
 
     phase = 'Adam7 exact import';
     // The external encoder corpus has an independent raw-RGBA oracle.

@@ -13,6 +13,8 @@ interface ProductionHost {
   setPalette(colors: readonly number[]): void;
   applyToFrames(edit: (document: PixelArtDocument2D) => PixelArtDocument2D): number | undefined;
   importAnimation(animation: PixelArtAnimation2D): void;
+  beginImport(): boolean;
+  endImport(): void;
   status(message: string, error?: boolean): void;
 }
 const el = (id: string) => document.getElementById(id)!;
@@ -92,36 +94,34 @@ export function installPixelArtProduction(host: ProductionHost) {
   }
   select('gradient-mode').onchange = gradientControls; gradientControls();
 
-  let importing = false;
   function sheetControls() {
     const manifest = select('sheet-import-mode').value === 'manifest';
     el('sheet-grid-controls').hidden = manifest; el('sheet-manifest-control').hidden = !manifest;
   }
   select('sheet-import-mode').onchange = sheetControls; sheetControls();
   button('import-animation-sheet').onclick = () => {
-    if (importing) return;
+    if (!host.beginImport()) return;
     void (async () => {
-      const file = field('animation-sheet-file').files?.[0];
-      if (!file) throw new Error('가져올 스프라이트시트 PNG를 선택해 주세요.');
-      const manifestMode = select('sheet-import-mode').value === 'manifest';
-      const manifestFile = field('animation-sheet-manifest').files?.[0];
-      if (manifestMode && !manifestFile) throw new Error('PNG와 함께 내보낸 시간 JSON을 선택해 주세요.');
-      if (file.size > 64 * 1024 * 1024) throw new RangeError('시트 PNG는 64 MiB 이하로 열어 주세요.');
-      if (manifestMode && manifestFile && manifestFile.size > 4 * 1024 * 1024) throw new RangeError('시트 시간 JSON은 4 MiB 이하로 열어 주세요.');
-      host.finishStroke();
-      const before = host.outputDocument();
-      const options = manifestMode ? undefined : {
-        frameWidth: numeric('slice-width'), frameHeight: numeric('slice-height'),
-        margin: [numeric('slice-margin-x'), numeric('slice-margin-y')] as [number, number],
-        gap: [numeric('slice-gap-x'), numeric('slice-gap-y')] as [number, number],
-        order: select('slice-order').value as 'row-major' | 'column-major', start: numeric('slice-start'),
-        ...(numeric('slice-count') ? { count: numeric('slice-count') } : {}),
-        skipEmpty: field('slice-skip-empty').checked, durationMs: numeric('slice-duration'),
-        name: file.name.replace(/\.png$/i, '').slice(0, 160) || 'Imported animation',
-      };
-      importing = true; button('import-animation-sheet').disabled = true;
-      host.status('원본 픽셀을 읽고 프레임 경계와 재생 시간을 확인하고 있습니다…');
       try {
+        const file = field('animation-sheet-file').files?.[0];
+        if (!file) throw new Error('가져올 스프라이트시트 PNG를 선택해 주세요.');
+        const manifestMode = select('sheet-import-mode').value === 'manifest';
+        const manifestFile = field('animation-sheet-manifest').files?.[0];
+        if (manifestMode && !manifestFile) throw new Error('PNG와 함께 내보낸 시간 JSON을 선택해 주세요.');
+        if (file.size > 64 * 1024 * 1024) throw new RangeError('시트 PNG는 64 MiB 이하로 열어 주세요.');
+        if (manifestMode && manifestFile && manifestFile.size > 4 * 1024 * 1024) throw new RangeError('시트 시간 JSON은 4 MiB 이하로 열어 주세요.');
+        host.finishStroke();
+        const before = host.outputDocument();
+        const options = manifestMode ? undefined : {
+          frameWidth: numeric('slice-width'), frameHeight: numeric('slice-height'),
+          margin: [numeric('slice-margin-x'), numeric('slice-margin-y')] as [number, number],
+          gap: [numeric('slice-gap-x'), numeric('slice-gap-y')] as [number, number],
+          order: select('slice-order').value as 'row-major' | 'column-major', start: numeric('slice-start'),
+          ...(numeric('slice-count') ? { count: numeric('slice-count') } : {}),
+          skipEmpty: field('slice-skip-empty').checked, durationMs: numeric('slice-duration'),
+          name: file.name.replace(/\.png$/i, '').slice(0, 160) || 'Imported animation',
+        };
+        host.status('원본 픽셀을 읽고 프레임 경계와 재생 시간을 확인하고 있습니다…');
         const decoded = await decodePixelArtPNG(new Uint8Array(await file.arrayBuffer()), {
           maxDimension: 16384, maxPixels: 16_777_216, maxFileBytes: 64 * 1024 * 1024, maxInflatedBytes: 128 * 1024 * 1024,
         });
@@ -136,7 +136,7 @@ export function installPixelArtProduction(host: ProductionHost) {
         const note = `${w} × ${h} 시트 → ${animation.frames.length}개 프레임 · ${animation.width} × ${animation.height} px. RGB·알파와 재생 시간을 보존했습니다.`;
         el('sheet-import-note').textContent = note + (decoded.warnings.length ? ' 색상 프로파일은 원본 수치를 유지하기 위해 변환하지 않았습니다.' : '');
         host.status(note);
-      } finally { importing = false; button('import-animation-sheet').disabled = false; }
+      } finally { host.endImport(); }
     })().catch(error => host.status(error instanceof Error ? error.message : String(error), true));
   };
 }
