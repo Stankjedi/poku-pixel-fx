@@ -1,0 +1,6 @@
+{
+  "status": "unavailable",
+  "phase": "initialization",
+  "reason": "Error: Error: Browser exited null: /usr/bin/chromium: 9: [: 5225713664: unexpected operator\n[16:16:1106/222824.507463:FATAL:chrome/browser/process_singleton_posix.cc:297] Check failed: . socket() failed: Operation not permitted (1)\n[1106/222824.507774:ERROR:third_party/crashpad/crashpad/util/linux/scoped_ptrace_attach.cc:27] ptrace: Operation not permitted (1)\n",
+  "checks": []
+}

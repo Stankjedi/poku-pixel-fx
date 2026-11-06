@@ -4,9 +4,11 @@ import type { EditableSprite2D } from '../src/core/sprite-edit.js';
 import type { MaterialChannels2D } from '../src/core/material-surface.js';
 import { createPixelArtStudy2D, type PixelArtStudyShape2D } from '../src/examples/pixel-art-study.js';
 import { pixelArtLayerLimit2D } from '../src/authoring/pixel-art-project.js';
-import { createPixelArtDocument2D, renderPixelArtDocument2D, parsePixelArtDocument2D, serializePixelArtDocument2D, nextPixelArtLayerId2D, PixelArtDocumentHistory2D,
+import { createPixelArtDocument2D, renderPixelArtDocument2D, renderPixelArtAuthoredHeight2D, parsePixelArtDocument2D, serializePixelArtDocument2D, nextPixelArtLayerId2D, PixelArtDocumentHistory2D,
   type PixelArtMaterialLayer2D, type PixelArtDocument2D } from '../src/authoring/pixel-art-document.js';
 import { installPixelArtWorkbench } from './pixel-art-workbench.js';
+import { installPixelArtTimeline } from './pixel-art-timeline.js';
+import { installPixelArtViewport } from './pixel-art-viewport.js';
 import { encodeRGBAPNG } from './png.js';
 import { decodePixelArtPNG } from './png-import.js';
 
@@ -21,6 +23,7 @@ const rangeIds = ['scale','detail','relief','bevel','roughness','light-angle','l
 let project: PixelArtDocument2D;
 let committed: EditableSprite2D, rendered: EditableSprite2D;
 let selection: Uint8Array, protectedMask: Uint8Array, authoredHeight: Float32Array | undefined;
+let sourceAuthoredHeight: Float32Array | undefined;
 let draft = true, queued = false, busy = false;
 let workingOptions: PixelMaterialOptions2D = {};
 let materialOrigin: [number,number] | undefined;
@@ -29,7 +32,11 @@ let revision = 0, renderedRevision = -1;
 let paintPreview: EditableSprite2D | undefined;
 let editingMaterialId: string | undefined;
 let workbench: ReturnType<typeof installPixelArtWorkbench> | undefined;
+let timeline: ReturnType<typeof installPixelArtTimeline> | undefined;
 let protectionVersion=0,beforeAnalysisKey='',beforeAnalysis:ReturnType<typeof diagnosePixelArt2D>|undefined;
+let previewVersion=0,outputKey='',cachedOutput:EditableSprite2D|undefined;
+let afterAnalysis:ReturnType<typeof diagnosePixelArt2D>|undefined,analysisSource:EditableSprite2D|undefined,analysisKey='';
+let outputDocumentKey='',outputDocumentCache:PixelArtDocument2D|undefined;
 const urls: string[] = [];
 
 function status(message: string, error = false) {
@@ -66,6 +73,8 @@ function loadSettings(options: PixelMaterialOptions2D) {
   input('grain-angle').value = String(((p.grainAngle * 180 / Math.PI + 180) % 360 + 360) % 360 - 180);
   input('ambient-occlusion').value=String(p.ambientOcclusion);
   input('cast-shadow').value=String(p.castShadow);
+  input('seamless-material').checked=!!p.tileSize;
+  element('tile-material-note').textContent=p.tileSize?`${p.tileSize[0]} × ${p.tileSize[1]} px 간격으로 무늬가 반복됩니다. 3 × 3 타일 보기로 경계를 확인하세요.`:'반복 무늬를 만들 때 사용합니다. 켜면 가장자리 입체감은 0이 됩니다.';
   palette(p.palette);
 }
 function editSetting(id:string) {
@@ -76,6 +85,11 @@ function editSetting(id:string) {
   }else if(id==='grain-angle')workingOptions.grainAngle=number(id)*Math.PI/180;
   else if(id==='ambient-occlusion')workingOptions.ambientOcclusion=number(id);
   else if(id==='cast-shadow')workingOptions.castShadow=number(id);
+  else if(id==='seamless-material'){
+    if(input(id).checked){workingOptions.tileSize=[project.width,project.height];workingOptions.bevel=0;input('bevel').value='0';}
+    else delete workingOptions.tileSize;
+    element('tile-material-note').textContent=input(id).checked?`${project.width} × ${project.height} px 간격으로 무늬가 반복됩니다. 전체를 채운 타일에서 사용하세요.`:'반복 재질을 껐습니다.';
+  }
   else if(id!=='use-height')workingOptions={...workingOptions,[id]:number(id)};
   changed();
 }
@@ -94,8 +108,11 @@ function canEditMasks(): boolean {
   return canAddLayer()||project.layers.some(layer=>layer.kind==='paint'&&!layer.locked&&layer.visible!==false);
 }
 function outputProject(): PixelArtDocument2D {
+  const key=`${revision}:${previewVersion}:${draft}:${editingMaterialId??''}`;
+  if(outputDocumentCache&&outputDocumentKey===key)return outputDocumentCache;
   const layers=draft&&canAddLayer()?(editingMaterialId?project.layers.map(layer=>layer.id===editingMaterialId?pendingLayer():layer):[...project.layers,pendingLayer()]):project.layers;
-  return {...project,layers,selection:Array.from(selection),protectedMask:Array.from(protectedMask),...(authoredHeight?{authoredHeight:Array.from(authoredHeight)}:{})};
+  outputDocumentKey=key;
+  return outputDocumentCache={...project,layers,selection:Array.from(selection),protectedMask:Array.from(protectedMask),...(sourceAuthoredHeight?{authoredHeight:Array.from(sourceAuthoredHeight)}:{})};
 }
 function resetHistory() {
   const {activeLayerId,...base}=project;
@@ -104,11 +121,18 @@ function resetHistory() {
   if(!project.layers.length)history=new PixelArtDocumentHistory2D(project);
 }
 function commitDocument(next:PixelArtDocument2D) {
+  if(timeline?.enabled){timeline.commitFrame(next);return;}
   const raster=renderPixelArtDocument2D(next);
+  element('status').classList.remove('error');
   if(history.commit(next)){project=history.value;revision++;committed=raster;renderedRevision=revision;}
+  if(next.selection)selection=Uint8Array.from(next.selection);
+  if(next.protectedMask){protectedMask=Uint8Array.from(next.protectedMask);protectionVersion++;}
+  sourceAuthoredHeight=next.authoredHeight?Float32Array.from(next.authoredHeight):undefined;
+  authoredHeight=renderPixelArtAuthoredHeight2D(next);
   draft=false;editingMaterialId=undefined;paintPreview=undefined;schedule();
 }
 function moveHistory(direction:'undo'|'redo') {
+  if(timeline?.enabled){timeline[direction]();return;}
   prepareImported(direction==='undo'?history.undo():history.redo(),false);
 }
 function sizeCanvases() {
@@ -161,12 +185,18 @@ function update() {
     }
     const started=performance.now();
     if(renderedRevision!==revision){committed=renderPixelArtDocument2D(project);renderedRevision=revision;}
-    rendered=paintPreview??(draft?(editingMaterialId?renderPixelArtDocument2D(outputProject()):createPixelMaterial2D(settings()).shade(committed,pendingLayer())):committed);
+    const nextOutputKey=`${revision}:${previewVersion}:${draft}:${editingMaterialId??''}`;
+    if(!cachedOutput||outputKey!==nextOutputKey){cachedOutput=draft?(editingMaterialId?renderPixelArtDocument2D(outputProject()):createPixelMaterial2D(settings()).shade(committed,pendingLayer())):committed;outputKey=nextOutputKey;}
+    rendered=paintPreview??cachedOutput;
     const style=select('expected-style').value as 'organic'|'cel-shaded'|'geometric';
     const options={expectedStyle:style,protected:protectedMask};
     const key=`${revision}:${style}:${protectionVersion}`;
     if(key!==beforeAnalysisKey||!beforeAnalysis){beforeAnalysis=diagnosePixelArt2D(committed,options);beforeAnalysisKey=key;}
-    const before=beforeAnalysis,after=diagnosePixelArt2D(rendered,options);
+    // During a stroke, show the last completed analysis; expensive region diagnosis runs once at commit.
+    if(!afterAnalysis||!paintPreview&&(analysisSource!==rendered||analysisKey!==key)){
+      afterAnalysis=diagnosePixelArt2D(rendered,options);analysisSource=rendered;analysisKey=key;
+    }
+    const before=beforeAnalysis,after=afterAnalysis;
     paint('source',committed);paint('result',rendered,select('view').value,after.heatmap);sizeCanvases();
     element('source-size').textContent=`${project.width} × ${project.height}`;
     element('metric-flat').textContent=`${(after.metrics.dominantFlatRegionRatio*100).toFixed(1)}%`;
@@ -186,22 +216,25 @@ function update() {
     workbench?.sync();
     element('empty-layers').hidden=project.layers.length>0;
     button('undo').disabled=!history.canUndo;button('redo').disabled=!history.canRedo;
+    timeline?.sync();
     button('apply-material').disabled=!draft||!count||!hasLayerRoom;
     button('apply-material').textContent=editingMaterialId?'수정한 재질 적용':'선택 영역에 재질 적용';
     button('cancel-preview').disabled=!draft;
-    status(hasLayerRoom?`${draft?'미리보기':'적용 완료'} · ${Math.round(performance.now()-started)} ms · ${after.metrics.paletteSize}색`:`이 해상도의 레이어 한도 ${pixelArtLayerLimit2D(project.width,project.height)}개 · 실행 취소하면 계속 편집할 수 있습니다.`);
+    if(!element('status').classList.contains('error'))status(hasLayerRoom?`${paintPreview?'편집 중':draft?'미리보기':'적용 완료'} · ${Math.round(performance.now()-started)} ms · ${after.metrics.paletteSize}색`:`이 해상도의 레이어 한도 ${pixelArtLayerLimit2D(project.width,project.height)}개 · 실행 취소하면 계속 편집할 수 있습니다.`);
     element('result').dataset.ready='true';
     valid=true;
   });
   return valid;
 }
 function schedule() {if(!queued){queued=true;requestAnimationFrame(update);}}
-function changed() {paintPreview=undefined;draft=canAddLayer();schedule();}
+function changed() {element('status').classList.remove('error');paintPreview=undefined;previewVersion++;draft=canAddLayer();schedule();}
 function study() {
   const shape=select('shape').value;
   if(shape==='imported')return;
+  timeline?.close();
   const result=createPixelArtStudy2D(shape as PixelArtStudyShape2D,number('seed'),input('organic').checked);
-  project=createPixelArtDocument2D(result.sprite,`POKU ${shape}`);authoredHeight=result.height;materialOrigin=undefined;editingMaterialId=undefined;paintPreview=undefined;
+  project={...createPixelArtDocument2D(result.sprite,`POKU ${shape}`),authoredHeight:Array.from(result.height)};
+  sourceAuthoredHeight=result.height;authoredHeight=result.height;materialOrigin=undefined;editingMaterialId=undefined;paintPreview=undefined;
   selection=result.sprite.mask.data.slice();protectedMask=new Uint8Array(selection.length);resetHistory();revision++;draft=true;
   input('use-height').disabled=false;input('use-height').checked=true;
   input('organic').disabled=!['stone-path','boulder'].includes(shape);
@@ -225,7 +258,7 @@ function savePNG() {
   void encodeRGBAPNG(rendered.w,rendered.h,rgba).then(blob=>addDownload(blob,name)).catch(error=>status(String(error),true));
 }
 
-for(const id of [...rangeIds,'seed','use-height'])element(id).addEventListener('input',()=>editSetting(id));
+for(const id of [...rangeIds,'seed','use-height','seamless-material'])element(id).addEventListener('input',()=>editSetting(id));
 for(const id of ['view','expected-style','zoom'])element(id).addEventListener('change',schedule);
 select('material').addEventListener('change',()=>attempt(resetMaterial));
 select('shape').addEventListener('change',()=>attempt(()=>{
@@ -247,24 +280,38 @@ button('cancel-preview').onclick=()=>{draft=false;editingMaterialId=undefined;pa
 button('undo').onclick=()=>attempt(()=>moveHistory('undo'));
 button('redo').onclick=()=>attempt(()=>moveHistory('redo'));
 button('save-png').onclick=()=>attempt(savePNG);
-button('save-project').onclick=()=>attempt(()=>{if(update())addDownload(new Blob([serializePixelArtDocument2D(outputProject())],{type:'application/json'}),filename()+'.poku-pixel-art.json');});
+button('save-project').onclick=()=>attempt(()=>{if(update())addDownload(new Blob([timeline?.serialize()??serializePixelArtDocument2D(outputProject())],{type:'application/json'}),filename()+'.poku-pixel-art.json');});
+button('focus-workspace').onclick=()=>{const enabled=document.body.classList.toggle('focus-mode');button('focus-workspace').setAttribute('aria-pressed',String(enabled));button('focus-workspace').textContent=enabled?'비교 화면으로':'작업 화면 확대';schedule();};
 button('import-png').onclick=()=>input('png-file').click();
 button('open-project').onclick=()=>input('project-file').click();
 
-function prepareImported(next: PixelArtDocument2D,replaceHistory=true) {
+function prepareImported(next: PixelArtDocument2D,replaceHistory=true,preparedRaster?: EditableSprite2D) {
   if(next.width>4096||next.height>4096)throw new RangeError('브라우저 작업실에서는 가로·세로 4096픽셀 이하의 프로젝트를 사용해 주세요.');
   serializePixelArtDocument2D(next);
-  const raster=renderPixelArtDocument2D(next);
+  const raster=preparedRaster??renderPixelArtDocument2D(next);
+  element('status').classList.remove('error');
   project=next;select('shape').value='imported';input('organic').disabled=true;
-  const last=project.layers.filter((layer):layer is PixelArtMaterialLayer2D=>layer.kind==='material').at(-1);authoredHeight=next.authoredHeight?Float32Array.from(next.authoredHeight):last?.height?Float32Array.from(last.height):undefined;materialOrigin=last?.origin?[...last.origin]:undefined;
+  const last=project.layers.filter((layer):layer is PixelArtMaterialLayer2D=>layer.kind==='material').at(-1);
+  sourceAuthoredHeight=next.authoredHeight?Float32Array.from(next.authoredHeight):last?.height?Float32Array.from(last.height):undefined;
+  authoredHeight=renderPixelArtAuthoredHeight2D(sourceAuthoredHeight&&!next.authoredHeight?{...next,authoredHeight:Array.from(sourceAuthoredHeight)}:next);
+  materialOrigin=last?.origin?[...last.origin]:undefined;
   input('use-height').checked=!!authoredHeight;input('use-height').disabled=!authoredHeight;
   selection=next.selection?Uint8Array.from(next.selection):last?.selection?Uint8Array.from(last.selection):Uint8Array.from(project.pixels,(c,i)=>(project.mask?.[i]??1)&&c>>>24?1:0);
-  protectedMask=next.protectedMask?Uint8Array.from(next.protectedMask):last?.protectedMask?Uint8Array.from(last.protectedMask):new Uint8Array(selection.length);
+  protectedMask=next.protectedMask?Uint8Array.from(next.protectedMask):last?.protectedMask?Uint8Array.from(last.protectedMask):new Uint8Array(selection.length);protectionVersion++;
   if(last)loadSettings(last.material);if(replaceHistory)resetHistory();revision++;committed=raster;renderedRevision=revision;draft=false;editingMaterialId=undefined;paintPreview=undefined;schedule();
 }
 input('project-file').onchange=async()=>{
   const file=input('project-file').files?.[0];if(!file||busy)return;busy=true;
-  try{if(file.size>64*1024*1024)throw new RangeError('프로젝트는 64 MiB 이하로 열어 주세요.');prepareImported(parsePixelArtDocument2D(await file.text()));}
+  try{
+    if(file.size>64*1024*1024)throw new RangeError('프로젝트는 64 MiB 이하로 열어 주세요.');
+    const json=await file.text(),header=JSON.parse(json);
+    if(header?.schema==='poku-pixel-art/v3')timeline!.open(json);
+    else {
+      const next=parsePixelArtDocument2D(json);
+      if(next.width>4096||next.height>4096)throw new RangeError('브라우저 작업실에서는 가로·세로 4096픽셀 이하의 프로젝트를 사용해 주세요.');
+      const raster=renderPixelArtDocument2D(next);timeline?.close();prepareImported(next,true,raster);
+    }
+  }
   catch(error){status(String(error),true);}finally{busy=false;input('project-file').value='';}
 };
 input('png-file').onchange=async()=>{
@@ -280,7 +327,8 @@ input('png-file').onchange=async()=>{
       const ctx=c.getContext('2d')!;ctx.drawImage(bitmap,0,0);const rgba=ctx.getImageData(0,0,w,h).data;pixels=new Uint32Array(w*h);
       for(let i=0;i<pixels.length;i++)pixels[i]=(rgba[i*4]|rgba[i*4+1]<<8|rgba[i*4+2]<<16|rgba[i*4+3]<<24)>>>0;
     }
-    prepareImported(createPixelArtDocument2D({w,h,pixels,mask:{w,h,data:Uint8Array.from(pixels,p=>p>>>24?1:0)}},file.name.replace(/\.png$/i,'')));
+    const next=createPixelArtDocument2D({w,h,pixels,mask:{w,h,data:Uint8Array.from(pixels,p=>p>>>24?1:0)}},file.name.replace(/\.png$/i,''));
+    timeline?.close();prepareImported(next);
     element('import-note').textContent=decoded.kind==='decoded'
       ?`PNG 원본 RGB·알파를 그대로 가져왔습니다.${decoded.warnings.length?' 색상 프로파일은 원본 수치 보존을 위해 변환하지 않았습니다.':''}`
       :`${decoded.reason==='16-bit'?'16비트':'Adam7 인터레이스'} PNG를 브라우저에서 변환했습니다. 원본 수치를 그대로 편집하려면 비인터레이스 8비트 PNG를 사용하세요.`;
@@ -321,18 +369,18 @@ canvas('source').onpointermove=event=>{
 };
 const endStroke=()=>{pointer=undefined;lastPoint=undefined;};
 canvas('source').onpointerup=endStroke;canvas('source').onpointercancel=endStroke;
-new ResizeObserver(sizeCanvases).observe(element('source-host'));
-window.addEventListener('resize',sizeCanvases);
+new ResizeObserver(schedule).observe(element('source-host'));
+window.addEventListener('resize',schedule);
 window.addEventListener('beforeunload',()=>urls.forEach(url=>URL.revokeObjectURL(url)));
 workbench=installPixelArtWorkbench({
   document:()=>project, outputDocument:outputProject, committed:()=>committed, output:()=>rendered,
   selection:()=>selection, protection:()=>protectedMask,
   palette:()=>createPixelMaterial2D(settings()).options.palette,
   setPalette:colors=>{workingOptions.palette=[...colors];delete workingOptions.thresholds;palette(colors);changed();},
-  setSelection:mask=>{selection=mask;schedule();},
+  setSelection:mask=>{selection=mask;previewVersion++;element('status').classList.remove('error');schedule();},
   commit:commitDocument, load:prepareImported,
-  newCanvas:next=>{history.commit(outputProject());prepareImported(next,false);history.commit(project);},
-  preview:sprite=>{paintPreview=sprite;schedule();},
+  newCanvas:next=>{if(timeline?.enabled){timeline.newDocument(next);return;}history.commit(outputProject());prepareImported(next,false);history.commit(project);},
+  preview:sprite=>{paintPreview=sprite;if(sprite)element('status').classList.remove('error');schedule();},
   refresh:schedule, status, download:addDownload, filename,
   editMaterial:id=>attempt(()=>{
     const layer=project.layers.find((layer):layer is PixelArtMaterialLayer2D=>layer.id===id&&layer.kind==='material');
@@ -341,7 +389,13 @@ workbench=installPixelArtWorkbench({
     selection=layer.selection?Uint8Array.from(layer.selection):new Uint8Array(project.width*project.height).fill(1);
     protectedMask=layer.protectedMask?Uint8Array.from(layer.protectedMask):new Uint8Array(selection.length);protectionVersion++;
     authoredHeight=layer.height?Float32Array.from(layer.height):undefined;materialOrigin=layer.origin?[...layer.origin]:undefined;
-    input('use-height').checked=!!authoredHeight;draft=true;schedule();
+    input('use-height').checked=!!authoredHeight;previewVersion++;draft=true;schedule();
   }),
 });
+timeline=installPixelArtTimeline({
+  outputDocument:outputProject,restore:(next,raster)=>prepareImported(next,false,raster),finishStroke:()=>workbench?.finishStroke(),
+  palette:()=>workbench!.palette(),setPalette:colors=>workbench!.setAuthoredPalette(colors),
+  refresh:schedule,status,download:addDownload,filename,
+});
+installPixelArtViewport();
 attempt(()=>{resetMaterial();study();});

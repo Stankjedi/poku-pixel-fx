@@ -1,4 +1,5 @@
 import type { EditableSprite2D } from './sprite-edit.js';
+import { hex } from './color.js';
 
 /** Native cell coordinates, independent of sprite placement. Fractions snap down to their cell. */
 export interface PixelBrushPoint2D { x: number; y: number; pressure?: number }
@@ -26,6 +27,7 @@ export interface PixelPaintOptions2D {
   /** Recolor occupied cells without changing their alpha or exposing hidden silhouette cells. */
   alphaLock?: boolean;
 }
+export type PixelShadeOptions2D = Pick<PixelPaintOptions2D, 'selection' | 'protectedMask'>;
 export interface PixelRegionSelectionOptions2D {
   /** Maximum difference in any sRGB channel, 0..255. Each candidate is compared with the seed. */
   tolerance?: number;
@@ -260,6 +262,51 @@ export function paintPixelMask2D<T extends EditableSprite2D>(
     pixels[i] = mixed >>> 0; silhouette[i] = options.alphaLock ? source.mask.data[i] : 1;
   }
   return { ...source, pixels, mask: { ...source.mask, data: silhouette } };
+}
+
+/**
+ * Shift only exact RGB members of an authored shadow-to-highlight ramp. Positive steps lighten,
+ * negative steps darken, and endpoints clamp. Duplicate ramp colors collapse in first-occurrence
+ * order so a brush step always advances to a distinct entry. Colors outside the ramp, transparent
+ * cells, independent silhouette gaps and protected details remain byte-identical.
+ *
+ * Source alpha/mask values are retained exactly; no blending, nearest-color conversion or new
+ * palette color is introduced. Apply the complete stroke mask once against the pre-stroke raster
+ * to advance one step per gesture instead of once per pointer event or overlapping mirror.
+ */
+export function shadePixelMask2D<T extends EditableSprite2D>(
+  source: T, mask: ArrayLike<number>, ramp: readonly (string | number)[], steps: number,
+  options: PixelShadeOptions2D = {},
+): T {
+  const count = checkSprite(source);
+  checkMask(mask, count, 'Shade mask');
+  if (options.selection) checkMask(options.selection, count, 'Shade selection');
+  if (options.protectedMask) checkMask(options.protectedMask, count, 'Protected mask');
+  if (!Array.isArray(ramp) || ramp.length < 1 || ramp.length > 256)
+    throw new RangeError('Pixel shade ramp needs 1..256 ordered opaque colors');
+  if (!Number.isInteger(steps) || Math.abs(steps) > 255) throw new RangeError('Pixel shade steps must be an integer within -255..255');
+  const colors: number[] = [], unique = new Set<number>();
+  for (const value of ramp) {
+    let color: number;
+    if (typeof value === 'string') {
+      if (!/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) throw new RangeError('Pixel shade colors must be #rgb or #rrggbb');
+      color = hex(value) & 0xffffff;
+    } else {
+      if (!Number.isInteger(value) || value < -0x80000000 || value > 0xffffffff || value >>> 24 !== 255)
+        throw new RangeError('Packed pixel shade colors must be opaque ABGR integers');
+      color = value & 0xffffff;
+    }
+    if (!unique.has(color)) { colors.push(color); unique.add(color); }
+  }
+  const shifts = new Map(colors.map((color, i) => [color, colors[Math.max(0, Math.min(colors.length - 1, i + steps))]]));
+  const pixels = source.pixels.slice();
+  for (let i = 0; i < count; i++) {
+    const before = source.pixels[i];
+    if (!mask[i] || !source.mask.data[i] || !(before >>> 24) || options.selection && !options.selection[i] || options.protectedMask?.[i]) continue;
+    const shifted = shifts.get(before & 0xffffff);
+    if (shifted !== undefined) pixels[i] = ((before & 0xff000000) | shifted) >>> 0;
+  }
+  return { ...source, pixels, mask: { ...source.mask, data: source.mask.data.slice() } };
 }
 
 /** Connected bucket/wand selection or all matching colors. No recursion or tolerance chaining. */

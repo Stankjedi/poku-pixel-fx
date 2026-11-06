@@ -48,6 +48,9 @@ export interface PixelMaterialOptions2D {
   castShadow?: number;
   /** Integer planar shadow-ray distance in native cells, 1..128. Default: 32. */
   shadowDistance?: number;
+  /** Optional repeat period in native cells. Use the exact canvas size and bevel:0 for a
+   * seamless tile, including wrapped authored-height normals and visibility. */
+  tileSize?: readonly [number, number];
 }
 
 export interface PixelMaterialShadeOptions2D {
@@ -79,6 +82,7 @@ export interface ResolvedPixelMaterialOptions2D {
   readonly occlusionRadius: number;
   readonly castShadow: number;
   readonly shadowDistance: number;
+  readonly tileSize?: readonly [number, number];
 }
 
 const KIND_RESPONSE = {
@@ -114,6 +118,9 @@ function resolveOptions(input: PixelMaterialOptions2D): ResolvedPixelMaterialOpt
   const occlusionRadius = input.occlusionRadius ?? 8, shadowDistance = input.shadowDistance ?? 32;
   if (!Number.isInteger(occlusionRadius) || !Number.isInteger(shadowDistance))
     throw new RangeError('Occlusion radius and shadow distance must be native-cell integers');
+  if (input.tileSize !== undefined && (input.tileSize.length !== 2
+    || !input.tileSize.every(v => Number.isInteger(v) && v >= 2 && v <= 4096)))
+    throw new RangeError('Material tile size must contain two native-cell integers within 2..4096');
   return Object.freeze({
     kind, seed: seed >>> 0, materialId,
     palette: Object.freeze(Array.from(palette, color => hex(color) >>> 0)),
@@ -130,6 +137,7 @@ function resolveOptions(input: PixelMaterialOptions2D): ResolvedPixelMaterialOpt
     occlusionRadius: inRange(occlusionRadius, 1, 32, 'Material occlusion radius'),
     castShadow: inRange(input.castShadow ?? 0, 0, 1, 'Material cast shadow'),
     shadowDistance: inRange(shadowDistance, 1, 128, 'Material shadow distance'),
+    ...(input.tileSize ? { tileSize: Object.freeze([...input.tileSize]) as readonly [number, number] } : {}),
   });
 }
 
@@ -269,13 +277,34 @@ function materialField(options: ResolvedPixelMaterialOptions2D) {
   };
 }
 
+/** Periodize the continuous material field before rasterization. Quintic blend weights have
+ * zero first/second derivatives at both ends, so joins retain the original field's slope.
+ * This repeats structure and height together, instead of copying only the border colors. */
+function periodicField(field: ReturnType<typeof materialField>, period: readonly [number, number]) {
+  const samples = Array.from({ length: 4 }, (): SurfaceSample => ({ height: 0, tone: 0, cavity: 0, accent: 0 }));
+  const fade = (t: number): number => t * t * t * (t * (t * 6 - 15) + 10);
+  const [w, h] = period;
+  return (x: number, y: number, out: SurfaceSample): void => {
+    const u = ((x % w) + w) % w, v = ((y % h) + h) % h;
+    const sx = fade(u / w), sy = fade(v / h);
+    field(u, v, samples[0]); field(u - w, v, samples[1]);
+    field(u, v - h, samples[2]); field(u - w, v - h, samples[3]);
+    for (const channel of ['height', 'tone', 'cavity', 'accent'] as const) {
+      const top = samples[0][channel] + (samples[1][channel] - samples[0][channel]) * sx;
+      const bottom = samples[2][channel] + (samples[3][channel] - samples[2][channel]) * sx;
+      out[channel] = top + (bottom - top) * sy;
+    }
+  };
+}
+
 /** Compile an opt-in native material authoring operation, not an RGB "beautify" filter.
  * Supply an authored form/selection when geometry matters. The source silhouette, coverage,
  * protected cells and unrelated metadata/HDR are preserved; only palette surface colors and
  * selected material channels are replaced. Object-space patterns have no time or RNG state.
  * Bake/cache the resulting sprite for animation rather than resynthesizing it every display frame. */
 export function createPixelMaterial2D(input: PixelMaterialOptions2D = {}) {
-  const options = resolveOptions(input), field = materialField(options);
+  const options = resolveOptions(input), rawField = materialField(options);
+  const field = options.tileSize ? periodicField(rawField, options.tileSize) : rawField;
   const ramp = createMaterialRamp2D(options.palette, { thresholds: options.thresholds });
   const lightLength = Math.hypot(...options.light), [lx, ly, lz] = options.light.map(v => v / lightLength);
   const halfLength = Math.hypot(lx, ly, lz + 1), hx = halfLength ? lx / halfLength : 0;
@@ -305,6 +334,7 @@ export function createPixelMaterial2D(input: PixelMaterialOptions2D = {}) {
       if (!changed) return { ...source, pixels, mask, channels };
 
       const distance = options.bevel ? silhouetteDistance(occupied, w, h) : undefined;
+      const wrap = !!options.tileSize && options.tileSize[0] === w && options.tileSize[1] === h && !distance;
       const heights = new Float32Array(count), sample: SurfaceSample = { height: 0, tone: 0, cavity: 0, accent: 0 };
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         const i = y * w + x, edge = distance ? clamp(distance[i] / options.bevel) : 1;
@@ -316,6 +346,7 @@ export function createPixelMaterial2D(input: PixelMaterialOptions2D = {}) {
       const outsideSample: SurfaceSample = { height: 0, tone: 0, cavity: 0, accent: 0 };
       const sampleHeight = (x: number, y: number): number => {
         if (x >= 0 && y >= 0 && x < w && y < h) return heights[y * w + x];
+        if (wrap) return heights[((y % h + h) % h) * w + (x % w + w) % w];
         if (distance) return 0;
         field(x + origin[0] + .5, y + origin[1] + .5, outsideSample);
         const authored = edit.height?.[clamp(y, 0, h - 1) * w + clamp(x, 0, w - 1)] ?? 0;
@@ -326,6 +357,7 @@ export function createPixelMaterial2D(input: PixelMaterialOptions2D = {}) {
         ? bakePixelSurfaceLighting2D(w, h, heights, {
           mask: occupied, light: options.light, ambientOcclusion: options.ambientOcclusion,
           occlusionRadius: options.occlusionRadius, castShadow: options.castShadow, shadowDistance: options.shadowDistance,
+          wrap,
         }) : undefined;
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
         const i = y * w + x;

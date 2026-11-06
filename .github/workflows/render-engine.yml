@@ -150,6 +150,12 @@ jobs:
           PIXEL_WORKBENCH_REPORT_PATH: pixel-workbench-browser-result.json
           PIXEL_WORKBENCH_SCREENSHOT_PATH: pixel-workbench-browser.png
         run: node tools/pixel-workbench-browser-harness.mjs
+      - name: Exercise exact selections, animation cels, shared palettes and timed exports
+        env:
+          PIXEL_ART_PRO_REQUIRED: "1"
+          PIXEL_ART_PRO_REPORT_PATH: pixel-art-pro-browser-result.json
+          PIXEL_ART_PRO_SCREENSHOT_PATH: pixel-art-pro-browser.png
+        run: node tools/pixel-art-pro-browser-harness.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -164,6 +170,8 @@ jobs:
             pixel-art-browser.png
             pixel-workbench-browser-result.json
             pixel-workbench-browser.png
+            pixel-art-pro-browser-result.json
+            pixel-art-pro-browser.png
 
   native-wgpu:
     runs-on: ubuntu-latest
