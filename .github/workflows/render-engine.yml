@@ -156,6 +156,12 @@ jobs:
           PIXEL_ART_PRO_REPORT_PATH: pixel-art-pro-browser-result.json
           PIXEL_ART_PRO_SCREENSHOT_PATH: pixel-art-pro-browser.png
         run: node tools/pixel-art-pro-browser-harness.mjs
+      - name: Exercise precision recoloring, sheet import and exact Adam7 PNG round trips
+        env:
+          PIXEL_ART_PRODUCTION_REQUIRED: "1"
+          PIXEL_ART_PRODUCTION_REPORT_PATH: pixel-art-production-browser-result.json
+          PIXEL_ART_PRODUCTION_SCREENSHOT_PATH: pixel-art-production-browser.png
+        run: node tools/pixel-art-production-browser-harness.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -172,6 +178,8 @@ jobs:
             pixel-workbench-browser.png
             pixel-art-pro-browser-result.json
             pixel-art-pro-browser.png
+            pixel-art-production-browser-result.json
+            pixel-art-production-browser.png
 
   native-wgpu:
     runs-on: ubuntu-latest

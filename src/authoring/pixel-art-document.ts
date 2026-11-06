@@ -60,6 +60,8 @@ export interface PixelArtDocument2D {
   selection?: number[];
   protectedMask?: number[];
   authoredHeight?: number[];
+  /** Ordered authoring swatches; independent of any palette applied to the artwork. */
+  workingPalette?: number[];
   activeLayerId?: string;
 }
 export type PixelArtDocumentRaster2D = EditableSprite2D & { channels?: MaterialChannels2D };
@@ -147,8 +149,11 @@ export function validatePixelArtDocument2D(input: unknown): PixelArtDocument2D {
       height: values(p.channels.height, n, 'Source height', float), normal: values(p.channels.normal, n * 3, 'Source normals', float) };
   }
   if (p.activeLayerId !== undefined && !ids.has(p.activeLayerId)) throw new RangeError('Active layer must exist in the document');
+  if (p.workingPalette !== undefined && (!Array.isArray(p.workingPalette) || p.workingPalette.length < 1 || p.workingPalette.length > 256
+    || !Array.from(p.workingPalette).every(value => packed(value) && value >>> 24 === 255))) throw new RangeError('Working palette needs 1..256 opaque packed colors');
   return { schema: 'poku-pixel-art/v2', name: p.name, width: p.width, height: p.height, pixels, ...(sourceMask ? { mask: sourceMask } : {}), layers,
     ...(channels ? { channels } : {}), ...optionalMasks(p, n), ...(p.authoredHeight !== undefined ? { authoredHeight: values(p.authoredHeight, n, 'Document height', float) } : {}),
+    ...(p.workingPalette ? { workingPalette: p.workingPalette.slice() } : {}),
     ...(p.activeLayerId !== undefined ? { activeLayerId: p.activeLayerId } : {}) };
 }
 
@@ -258,7 +263,8 @@ export function nextPixelArtLayerId2D(document: PixelArtDocument2D, prefix: stri
 export function flattenPixelArtDocument2D(document: PixelArtDocument2D): PixelArtDocument2D {
   const p = validatePixelArtDocument2D(document), out = createPixelArtDocument2D(renderPixelArtDocument2D(p), p.name);
   const authoredHeight = renderPixelArtAuthoredHeight2D(p);
-  return { ...out, ...optionalMasks(p, p.width * p.height), ...(authoredHeight ? { authoredHeight: Array.from(authoredHeight) } : {}) };
+  return { ...out, ...optionalMasks(p, p.width * p.height), ...(authoredHeight ? { authoredHeight: Array.from(authoredHeight) } : {}),
+    ...(p.workingPalette ? { workingPalette: p.workingPalette.slice() } : {}) };
 }
 
 function checkBytes(json: string): void {

@@ -91,13 +91,15 @@
     "test:native": "cargo test --locked --manifest-path native/Cargo.toml",
     "test:production": "node --test tests/character-animation-tracks.test.mjs tests/palette-atlas-production.test.mjs tests/authoring-sequence.test.mjs tests/authoring-retiming.test.mjs tests/gpu-tiles.test.mjs tests/atlas-memory.test.mjs",
     "test:browser:production": "node tools/production-browser-harness.mjs",
-    "test:pixel-art": "node --test tests/pixel-contour.test.mjs tests/pixel-material.test.mjs tests/pixel-art-analysis.test.mjs tests/pixel-art-project.test.mjs tests/pixel-brush.test.mjs tests/pixel-palette.test.mjs tests/pixel-surface-maps.test.mjs tests/pixel-art-document.test.mjs tests/pixel-png-import.test.mjs tests/pixel-selection-transform.test.mjs tests/pixel-relight.test.mjs tests/pixel-seamless.test.mjs tests/pixel-animation-palette.test.mjs tests/pixel-art-animation.test.mjs tests/pixel-art-adjustment-layers.test.mjs",
+    "test:pixel-art": "node --test tests/pixel-contour.test.mjs tests/pixel-material.test.mjs tests/pixel-art-analysis.test.mjs tests/pixel-art-project.test.mjs tests/pixel-brush.test.mjs tests/pixel-palette.test.mjs tests/pixel-surface-maps.test.mjs tests/pixel-art-document.test.mjs tests/pixel-png-import.test.mjs tests/pixel-selection-transform.test.mjs tests/pixel-relight.test.mjs tests/pixel-seamless.test.mjs tests/pixel-animation-palette.test.mjs tests/pixel-art-animation.test.mjs tests/pixel-art-adjustment-layers.test.mjs tests/pixel-color-edit.test.mjs tests/pixel-art-sheet.test.mjs tests/pixel-art-production.test.mjs",
     "preview:pixel-art": "node tools/preview-pixel-art.mjs",
     "test:browser:pixel-art": "node tools/pixel-art-browser-harness.mjs",
     "test:browser:workbench": "node tools/pixel-workbench-browser-harness.mjs",
     "preview:pixel-workbench": "node tools/preview-pixel-workbench.mjs",
     "test:browser:pixel-pro": "node tools/pixel-art-pro-browser-harness.mjs",
-    "preview:pixel-pro": "node tools/preview-pixel-art-pro.mjs"
+    "preview:pixel-pro": "node tools/preview-pixel-art-pro.mjs",
+    "test:browser:pixel-production": "node tools/pixel-art-production-browser-harness.mjs",
+    "preview:pixel-production": "node tools/preview-pixel-art-production.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

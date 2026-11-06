@@ -94,6 +94,7 @@ export * from './pixel-surface-maps.js';
 export * from './pixel-selection.js';
 export * from './pixel-transform.js';
 export * from './pixel-relight.js';
+export * from './pixel-color-edit.js';
 export * from './character-animation.js';
 export * from './character-identity.js';
 export * from './creature-asset.js';

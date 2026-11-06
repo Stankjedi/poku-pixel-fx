@@ -1,0 +1,21 @@
+{
+  "scope": "Local integrated validation; real-browser validation runs in required GitHub Actions job because local Chromium cannot create its process-singleton socket.",
+  "baselineCommit": "ad18d8a34427416696910634a28d830251fbfaa4",
+  "build": "passed",
+  "nodeTests": {
+    "total": 1026,
+    "passed": 1026,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 59985.716791
+  },
+  "preparedAssets": "verified against current source",
+  "localBrowser": {
+    "status": "unavailable",
+    "checksExecuted": 0,
+    "reason": "Chromium process_singleton socket() Operation not permitted; browser sandbox was not disabled."
+  },
+  "visualEvidence": "../previews/pixel-art-production/evidence.json",
+  "browserHarness": "tools/pixel-art-production-browser-harness.mjs",
+  "existingArtwork": "No source changes under src/fx or src/3d."
+}

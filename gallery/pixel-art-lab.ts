@@ -9,6 +9,7 @@ import { createPixelArtDocument2D, renderPixelArtDocument2D, renderPixelArtAutho
 import { installPixelArtWorkbench } from './pixel-art-workbench.js';
 import { installPixelArtTimeline } from './pixel-art-timeline.js';
 import { installPixelArtViewport } from './pixel-art-viewport.js';
+import { installPixelArtProduction } from './pixel-art-production.js';
 import { encodeRGBAPNG } from './png.js';
 import { decodePixelArtPNG } from './png-import.js';
 
@@ -122,7 +123,14 @@ function outputProject(): PixelArtDocument2D {
   if(outputDocumentCache&&outputDocumentKey===key)return outputDocumentCache;
   const layers=draft&&canAddLayer()?(editingMaterialId?project.layers.map(layer=>layer.id===editingMaterialId?pendingLayer():layer):[...project.layers,pendingLayer()]):project.layers;
   outputDocumentKey=key;
-  return outputDocumentCache={...project,layers,selection:Array.from(selection),protectedMask:Array.from(protectedMask),...(sourceAuthoredHeight?{authoredHeight:Array.from(sourceAuthoredHeight)}:{})};
+  const {workingPalette:_previousPalette,...base}=project, workingPalette=workbench?.storedPalette();
+  const last=project.layers.filter((layer):layer is PixelArtMaterialLayer2D=>layer.kind==='material').at(-1);
+  // Merely displaying an imported cel must not add an Undo step on navigation.
+  // Keep implicit default masks implicit until the artist actually changes them.
+  const saveSelection=project.selection!==undefined||!selection.every((value,i)=>value===(last?.selection?.[i]??((project.mask?.[i]??1)&&(project.pixels[i]>>>24)?1:0)));
+  const saveProtection=project.protectedMask!==undefined||!protectedMask.every((value,i)=>value===(last?.protectedMask?.[i]??0));
+  return outputDocumentCache={...base,layers,...(saveSelection?{selection:Array.from(selection)}:{}),...(saveProtection?{protectedMask:Array.from(protectedMask)}:{}),
+    ...(sourceAuthoredHeight?{authoredHeight:Array.from(sourceAuthoredHeight)}:{}),...(workingPalette?{workingPalette:[...workingPalette]}:{})};
 }
 function resetHistory() {
   const {activeLayerId,...base}=project;
@@ -242,6 +250,7 @@ function study() {
   const shape=select('shape').value;
   if(shape==='imported')return;
   timeline?.close();
+  workbench?.restoreAuthoredPalette(undefined);
   const result=createPixelArtStudy2D(shape as PixelArtStudyShape2D,number('seed'),input('organic').checked);
   project={...createPixelArtDocument2D(result.sprite,`POKU ${shape}`),authoredHeight:Array.from(result.height)};
   sourceAuthoredHeight=result.height;authoredHeight=result.height;materialOrigin=undefined;editingMaterialId=undefined;paintPreview=undefined;
@@ -303,6 +312,7 @@ function prepareImported(next: PixelArtDocument2D,replaceHistory=true,preparedRa
   const raster=preparedRaster??renderPixelArtDocument2D(next);
   element('status').classList.remove('error');
   project=next;select('shape').value='imported';input('organic').disabled=true;
+  workbench?.restoreAuthoredPalette(next.workingPalette);
   const last=project.layers.filter((layer):layer is PixelArtMaterialLayer2D=>layer.kind==='material').at(-1);
   sourceAuthoredHeight=next.authoredHeight?Float32Array.from(next.authoredHeight):last?.height?Float32Array.from(last.height):undefined;
   authoredHeight=renderPixelArtAuthoredHeight2D(sourceAuthoredHeight&&!next.authoredHeight?{...next,authoredHeight:Array.from(sourceAuthoredHeight)}:next);
@@ -395,6 +405,7 @@ workbench=installPixelArtWorkbench({
   selection:()=>selection, protection:()=>protectedMask,
   palette:()=>createPixelMaterial2D(settings()).options.palette,
   setPalette:colors=>{workingOptions.palette=[...colors];delete workingOptions.thresholds;palette(colors);changed();},
+  workingPaletteChanged:()=>{previewVersion++;schedule();},
   setSelection:mask=>{selection=mask;previewVersion++;element('status').classList.remove('error');schedule();},
   commit:commitDocument, load:prepareImported,
   newCanvas:next=>{if(timeline?.enabled){timeline.newDocument(next);return;}history.commit(outputProject());prepareImported(next,false);history.commit(project);},
@@ -416,4 +427,11 @@ timeline=installPixelArtTimeline({
   refresh:schedule,status,download:addDownload,filename,
 });
 installPixelArtViewport();
+installPixelArtProduction({
+  outputDocument:outputProject,finishStroke:()=>workbench!.finishStroke(),commit:commitDocument,
+  palette:()=>workbench!.palette(),setPalette:colors=>workbench!.setAuthoredPalette(colors),
+  applyToFrames:edit=>timeline!.editDocuments(edit),
+  importAnimation:animation=>timeline!.importAnimation(animation),
+  status,
+});
 attempt(()=>{resetMaterial();study();});
