@@ -182,7 +182,10 @@ export function addPixelArtAnimationFrame2D(animation: PixelArtAnimation2D, docu
   if (animation.frames.length >= pixelArtAnimationFrameLimit2D(animation.width, animation.height)) throw new RangeError('Pixel art animation frame budget exceeded');
   const name = options.name ?? `Frame ${animation.frames.length + 1}`, durationMs = options.durationMs ?? active.durationMs;
   if (!validName(name) || !validDuration(durationMs)) throw new RangeError('Frame needs a valid name and positive finite duration');
-  const id = nextPixelArtAnimationFrameId2D(animation), cel = document ?? createBlankPixelArtDocument2D(animation.width, animation.height, name);
+  const id = nextPixelArtAnimationFrameId2D(animation), cel = document ?? {
+    ...createBlankPixelArtDocument2D(animation.width, animation.height, name),
+    ...(active.document.workingPalette ? { workingPalette: active.document.workingPalette.slice() } : {}),
+  };
   const frames = animation.frames.slice(); frames.splice(index, 0, { id, name, durationMs, document: cel });
   const next = { ...animation, frames, activeFrameId: id }; checkAnimation(next);
   frames[index] = { ...frames[index], document: validatePixelArtDocument2D(cel) };

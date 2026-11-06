@@ -1,0 +1,607 @@
+{
+  "schema": "poku.pixel-art-production-evidence/v1",
+  "nativeSize": [
+    192,
+    112
+  ],
+  "seed": 41,
+  "revisionAtGeneration": "ad18d8a34427416696910634a28d830251fbfaa4",
+  "scope": "Standalone native authoring study. No existing effect artwork is edited or shown as a before/after result.",
+  "source": {
+    "recipe": "createPixelArtStudy2D(cloth,41,true), explicit fabric height, authored metal/gem contour, curved embroidery",
+    "material": {
+      "kind": "fabric",
+      "seed": 41,
+      "materialId": 1,
+      "palette": [
+        4281408033,
+        4281999659,
+        4282591285,
+        4283182912,
+        4283774539,
+        4284366423,
+        4284958051,
+        4285484400,
+        4286011518,
+        4286604943,
+        4287198623,
+        4287792302,
+        4288451773,
+        4289242316,
+        4290033113,
+        4290889447
+      ],
+      "scale": 10,
+      "detail": 0.55,
+      "relief": 0.8,
+      "bevel": 2,
+      "roughness": 0.92,
+      "light": [
+        -0.65,
+        -0.8,
+        1
+      ],
+      "ambient": 0.2,
+      "grainAngle": 0,
+      "ambientOcclusion": 0.25,
+      "occlusionRadius": 8,
+      "castShadow": 0.3,
+      "shadowDistance": 32
+    },
+    "authoredStrokes": [
+      {
+        "color": "#624738",
+        "size": 3,
+        "symmetry": "none",
+        "writtenCells": 412
+      },
+      {
+        "color": "#ddbd7e",
+        "size": 1,
+        "symmetry": "none",
+        "writtenCells": 126
+      },
+      {
+        "color": "#624738",
+        "size": 3,
+        "symmetry": "none",
+        "writtenCells": 376
+      },
+      {
+        "color": "#ddbd7e",
+        "size": 1,
+        "symmetry": "none",
+        "writtenCells": 116
+      },
+      {
+        "color": "#785540",
+        "size": 3,
+        "symmetry": "x",
+        "writtenCells": 482
+      },
+      {
+        "color": "#ebc88a",
+        "size": 1,
+        "symmetry": "x",
+        "writtenCells": 130
+      },
+      {
+        "color": "#785540",
+        "size": 3,
+        "symmetry": "x",
+        "writtenCells": 260
+      },
+      {
+        "color": "#ebc88a",
+        "size": 1,
+        "symmetry": "x",
+        "writtenCells": 62
+      },
+      {
+        "color": "#785540",
+        "size": 3,
+        "symmetry": "x",
+        "writtenCells": 202
+      },
+      {
+        "color": "#ebc88a",
+        "size": 1,
+        "symmetry": "x",
+        "writtenCells": 44
+      },
+      {
+        "color": "#785540",
+        "size": 3,
+        "symmetry": "x",
+        "writtenCells": 174
+      },
+      {
+        "color": "#ebc88a",
+        "size": 1,
+        "symmetry": "x",
+        "writtenCells": 32
+      },
+      {
+        "color": "#d8ede2",
+        "size": 1,
+        "symmetry": "none",
+        "writtenCells": 25
+      },
+      {
+        "color": "#79b5c3",
+        "size": 1,
+        "symmetry": "none",
+        "writtenCells": 14
+      }
+    ],
+    "pixelSHA256": "a3783524f339e4a220f4e04652d4c497ba19f4fa2d856cdc1c085bdfd38e143c",
+    "maskSHA256": "7b3648b2c2fbae970e2819ac4a7f156f7e49042822f3f3d49307c07417ccbfee",
+    "channelSHA256": {
+      "material": "77751fbb9ce4092dd6f55e0f3c965703a18a1490a275018f4baeb14eca52535e",
+      "height": "f0c705d0dc46fcf3c7964ffa18a7eac12d6d3ce3afc4eadb8e9ea59901b5dc3e",
+      "normal": "474d186485bb49b4d65bd78583684b10177f9f199a3bfb9ed268d14844ff085a"
+    },
+    "bounds": {
+      "x": 25,
+      "y": 16,
+      "width": 142,
+      "height": 80,
+      "cells": 9656
+    },
+    "colors": 38
+  },
+  "resampling": {
+    "native": 1,
+    "enlarged": 3,
+    "method": "exact nearest-neighbor pixel repetition; no blur or added detail"
+  },
+  "projectFixtures": "Every v2 fixture retains the common baked source and geometry plus one sparse paint layer. Settings are recorded here, but baked paint layers do not automatically expose re-editable color parameters.",
+  "sourceUnchanged": true,
+  "cases": [
+    {
+      "id": "exact-swap",
+      "settings": {
+        "operation": "replace",
+        "replacements": [
+          {
+            "from": 4281408033,
+            "to": 4281805588
+          },
+          {
+            "from": 4281999659,
+            "to": 4282463513
+          },
+          {
+            "from": 4282591285,
+            "to": 4283121439
+          },
+          {
+            "from": 4283182912,
+            "to": 4283779364
+          },
+          {
+            "from": 4283774539,
+            "to": 4284437546
+          },
+          {
+            "from": 4284366423,
+            "to": 4285095727
+          },
+          {
+            "from": 4284958051,
+            "to": 4285753909
+          },
+          {
+            "from": 4285484400,
+            "to": 4286346556
+          },
+          {
+            "from": 4286011518,
+            "to": 4286939719
+          },
+          {
+            "from": 4286604943,
+            "to": 4287467608
+          },
+          {
+            "from": 4287198623,
+            "to": 4287995241
+          },
+          {
+            "from": 4287792302,
+            "to": 4288523132
+          },
+          {
+            "from": 4288451773,
+            "to": 4289116303
+          },
+          {
+            "from": 4289242316,
+            "to": 4289709474
+          },
+          {
+            "from": 4290033113,
+            "to": 4290433973
+          },
+          {
+            "from": 4290889447,
+            "to": 4291158217
+          }
+        ]
+      },
+      "selectedCells": 6165,
+      "protectedCells": 3491,
+      "changedColorCells": 6165,
+      "inputColors": 38,
+      "outputColors": 38,
+      "inputBounds": {
+        "x": 25,
+        "y": 16,
+        "width": 142,
+        "height": 80,
+        "cells": 9656
+      },
+      "outputBounds": {
+        "x": 25,
+        "y": 16,
+        "width": 142,
+        "height": 80,
+        "cells": 9656
+      },
+      "alphaEqual": true,
+      "silhouetteEqual": true,
+      "protectedRGBEqual": true,
+      "outsideSelectionEqual": true,
+      "hiddenRGBEqual": true,
+      "channelsSameReference": true,
+      "materialEqual": true,
+      "heightEqual": true,
+      "normalEqual": true
+    },
+    {
+      "id": "value-map",
+      "settings": {
+        "operation": "ramp",
+        "palette": [
+          4282264344,
+          4283119137,
+          4284039722,
+          4284960563,
+          4285946684,
+          4286867525,
+          4287853903,
+          4288579159,
+          4288911715,
+          4289047161,
+          4289313427,
+          4289775792,
+          4290500300,
+          4291552487
+        ],
+        "mode": "value",
+        "start": [
+          0,
+          0
+        ],
+        "end": [
+          1,
+          0
+        ],
+        "valueRange": [
+          0.16,
+          0.86
+        ],
+        "gamma": 1,
+        "dither": "none",
+        "origin": [
+          0,
+          0
+        ]
+      },
+      "selectedCells": 6165,
+      "protectedCells": 3491,
+      "changedColorCells": 6165,
+      "inputColors": 38,
+      "outputColors": 35,
+      "inputBounds": {
+        "x": 25,
+        "y": 16,
+        "width": 142,
+        "height": 80,
+        "cells": 9656
+      },
+      "outputBounds": {
+        "x": 25,
+        "y": 16,
+        "width": 142,
+        "height": 80,
+        "cells": 9656
+      },
+      "alphaEqual": true,
+      "silhouetteEqual": true,
+      "protectedRGBEqual": true,
+      "outsideSelectionEqual": true,
+      "hiddenRGBEqual": true,
+      "channelsSameReference": true,
+      "materialEqual": true,
+      "heightEqual": true,
+      "normalEqual": true
+    },
+    {
+      "id": "linear-map",
+      "settings": {
+        "operation": "ramp",
+        "palette": [
+          4281673514,
+          4282857030,
+          4283581798,
+          4283717508,
+          4283592605,
+          4284123054,
+          4285308353,
+          4286624724,
+          4287875558,
+          4289257721
+        ],
+        "mode": "linear",
+        "start": [
+          84,
+          68
+        ],
+        "end": [
+          106,
+          42
+        ],
+        "valueRange": [
+          0,
+          1
+        ],
+        "gamma": 0.9,
+        "dither": "none",
+        "origin": [
+          0,
+          0
+        ]
+      },
+      "selectedCells": 1038,
+      "protectedCells": 1794,
+      "changedColorCells": 999,
+      "inputColors": 38,
+      "outputColors": 30,
+      "inputBounds": {
+        "x": 25,
+        "y": 16,
+        "width": 142,
+        "height": 80,
+        "cells": 9656
+      },
+      "outputBounds": {
+        "x": 25,
+        "y": 16,
+        "width": 142,
+        "height": 80,
+        "cells": 9656
+      },
+      "alphaEqual": true,
+      "silhouetteEqual": true,
+      "protectedRGBEqual": true,
+      "outsideSelectionEqual": true,
+      "hiddenRGBEqual": true,
+      "channelsSameReference": true,
+      "materialEqual": true,
+      "heightEqual": true,
+      "normalEqual": true
+    },
+    {
+      "id": "radial-map",
+      "settings": {
+        "operation": "ramp",
+        "palette": [
+          4291027954,
+          4289911001,
+          4289187517,
+          4288856991,
+          4288853888,
+          4288981604,
+          4287992656,
+          4286872638,
+          4285752623,
+          4284567586,
+          4283382550
+        ],
+        "mode": "radial",
+        "start": [
+          92,
+          48
+        ],
+        "end": [
+          111,
+          65
+        ],
+        "valueRange": [
+          0,
+          1
+        ],
+        "gamma": 0.85,
+        "dither": "none",
+        "origin": [
+          0,
+          0
+        ]
+      },
+      "selectedCells": 1038,
+      "protectedCells": 1794,
+      "changedColorCells": 999,
+      "inputColors": 38,
+      "outputColors": 40,
+      "inputBounds": {
+        "x": 25,
+        "y": 16,
+        "width": 142,
+        "height": 80,
+        "cells": 9656
+      },
+      "outputBounds": {
+        "x": 25,
+        "y": 16,
+        "width": 142,
+        "height": 80,
+        "cells": 9656
+      },
+      "alphaEqual": true,
+      "silhouetteEqual": true,
+      "protectedRGBEqual": true,
+      "outsideSelectionEqual": true,
+      "hiddenRGBEqual": true,
+      "channelsSameReference": true,
+      "materialEqual": true,
+      "heightEqual": true,
+      "normalEqual": true
+    }
+  ],
+  "visualReview": {
+    "status": "inspected native and nearest-3x images with image viewer",
+    "reviewer": "assistant",
+    "observationRecord": "README.md#실제-이미지-확인-기록",
+    "artisticQualityCertified": false,
+    "userApproval": false,
+    "inspectedFiles": [
+      {
+        "name": "comparison-native.png",
+        "fileSHA256": "349b6b28727e7e111e8585914195cea3f0dc367c65187c1ce245b659a3053fb7"
+      },
+      {
+        "name": "comparison-3x.png",
+        "fileSHA256": "122f1f621ec16cbb3a1cda0298ed64e66f45c6e45331079bfb34a5acee852518"
+      }
+    ],
+    "observations": [
+      "Exact recolor changes purple cloth to teal while retaining weave clusters, gold ornament and blue gem.",
+      "Perceptual value mapping retains the large cloth folds with some adjacent colors merged into shared value steps.",
+      "Linear and radial modes visibly replace gem color structure with explicit diagonal and circular bands; protected small highlights remain.",
+      "Comparison captions and source/target swatches remain readable; exact 3x enlargement introduces no new detail."
+    ]
+  },
+  "sourceFiles": [
+    {
+      "path": "tools/preview-pixel-art-production.mjs",
+      "sha256": "b2af4a0ad0cfb918b50ea0aa9c16efe79bd089e8da6a3d6c5b35a75cdf2d0025"
+    },
+    {
+      "path": "src/core/pixel-color-edit.ts",
+      "sha256": "0b48edfaca03a3a5fc1a0a7ed30ce3e8e1fc553b28b19f49493af2994531d577"
+    },
+    {
+      "path": "src/core/pixel-palette.ts",
+      "sha256": "8cb257a1a75edca6c9cf38cf115db365f6646c903ca3237b3b596158d7cb1935"
+    },
+    {
+      "path": "src/core/pixel-material.ts",
+      "sha256": "34b6b0bfe0fa06aeba84bffec8c3000551eb29b00a063178222dffac2cc4cc64"
+    },
+    {
+      "path": "src/core/pixel-brush.ts",
+      "sha256": "9b3c84ef87bbe38b6b2ae7202beb0d35c7f94a21ab1419839b5c76e5006379dc"
+    },
+    {
+      "path": "src/core/material-surface.ts",
+      "sha256": "f3245c2208e23ae57b40502394b17ed8b31342888691cccc4e64279a1e9ff8e8"
+    },
+    {
+      "path": "src/examples/pixel-art-study.ts",
+      "sha256": "4bb1bd8ad3ef671f3fa21a37fa3eb2796058e982af4e8a465b700db587de3708"
+    },
+    {
+      "path": "src/authoring/pixel-art-document.ts",
+      "sha256": "9f07eb4cd9808c6871261cb8ab26891eecb70ccd38a039602a90f769f6c87b84"
+    },
+    {
+      "path": "build/core/pixel-color-edit.js",
+      "sha256": "4674294625b246843c507f55f57b048b8cfbc9b205a576dc96ba8db0ce384231"
+    },
+    {
+      "path": "build/core/pixel-material.js",
+      "sha256": "0f2d78242a6a57103a60782043f7b19c09595d423f7a1f82ae6047f7a66f4b67"
+    },
+    {
+      "path": "build/examples/pixel-art-study.js",
+      "sha256": "6b611f2554dfc534fced2188caee2aaaf56a499181f38b535861dd888fb496c0"
+    }
+  ],
+  "files": [
+    {
+      "name": "source-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "a3783524f339e4a220f4e04652d4c497ba19f4fa2d856cdc1c085bdfd38e143c",
+      "fileSHA256": "a764dbbec28446c380f278c267fbb67267fd4e653a36e6f4c6e01a82b1fbacbd"
+    },
+    {
+      "name": "source.poku-pixel-art.json",
+      "bytes": 1080213,
+      "fileSHA256": "ca9339903aa68332514f399be892afbb1062c8b8d7fa671cd2bb057e6094cb54"
+    },
+    {
+      "name": "exact-swap-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "2c535a8cb395287dcc036d936d6d34dd4fb136bb6447a7a677262bd7ae33e967",
+      "fileSHA256": "8ddcb840559b0e976bbf73853261986d350508e96f17754b4735d6718869e116"
+    },
+    {
+      "name": "exact-swap.poku-pixel-art.json",
+      "bytes": 1268074,
+      "fileSHA256": "f691a1cc9f03d9a327f89951435c8aa4a554670e8c5c05929821c97a80e40745"
+    },
+    {
+      "name": "value-map-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "e2f23b0e8958e6e3421f899eb1d0f2eda9592e3147cd65518cb888f60231b93a",
+      "fileSHA256": "02fdc60d8feb9268dd41976a3afa07a19e3712ddea16f9e425962828c64ddc55"
+    },
+    {
+      "name": "value-map.poku-pixel-art.json",
+      "bytes": 1268060,
+      "fileSHA256": "5e876bfc91e1354afb80de3e6f080d38c153db1db624b749feef76290575b2ed"
+    },
+    {
+      "name": "linear-map-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "a2882ec18702fc42c23dc9a2a4609ba010b1fd44b77c4815ca05a066de2fe16f",
+      "fileSHA256": "f8168c99d42a0608c253b6069d15ee7bc0bcd2d244036426d32addea13df355d"
+    },
+    {
+      "name": "linear-map.poku-pixel-art.json",
+      "bytes": 1182859,
+      "fileSHA256": "60fd68418e8b828bef3a37bdfc49c7b7379c3be84b0e20a27e53612f8f05934a"
+    },
+    {
+      "name": "radial-map-native.png",
+      "width": 192,
+      "height": 112,
+      "rgbaSHA256": "7081a5dc08d57b1adf019984e60f9a7ee0e41343b1e61892bf8adda5a5ac3501",
+      "fileSHA256": "24c68b3939de34cd0f42d5a2ae4e9dec8da2db6a4b46e3e35b5b246e7fe2dd1a"
+    },
+    {
+      "name": "radial-map.poku-pixel-art.json",
+      "bytes": 1182870,
+      "fileSHA256": "7f13a40696b33021dc320e18cd960b769f847593c8bbb5a2cb16b3db9f514e3b"
+    },
+    {
+      "name": "comparison-native.png",
+      "width": 450,
+      "height": 887,
+      "rgbaSHA256": "e15b8bbf44d15a1fbe27189fcbdaa77c66c9fec369a809b0215ecc4ae6ef3dfa",
+      "fileSHA256": "349b6b28727e7e111e8585914195cea3f0dc367c65187c1ce245b659a3053fb7"
+    },
+    {
+      "name": "comparison-3x.png",
+      "width": 1218,
+      "height": 1912,
+      "rgbaSHA256": "dc641510298a3651b867ae5a5031792318e4099cbdc4f8c0df0eb83d03be881f",
+      "fileSHA256": "122f1f621ec16cbb3a1cda0298ed64e66f45c6e45331079bfb34a5acee852518"
+    }
+  ]
+}

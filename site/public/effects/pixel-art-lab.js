@@ -6,9 +6,11 @@ import {
   applyPixelHeightDeltas2D,
   combinePixelSelections2D,
   createOrganicSilhouette2D,
+  createPixelColorReplacer2D,
   createPixelMaterial2D,
   createPixelPaletteMapper2D,
   createPixelPaletteRamp2D,
+  createPixelRampMapper2D,
   createPixelRelighter2D,
   diagnosePixelArt2D,
   exportPixelSurfaceMaps2D,
@@ -26,10 +28,11 @@ import {
   sculptPixelHeight2D,
   selectPixelRegion2D,
   shadePixelMask2D,
+  sortPixelColorsByLightness2D,
   transformPixelSelection2D,
   validatePixelArtPath2D,
   validatePixelSelectionTransformOptions2D
-} from "./chunks/chunk-X2UOCPCM.js";
+} from "./chunks/chunk-WP6F6TUS.js";
 import {
   hex
 } from "./chunks/chunk-MBWWV6CB.js";
@@ -306,6 +309,7 @@ function validatePixelArtDocument2D(input3) {
     };
   }
   if (p.activeLayerId !== void 0 && !ids.has(p.activeLayerId)) throw new RangeError("Active layer must exist in the document");
+  if (p.workingPalette !== void 0 && (!Array.isArray(p.workingPalette) || p.workingPalette.length < 1 || p.workingPalette.length > 256 || !Array.from(p.workingPalette).every((value) => packed(value) && value >>> 24 === 255))) throw new RangeError("Working palette needs 1..256 opaque packed colors");
   return {
     schema: "poku-pixel-art/v2",
     name: p.name,
@@ -317,6 +321,7 @@ function validatePixelArtDocument2D(input3) {
     ...channels ? { channels } : {},
     ...optionalMasks(p, n),
     ...p.authoredHeight !== void 0 ? { authoredHeight: values(p.authoredHeight, n, "Document height", float) } : {},
+    ...p.workingPalette ? { workingPalette: p.workingPalette.slice() } : {},
     ...p.activeLayerId !== void 0 ? { activeLayerId: p.activeLayerId } : {}
   };
 }
@@ -605,7 +610,12 @@ function nextPixelArtLayerId2D(document2, prefix) {
 function flattenPixelArtDocument2D(document2) {
   const p = validatePixelArtDocument2D(document2), out = createPixelArtDocument2D(renderPixelArtDocument2D(p), p.name);
   const authoredHeight2 = renderPixelArtAuthoredHeight2D(p);
-  return { ...out, ...optionalMasks(p, p.width * p.height), ...authoredHeight2 ? { authoredHeight: Array.from(authoredHeight2) } : {} };
+  return {
+    ...out,
+    ...optionalMasks(p, p.width * p.height),
+    ...authoredHeight2 ? { authoredHeight: Array.from(authoredHeight2) } : {},
+    ...p.workingPalette ? { workingPalette: p.workingPalette.slice() } : {}
+  };
 }
 function checkBytes(json) {
   if (json.length > MAX_BYTES || new TextEncoder().encode(json).byteLength > MAX_BYTES) throw new RangeError("Pixel art document exceeds 64 MiB");
@@ -1102,10 +1112,10 @@ var el2 = (id) => document.getElementById(id);
 var input = (id) => el2(id);
 var choice = (id) => el2(id);
 var button2 = (id) => el2(id);
-var number = (id, low, high, integer2 = false) => {
+var number = (id, low, high, integer3 = false) => {
   const value = Number(input(id).value);
-  if (!Number.isFinite(value) || value < low || value > high || integer2 && !Number.isInteger(value))
-    throw new RangeError(`${input(id).getAttribute("aria-label") ?? id}: ${low}~${high}${integer2 ? " \uBC94\uC704\uC758 \uC815\uC218" : " \uBC94\uC704\uC758 \uAC12"}\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694.`);
+  if (!Number.isFinite(value) || value < low || value > high || integer3 && !Number.isInteger(value))
+    throw new RangeError(`${input(id).getAttribute("aria-label") ?? id}: ${low}~${high}${integer3 ? " \uBC94\uC704\uC758 \uC815\uC218" : " \uBC94\uC704\uC758 \uAC12"}\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694.`);
   return value;
 };
 var sameMask2 = (a, b, count) => {
@@ -1576,15 +1586,15 @@ function installPixelArtCraft(host) {
     const key = `${nodes.length}:${selected}`;
     if (key !== nodeOptionsKey) {
       nodeOptionsKey = key;
-      const select4 = choice("path-node");
-      select4.replaceChildren(...nodes.map((_, i) => {
+      const select5 = choice("path-node");
+      select5.replaceChildren(...nodes.map((_, i) => {
         const option = document.createElement("option");
         option.value = String(i);
         option.textContent = `\uC810 ${i + 1}`;
         return option;
       }));
-      select4.value = String(selected);
-      select4.disabled = !nodes.length;
+      select5.value = String(selected);
+      select5.disabled = !nodes.length;
     }
     for (const id of ["path-corner", "path-smooth", "path-delete", "path-x", "path-y"]) el2(id).disabled = selected < 0;
     const point2 = nodes[selected]?.point;
@@ -2029,9 +2039,9 @@ function installPixelArtAdjustments(host, palette2, setPalette, finishStroke) {
         el3("palette-note").textContent = `${layer.name}\uC758 \uD314\uB808\uD2B8\uB97C \uC218\uC815\uD569\uB2C8\uB2E4. \uC800\uC7A5\uB41C \uC120\uD0DD\xB7\uBCF4\uD638\xB7\uC88C\uD45C\uB294 \uC720\uC9C0\uB429\uB2C8\uB2E4.`;
         el3("palette-note").scrollIntoView({ block: "nearest" });
       } else {
-        const options = createPixelRelighter2D(layer.lighting).options, key = options.lights[0], fill = options.lights[1], direction = key?.direction ?? [-0.6, -0.7, 1];
-        setNumber("relight-angle", Math.atan2(direction[1], direction[0]) * 180 / Math.PI);
-        setNumber("relight-elevation", Math.atan2(direction[2], Math.hypot(direction[0], direction[1])) * 180 / Math.PI);
+        const options = createPixelRelighter2D(layer.lighting).options, key = options.lights[0], fill = options.lights[1], direction2 = key?.direction ?? [-0.6, -0.7, 1];
+        setNumber("relight-angle", Math.atan2(direction2[1], direction2[0]) * 180 / Math.PI);
+        setNumber("relight-elevation", Math.atan2(direction2[2], Math.hypot(direction2[0], direction2[1])) * 180 / Math.PI);
         field2("relight-key-color").value = cssColor2(key?.color ?? "#ffffff");
         field2("relight-fill-color").value = cssColor2(fill?.color ?? "#ffffff");
         for (const [name2, value] of Object.entries({
@@ -2297,14 +2307,14 @@ function installPixelArtWorkbench(host) {
     host.commit({ ...base, layers, ...activeLayerId && layers.some((layer) => layer.id === activeLayerId) ? { activeLayerId } : {} });
   }
   const actionButton = (label, title, action, disabled = false) => {
-    const button6 = document.createElement("button");
-    button6.type = "button";
-    button6.textContent = label;
-    button6.title = title;
-    button6.setAttribute("aria-label", title);
-    button6.disabled = disabled;
-    button6.onclick = () => attempt2(action);
-    return button6;
+    const button7 = document.createElement("button");
+    button7.type = "button";
+    button7.textContent = label;
+    button7.title = title;
+    button7.setAttribute("aria-label", title);
+    button7.disabled = disabled;
+    button7.onclick = () => attempt2(action);
+    return button7;
   };
   function syncLayers() {
     const doc = host.document(), key = JSON.stringify([doc.activeLayerId, doc.layers.map(({ id, name: name2, kind, visible, locked }) => ({ id, name: name2, kind, visible, locked }))]);
@@ -2394,21 +2404,26 @@ function installPixelArtWorkbench(host) {
     const doc = host.document();
     host.setSelection(resizePixelSelection2D(doc.width, doc.height, host.selection(), radius));
   });
-  function setAuthoredPalette(colors) {
-    authoredPalette = colors;
-    el4("workbench-palette").replaceChildren(...colors.map((color, i) => {
+  function showAuthoredPalette(colors) {
+    authoredPalette = colors ? colors.map((color) => color >>> 0) : void 0;
+    el4("workbench-palette").replaceChildren(...(authoredPalette ?? []).map((color, i) => {
       const swatch = document.createElement("input");
       swatch.type = "color";
       swatch.value = cssColor3(color);
       swatch.setAttribute("aria-label", `\uC791\uC5C5 \uD314\uB808\uD2B8 ${i + 1}`);
       swatch.oninput = () => {
-        authoredPalette[i] = hex(swatch.value);
+        authoredPalette[i] = hex(swatch.value) >>> 0;
+        host.workingPaletteChanged();
       };
       swatch.ondblclick = () => {
         field3("paint-color").value = swatch.value;
       };
       return swatch;
     }));
+  }
+  function setAuthoredPalette(colors) {
+    showAuthoredPalette(colors);
+    host.workingPaletteChanged();
     adjustments?.paletteChanged();
   }
   btn("extract-palette").onclick = () => attempt2(() => {
@@ -2418,8 +2433,8 @@ function installPixelArtWorkbench(host) {
       ...field3("paint-in-selection").checked ? { selection: host.selection() } : {}
     });
     if (!colors.length) throw new Error("\uC0C9\uC744 \uCD94\uCD9C\uD560 \uBD88\uD22C\uBA85\uD55C \uD53D\uC140\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uBA3C\uC800 \uADF8\uB9AC\uAC70\uB098 PNG\uB97C \uAC00\uC838\uC624\uC138\uC694.");
-    setAuthoredPalette(colors);
-    el4("palette-note").textContent = `\uD604\uC7AC \uADF8\uB9BC\uC5D0\uC11C ${colors.length}\uC0C9\uC744 \uCD94\uCD9C\uD588\uC2B5\uB2C8\uB2E4. \uD314\uB808\uD2B8 \uC870\uC815 \uB808\uC774\uC5B4\uB85C \uC801\uC6A9\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`;
+    setAuthoredPalette(sortPixelColorsByLightness2D(colors));
+    el4("palette-note").textContent = `\uD604\uC7AC \uADF8\uB9BC\uC5D0\uC11C ${colors.length}\uC0C9\uC744 \uCD94\uCD9C\uD574 \uC5B4\uB450\uC6B4 \uC0C9\uBD80\uD130 \uC815\uB82C\uD588\uC2B5\uB2C8\uB2E4. \uACE0\uC815\uD55C \uC0C9\uC758 \uAC12\uC740 \uADF8\uB300\uB85C \uC720\uC9C0\uD569\uB2C8\uB2E4.`;
   });
   btn("generate-ramp").onclick = () => attempt2(() => {
     const colors = createPixelPaletteRamp2D({ shadow: field3("ramp-shadow").value, midtone: field3("ramp-midtone").value, highlight: field3("ramp-highlight").value, colors: integer("palette-count", 2, 64) });
@@ -2585,23 +2600,30 @@ function installPixelArtWorkbench(host) {
     finishStroke();
     craft?.finish();
   });
-  return { finishStroke() {
-    finishStroke();
-    selections.finish();
-    craft?.finish();
-    adjustments?.finish();
-  }, setAuthoredPalette, palette: () => authoredPalette ?? host.palette(), sync() {
-    syncLayers();
-    syncOverlays();
-    syncCursor();
-    selections.sync();
-    const mapsAvailable = !!host.output()?.channels;
-    btn("apply-relight").disabled = !mapsAvailable || host.outputDocument().layers.length >= pixelArtLayerLimit2D(host.document().width, host.document().height);
-    choice3("normal-convention").disabled = !mapsAvailable;
-    for (const id of ["save-normal", "save-height", "save-occlusion", "save-shadow", "save-map-info"]) btn(id).disabled = !mapsAvailable;
-    craft?.sync();
-    adjustments?.sync();
-  } };
+  return {
+    finishStroke() {
+      finishStroke();
+      selections.finish();
+      craft?.finish();
+      adjustments?.finish();
+    },
+    setAuthoredPalette,
+    restoreAuthoredPalette: showAuthoredPalette,
+    storedPalette: () => authoredPalette,
+    palette: () => authoredPalette ?? host.palette(),
+    sync() {
+      syncLayers();
+      syncOverlays();
+      syncCursor();
+      selections.sync();
+      const mapsAvailable = !!host.output()?.channels;
+      btn("apply-relight").disabled = !mapsAvailable || host.outputDocument().layers.length >= pixelArtLayerLimit2D(host.document().width, host.document().height);
+      choice3("normal-convention").disabled = !mapsAvailable;
+      for (const id of ["save-normal", "save-height", "save-occlusion", "save-shadow", "save-map-info"]) btn(id).disabled = !mapsAvailable;
+      craft?.sync();
+      adjustments?.sync();
+    }
+  };
 }
 
 // src/authoring/pixel-art-animation.ts
@@ -2620,9 +2642,9 @@ var directions = ["forward", "reverse", "pingpong"];
 var object = (value) => !!value && typeof value === "object" && !Array.isArray(value);
 function checkedOptions(options) {
   if (!object(options) || options.name !== void 0 && !validName2(options.name)) throw new RangeError("Animation needs a valid name");
-  const durationMs = options.durationMs ?? 100, loop = options.loop ?? true, direction = options.direction ?? "forward";
-  if (!validDuration(durationMs) || typeof loop !== "boolean" || !directions.includes(direction)) throw new RangeError("Animation needs positive finite durations, a boolean loop flag and a supported direction");
-  return { durationMs, loop, direction };
+  const durationMs = options.durationMs ?? 100, loop = options.loop ?? true, direction2 = options.direction ?? "forward";
+  if (!validDuration(durationMs) || typeof loop !== "boolean" || !directions.includes(direction2)) throw new RangeError("Animation needs positive finite durations, a boolean loop flag and a supported direction");
+  return { durationMs, loop, direction: direction2 };
 }
 function pixelArtAnimationFrameLimit2D(width, height) {
   pixelArtLayerLimit2D(width, height);
@@ -2739,7 +2761,10 @@ function addPixelArtAnimationFrame2D(animation, document2, options = {}) {
   if (animation.frames.length >= pixelArtAnimationFrameLimit2D(animation.width, animation.height)) throw new RangeError("Pixel art animation frame budget exceeded");
   const name2 = options.name ?? `Frame ${animation.frames.length + 1}`, durationMs = options.durationMs ?? active2.durationMs;
   if (!validName2(name2) || !validDuration(durationMs)) throw new RangeError("Frame needs a valid name and positive finite duration");
-  const id = nextPixelArtAnimationFrameId2D(animation), cel = document2 ?? createBlankPixelArtDocument2D(animation.width, animation.height, name2);
+  const id = nextPixelArtAnimationFrameId2D(animation), cel = document2 ?? {
+    ...createBlankPixelArtDocument2D(animation.width, animation.height, name2),
+    ...active2.document.workingPalette ? { workingPalette: active2.document.workingPalette.slice() } : {}
+  };
   const frames = animation.frames.slice();
   frames.splice(index, 0, { id, name: name2, durationMs, document: cel });
   const next = { ...animation, frames, activeFrameId: id };
@@ -3241,9 +3266,9 @@ function installPixelArtTimeline(host) {
     commit(updatePixelArtAnimationFrame2D(animation, animation.activeFrameId, { name: name2 }));
   });
   for (const id of ["animation-loop", "animation-direction"]) el5(id).addEventListener("change", () => attempt2(() => {
-    const loop = field4("animation-loop").checked, direction = select2("animation-direction").value;
+    const loop = field4("animation-loop").checked, direction2 = select2("animation-direction").value;
     capture();
-    commit({ ...ensure(), loop, direction });
+    commit({ ...ensure(), loop, direction: direction2 });
   }));
   for (const id of ["onion-skin", "onion-opacity"]) el5(id).addEventListener("input", () => {
     onionVersion = "";
@@ -3254,15 +3279,15 @@ function installPixelArtTimeline(host) {
     const animation = ensure(), count = Number(field4("palette-count").value);
     const palette2 = extractPixelAnimationPalette2D(animation.frames.map((frame, i) => ({ sprite: frameRaster(i), duration: frame.durationMs })), { colors: count, weighting: "equal-frame" });
     if (!palette2.length) throw new Error("\uC0C9\uC744 \uCD94\uCD9C\uD560 \uD504\uB808\uC784\uC774 \uBE44\uC5B4 \uC788\uC2B5\uB2C8\uB2E4.");
-    host.setPalette(palette2);
-    el5("palette-note").textContent = `${animation.frames.length}\uAC1C \uD504\uB808\uC784\uC5D0\uC11C \uACF5\uD1B5 ${palette2.length}\uC0C9\uC744 \uCD94\uCD9C\uD588\uC2B5\uB2C8\uB2E4. \uD504\uB808\uC784\uB9C8\uB2E4 \uD314\uB808\uD2B8\uAC00 \uB2EC\uB77C\uC9C0\uB294 \uD604\uC0C1\uC744 \uC904\uC77C \uC218 \uC788\uC2B5\uB2C8\uB2E4.`;
+    host.setPalette(sortPixelColorsByLightness2D(palette2));
+    el5("palette-note").textContent = `${animation.frames.length}\uAC1C \uD504\uB808\uC784\uC5D0\uC11C \uACF5\uD1B5 ${palette2.length}\uC0C9\uC744 \uCD94\uCD9C\uD574 \uBA85\uB3C4\uC21C\uC73C\uB85C \uC815\uB82C\uD588\uC2B5\uB2C8\uB2E4.`;
   });
   button4("apply-animation-palette").onclick = () => attempt2(() => {
     capture();
     const animation = ensure(), palette2 = [...host.palette()];
     const frames = animation.frames.map((frame) => {
       const doc = frame.document, id = nextPixelArtLayerId2D(doc, "palette");
-      const document2 = { ...doc, activeLayerId: id, layers: [...doc.layers, {
+      const document2 = { ...doc, workingPalette: [...palette2], activeLayerId: id, layers: [...doc.layers, {
         kind: "palette",
         id,
         name: `\uACF5\uD1B5 \uD314\uB808\uD2B8 \xB7 ${palette2.length}\uC0C9`,
@@ -3365,6 +3390,30 @@ function installPixelArtTimeline(host) {
     },
     sync,
     stop,
+    /** One transaction for every cel; a failed mapping never commits a partial sequence. */
+    editDocuments(edit) {
+      if (!state) return void 0;
+      host.finishStroke();
+      const current = replacePixelArtAnimationFrame2D(state, host.outputDocument());
+      let changed2 = 0;
+      const frames = current.frames.map((frame) => {
+        const document2 = edit(frame.document);
+        if (document2 !== frame.document) changed2++;
+        return document2 === frame.document ? frame : { ...frame, document: document2 };
+      });
+      if (changed2) commit({ ...current, frames }, true);
+      return changed2;
+    },
+    /** Sheet import is undoable, including when the preceding artwork was a still image. */
+    importAnimation(animation) {
+      const next = validatePixelArtAnimation2D(animation);
+      if (next.width > 4096 || next.height > 4096) throw new RangeError("\uAC00\uC838\uC62C \uD504\uB808\uC784\uC740 \uAC00\uB85C\xB7\uC138\uB85C 4096\uD53D\uC140 \uC774\uD558\uB85C \uC9C0\uC815\uD574 \uC8FC\uC138\uC694.");
+      renderPixelArtDocument2D(active(next).document);
+      serializePixelArtAnimation2D(next);
+      capture();
+      ensure();
+      commit(next, true);
+    },
     commitFrame(document2) {
       if (state) commit(replacePixelArtAnimationFrame2D(state, document2));
     },
@@ -3425,10 +3474,10 @@ function installPixelArtTimeline(host) {
 function installPixelArtViewport() {
   const zoom = document.getElementById("zoom");
   const levels = [1, 2, 4, 8, 16, 32];
-  function changeZoom(direction, host, at) {
+  function changeZoom(direction2, host, at) {
     const canvas2 = host?.querySelector("canvas#source,canvas#result") ?? document.getElementById("result");
     const rect = canvas2.getBoundingClientRect(), current = zoom.value === "auto" ? rect.width / canvas2.width : Number(zoom.value);
-    const next = direction > 0 ? levels.find((n) => n > current) ?? levels.at(-1) : [...levels].reverse().find((n) => n < current) ?? 1;
+    const next = direction2 > 0 ? levels.find((n) => n > current) ?? levels.at(-1) : [...levels].reverse().find((n) => n < current) ?? 1;
     const anchor = at ? { x: (at.x - rect.left) / rect.width, y: (at.y - rect.top) / rect.height } : void 0;
     zoom.value = String(next);
     zoom.dispatchEvent(new Event("change"));
@@ -3491,9 +3540,230 @@ function installPixelArtViewport() {
   });
 }
 
+// src/authoring/pixel-art-sheet.ts
+var object2 = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+var validName3 = (value) => typeof value === "string" && value.length > 0 && value.length <= 160;
+var integer2 = (value, minimum, maximum) => typeof value === "number" && Number.isSafeInteger(value) && value >= minimum && value <= maximum;
+var validDuration2 = (value) => typeof value === "number" && Number.isFinite(value) && value / 1e3 > 0;
+var direction = (value) => value === "forward" || value === "reverse" || value === "pingpong";
+function checkSource(source) {
+  if (!source || !integer2(source.w, 1, PIXEL_ART_ANIMATION_LIMITS_2D.sheetDimension) || !integer2(source.h, 1, PIXEL_ART_ANIMATION_LIMITS_2D.sheetDimension) || source.w * source.h > PIXEL_ART_ANIMATION_LIMITS_2D.sheetCells || !(source.pixels instanceof Uint32Array) || source.pixels.length !== source.w * source.h || !source.mask || source.mask.w !== source.w || source.mask.h !== source.h || !(source.mask.data instanceof Uint8Array) || source.mask.data.length !== source.w * source.h)
+    throw new RangeError("Sprite sheet needs matching native color and silhouette buffers within its image budget");
+  const channels = source.channels, n = source.w * source.h;
+  if (channels && (channels.w !== source.w || channels.h !== source.h || !(channels.material instanceof Uint16Array) || channels.material.length !== n || !(channels.height instanceof Float32Array) || channels.height.length !== n || !(channels.normal instanceof Float32Array) || channels.normal.length !== n * 3))
+    throw new RangeError("Sprite sheet geometry must match its full native dimensions");
+}
+function checkCapacity(source, width, height, count) {
+  const limit = pixelArtAnimationFrameLimit2D(width, height);
+  if (!integer2(count, 1, limit)) throw new RangeError(`Imported animation frame budget exceeded (maximum ${limit} at this size)`);
+  const cells2 = width * height * count, stored = cells2 * (source.channels ? 7 : 2);
+  if (stored > PIXEL_ART_ANIMATION_LIMITS_2D.storedValues || cells2 > PIXEL_ART_ANIMATION_LIMITS_2D.renderCells)
+    throw new RangeError("Imported animation aggregate storage or render budget exceeded");
+}
+function checkGeometry(source) {
+  if (source.channels && (!source.channels.height.every(Number.isFinite) || !source.channels.normal.every(Number.isFinite)))
+    throw new RangeError("Sprite sheet height and normals must contain finite native values");
+}
+function timelineFor(frames, playback) {
+  const sequence = Array.from({ length: frames.length }, (_, i) => playback === "reverse" ? frames.length - 1 - i : i);
+  if (playback === "pingpong") for (let i = frames.length - 2; i > 0; i--) sequence.push(i);
+  const startsMs = [];
+  let durationMs = 0;
+  for (const index of sequence) {
+    const next = durationMs + frames[index].durationMs;
+    if (!Number.isFinite(next) || next <= durationMs || next / 1e3 <= durationMs / 1e3)
+      throw new RangeError("Imported animation durations must have finite distinguishable boundaries");
+    startsMs.push(durationMs);
+    durationMs = next;
+  }
+  return { sequence, startsMs, durationMs };
+}
+function checkSerializedSize(source, plan) {
+  const encoder = new TextEncoder(), cells2 = plan.width * plan.height;
+  const encoded = (value) => encoder.encode(JSON.stringify(value)).byteLength;
+  let bytes = encoded({
+    schema: "poku-pixel-art/v3",
+    name: plan.name,
+    width: plan.width,
+    height: plan.height,
+    frames: [],
+    activeFrameId: plan.frames[0].id,
+    loop: plan.loop,
+    direction: plan.direction
+  }) + plan.frames.length - 1;
+  const lengths = /* @__PURE__ */ new Map();
+  const numericLength = (value) => {
+    const old = lengths.get(value);
+    if (old !== void 0) return old;
+    const length = String(value).length;
+    if (lengths.size < 4096) lengths.set(value, length);
+    return length;
+  };
+  const check = () => {
+    if (bytes > PIXEL_ART_ANIMATION_LIMITS_2D.jsonBytes) throw new RangeError("Imported animation exceeds the 64 MiB saved project budget");
+  };
+  for (const frame of plan.frames) {
+    bytes += encoded({
+      id: frame.id,
+      name: frame.name,
+      durationMs: frame.durationMs,
+      document: {
+        schema: "poku-pixel-art/v2",
+        name: frame.name,
+        width: plan.width,
+        height: plan.height,
+        pixels: [],
+        mask: [],
+        layers: [],
+        ...source.channels ? { channels: { material: [], height: [], normal: [] } } : {}
+      }
+    });
+    bytes += 2 * (cells2 - 1) + cells2;
+    if (source.channels) bytes += 2 * (cells2 - 1) + (cells2 * 3 - 1);
+    check();
+    for (let y = 0; y < plan.height; y++) {
+      for (let x = 0; x < plan.width; x++) {
+        const i = (frame.y + y) * source.w + frame.x + x;
+        bytes += numericLength(source.pixels[i]);
+        if (source.channels) {
+          const c = source.channels;
+          bytes += numericLength(c.material[i]) + numericLength(c.height[i]);
+          bytes += numericLength(c.normal[i * 3]) + numericLength(c.normal[i * 3 + 1]) + numericLength(c.normal[i * 3 + 2]);
+        }
+      }
+      check();
+    }
+  }
+}
+function materialize(source, plan) {
+  const cells2 = plan.width * plan.height;
+  const frames = plan.frames.map((frame) => {
+    const pixels = new Array(cells2), mask2 = new Array(cells2);
+    const channels = source.channels ? { material: new Array(cells2), height: new Array(cells2), normal: new Array(cells2 * 3) } : void 0;
+    for (let y = 0; y < plan.height; y++) for (let x = 0; x < plan.width; x++) {
+      const from = (frame.y + y) * source.w + frame.x + x, to = y * plan.width + x;
+      pixels[to] = source.pixels[from];
+      mask2[to] = source.mask.data[from] ? 1 : 0;
+      if (channels) {
+        const original = source.channels;
+        channels.material[to] = original.material[from];
+        channels.height[to] = original.height[from];
+        channels.normal[to * 3] = original.normal[from * 3];
+        channels.normal[to * 3 + 1] = original.normal[from * 3 + 1];
+        channels.normal[to * 3 + 2] = original.normal[from * 3 + 2];
+      }
+    }
+    const document2 = {
+      schema: "poku-pixel-art/v2",
+      name: frame.name,
+      width: plan.width,
+      height: plan.height,
+      pixels,
+      mask: mask2,
+      layers: [],
+      ...channels ? { channels } : {}
+    };
+    return { id: frame.id, name: frame.name, durationMs: frame.durationMs, document: document2 };
+  });
+  return {
+    schema: "poku-pixel-art/v3",
+    name: plan.name,
+    width: plan.width,
+    height: plan.height,
+    frames,
+    activeFrameId: frames[0].id,
+    loop: plan.loop,
+    direction: plan.direction
+  };
+}
+function importPixelArtAnimationSheet2D(source, manifest) {
+  checkSource(source);
+  if (!object2(manifest) || manifest.schema !== "poku-pixel-art-atlas/v1" || !validName3(manifest.name) || manifest.width !== source.w || manifest.height !== source.h || typeof manifest.loop !== "boolean" || !direction(manifest.direction))
+    throw new RangeError("Sprite sheet manifest needs its supported identity, matching image dimensions and playback settings");
+  const width = manifest.frameWidth, height = manifest.frameHeight;
+  if (!integer2(width, 1, PIXEL_ART_ANIMATION_LIMITS_2D.sheetDimension) || !integer2(height, 1, PIXEL_ART_ANIMATION_LIMITS_2D.sheetDimension) || !Array.isArray(manifest.frames)) throw new RangeError("Sprite sheet manifest needs native frame dimensions and a frame list");
+  checkCapacity(source, width, height, manifest.frames.length);
+  if (!integer2(manifest.columns, 1, manifest.frames.length) || !integer2(manifest.padding, 0, 32))
+    throw new RangeError("Sprite sheet manifest needs valid column and padding metadata");
+  const ids = /* @__PURE__ */ new Set();
+  const frames = Array.from(manifest.frames, (raw) => {
+    if (!object2(raw) || !validName3(raw.id) || ids.has(raw.id) || !validName3(raw.name) || !validDuration2(raw.durationMs) || raw.width !== width || raw.height !== height || !integer2(raw.x, 0, source.w - width) || !integer2(raw.y, 0, source.h - height))
+      throw new RangeError("Sprite sheet frames need unique IDs, valid names/timing and equal-size rectangles inside the image");
+    ids.add(raw.id);
+    return { id: raw.id, name: raw.name, durationMs: raw.durationMs, x: raw.x, y: raw.y, width, height };
+  });
+  const timing = timelineFor(frames, manifest.direction);
+  const matches = (value, expected) => Array.isArray(value) && value.length === expected.length && Array.from(value).every((item, i) => item === expected[i]);
+  if (!matches(manifest.sequence, timing.sequence) || !matches(manifest.startsMs, timing.startsMs) || manifest.durationMs !== timing.durationMs)
+    throw new RangeError("Sprite sheet manifest timing must match its frame durations and playback direction");
+  checkGeometry(source);
+  const plan = { name: manifest.name, width, height, frames, loop: manifest.loop, direction: manifest.direction };
+  checkSerializedSize(source, plan);
+  return materialize(source, plan);
+}
+function pair(value, label) {
+  const resolved = value === void 0 ? [0, 0] : typeof value === "number" ? [value, value] : value;
+  if (!Array.isArray(resolved) || resolved.length !== 2 || !Array.from(resolved).every((v) => integer2(v, 0, PIXEL_ART_ANIMATION_LIMITS_2D.sheetDimension)))
+    throw new RangeError(`Sprite sheet ${label} needs nonnegative native integers on both axes`);
+  return [resolved[0], resolved[1]];
+}
+function occupied(source, frame) {
+  for (let y = frame.y; y < frame.y + frame.height; y++) for (let x = frame.x; x < frame.x + frame.width; x++) {
+    const index = y * source.w + x;
+    if (source.mask.data[index] && source.pixels[index] >>> 24) return true;
+  }
+  return false;
+}
+function slicePixelArtAnimationSheet2D(source, options) {
+  checkSource(source);
+  if (!options || typeof options !== "object" || Array.isArray(options)) throw new RangeError("Sprite sheet slicing needs explicit grid options");
+  const width = options.frameWidth, height = options.frameHeight;
+  const limit = pixelArtAnimationFrameLimit2D(width, height);
+  const [mx, my] = pair(options.margin, "margin"), [gx, gy] = pair(options.gap, "gap");
+  const order = options.order ?? "row-major", start = options.start ?? 0, skipEmpty = options.skipEmpty ?? false;
+  const name2 = options.name ?? "Imported sprite sheet", durationMs = options.durationMs ?? 100, loop = options.loop ?? true, playback = options.direction ?? "forward";
+  if (order !== "row-major" && order !== "column-major" || typeof skipEmpty !== "boolean" || !validName3(name2) || !validDuration2(durationMs) || typeof loop !== "boolean" || !direction(playback))
+    throw new RangeError("Sprite sheet slicing needs valid order, name, duration and playback options");
+  const columns = Math.max(0, Math.floor((source.w - mx * 2 + gx) / (width + gx)));
+  const rows = Math.max(0, Math.floor((source.h - my * 2 + gy) / (height + gy))), available = columns * rows;
+  const count = options.count ?? available - start;
+  if (!integer2(start, 0, available - 1) || !integer2(count, 1, available - start))
+    throw new RangeError("Sprite sheet start/count must select complete cells inside the grid");
+  if (!skipEmpty) checkCapacity(source, width, height, count);
+  const frames = [];
+  for (let slot = start; slot < start + count; slot++) {
+    const column = order === "row-major" ? slot % columns : Math.floor(slot / rows);
+    const row = order === "row-major" ? Math.floor(slot / columns) : slot % rows;
+    const frame = { id: `frame-${slot + 1}`, name: `Frame ${slot + 1}`, x: mx + column * (width + gx), y: my + row * (height + gy), width, height, durationMs };
+    if (skipEmpty && !occupied(source, frame)) continue;
+    frames.push(frame);
+    if (frames.length > limit) throw new RangeError(`Imported animation frame budget exceeded (maximum ${limit} at this size)`);
+  }
+  if (!frames.length) throw new RangeError("Sprite sheet slicing found no visible frames; keep empty cells to import transparent holds");
+  checkCapacity(source, width, height, frames.length);
+  timelineFor(frames, playback);
+  checkGeometry(source);
+  const plan = { name: name2, width, height, loop, direction: playback, frames };
+  checkSerializedSize(source, plan);
+  return materialize(source, plan);
+}
+
 // gallery/png-import.ts
-var MAX_FILE_BYTES = 16 * 1024 * 1024;
-var MAX_DIMENSION = 512;
+function decodeLimits(input3) {
+  if (!input3 || typeof input3 !== "object" || Array.isArray(input3)) throw new RangeError("PNG decode limits must be an object.");
+  const limit = (value, fallback, maximum, label) => {
+    const resolved = value === void 0 ? fallback : value;
+    if (!Number.isSafeInteger(resolved) || resolved < 1 || resolved > maximum)
+      throw new RangeError(`PNG ${label} limit must be an integer within 1..${maximum}.`);
+    return resolved;
+  };
+  return {
+    maxDimension: limit(input3.maxDimension, 512, 16384, "dimension"),
+    maxPixels: limit(input3.maxPixels, 262144, 16777216, "pixel"),
+    maxFileBytes: limit(input3.maxFileBytes, 16 * 1024 * 1024, 64 * 1024 * 1024, "file byte"),
+    maxInflatedBytes: limit(input3.maxInflatedBytes, 128 * 1024 * 1024, 128 * 1024 * 1024, "inflated byte")
+  };
+}
 var SIGNATURE = [137, 80, 78, 71, 13, 10, 26, 10];
 var CRC = new Uint32Array(256);
 for (let n = 0; n < CRC.length; n++) {
@@ -3558,13 +3828,14 @@ function passesFor(w, h, channels, depth, interlace) {
   const patterns = interlace ? [[0, 0, 8, 8], [4, 0, 8, 8], [0, 4, 4, 8], [2, 0, 4, 4], [0, 2, 2, 4], [1, 0, 2, 2], [0, 1, 1, 2]] : [[0, 0, 1, 1]];
   return patterns.map(([x, y, dx, dy]) => {
     const width = Math.max(0, Math.ceil((w - x) / dx)), height = Math.max(0, Math.ceil((h - y) / dy));
-    return { w: width, h: height, rowBytes: Math.ceil(width * channels * depth / 8) };
+    return { x, y, dx, dy, w: width, h: height, rowBytes: Math.ceil(width * channels * depth / 8) };
   }).filter((pass) => pass.w > 0 && pass.h > 0);
 }
-async function decodePixelArtPNG(png) {
+async function decodePixelArtPNG(png, options = {}) {
+  const limits = decodeLimits(options);
   if (!(png instanceof Uint8Array) || png.length < 8 || SIGNATURE.some((value, i) => png[i] !== value))
     throw new Error("Invalid PNG signature.");
-  if (png.length > MAX_FILE_BYTES) throw new Error("PNG exceeds the 16 MiB file limit.");
+  if (png.length > limits.maxFileBytes) throw new Error(`PNG exceeds the ${limits.maxFileBytes / (1024 * 1024)} MiB file limit.`);
   const bytes = view(png);
   let w = 0, h = 0, depth = 0, color = -1, channels = 0, interlace = 0;
   let seenHeader = false, seenData = false, dataEnded = false, seenEnd = false, chunkCount = 0;
@@ -3594,8 +3865,10 @@ async function decodePixelArtPNG(png) {
         depth = data[8];
         color = data[9];
         interlace = data[12];
-        if (!w || !h || w > MAX_DIMENSION || h > MAX_DIMENSION)
-          throw new Error("PNG dimensions must be within 1..512 native cells per axis.");
+        if (!w || !h || w > limits.maxDimension || h > limits.maxDimension)
+          throw new Error(`PNG dimensions must be within 1..${limits.maxDimension} native cells per axis.`);
+        if (w * h > limits.maxPixels)
+          throw new Error(`PNG dimensions exceed the ${limits.maxPixels} native pixel limit.`);
         if (data[10] !== 0 || data[11] !== 0) throw new Error("Invalid PNG compression or filter method.");
         if (interlace !== 0 && interlace !== 1) throw new Error("Invalid PNG interlace method.");
         const allowed = color === 0 ? [1, 2, 4, 8, 16] : color === 3 ? [1, 2, 4, 8] : [2, 4, 6].includes(color) ? [8, 16] : [];
@@ -3634,6 +3907,8 @@ async function decodePixelArtPNG(png) {
   if (!seenEnd) throw new Error("PNG is missing IEND.");
   const passes = passesFor(w, h, channels, depth, interlace);
   const expected = passes.reduce((sum, pass) => sum + (pass.rowBytes + 1) * pass.h, 0);
+  if (!Number.isSafeInteger(expected) || expected > limits.maxInflatedBytes)
+    throw new Error(`PNG filtered samples exceed the ${limits.maxInflatedBytes} inflated byte limit.`);
   const raw = await inflate(blocks, expected), bytesPerPixel = Math.max(1, Math.ceil(channels * depth / 8));
   let offset = 0;
   for (const pass of passes) {
@@ -3654,42 +3929,190 @@ async function decodePixelArtPNG(png) {
     offset += (pass.rowBytes + 1) * pass.h;
   }
   const warnings = profiles.size ? [`PNG color-profile chunks (${[...profiles].join(", ")}) were not transformed; encoded straight samples are preserved.`] : [];
-  if (depth === 16 || interlace === 1)
-    return { kind: "unsupported", w, h, reason: depth === 16 ? "16-bit" : "adam7", warnings };
-  const pixels = new Uint32Array(w * h), rowBytes = passes[0].rowBytes, sampleMask = (1 << depth) - 1;
+  if (depth === 16)
+    return { kind: "unsupported", w, h, reason: "16-bit", warnings };
+  const pixels = new Uint32Array(w * h), sampleMask = (1 << depth) - 1;
   const keys = transparency && color !== 3 ? Array.from({ length: color === 0 ? 1 : 3 }, (_, i) => view(transparency).getUint16(i * 2) & sampleMask) : void 0;
-  for (let y = 0; y < h; y++) {
-    const start = y * (rowBytes + 1) + 1;
-    for (let x = 0; x < w; x++) {
-      const input3 = start + x * channels;
-      let r, g, b, a;
-      if (color === 3) {
-        const bit = x * depth, index = raw[start + (bit >>> 3)] >>> 8 - depth - (bit & 7) & sampleMask;
-        r = palette2[index * 3];
-        g = palette2[index * 3 + 1];
-        b = palette2[index * 3 + 2];
-        a = transparency && index < transparency.length ? transparency[index] : 255;
-      } else if (color === 0 || color === 4) {
-        const bit = x * depth, sample = depth < 8 ? raw[start + (bit >>> 3)] >>> 8 - depth - (bit & 7) & sampleMask : raw[input3];
-        r = g = b = Math.round(sample * 255 / sampleMask);
-        a = color === 4 ? raw[input3 + 1] : keys && sample === keys[0] ? 0 : 255;
-      } else {
-        r = raw[input3];
-        g = raw[input3 + 1];
-        b = raw[input3 + 2];
-        a = color === 6 ? raw[input3 + 3] : keys && r === keys[0] && g === keys[1] && b === keys[2] ? 0 : 255;
+  offset = 0;
+  for (const pass of passes) {
+    for (let y = 0; y < pass.h; y++) {
+      const start = offset + y * (pass.rowBytes + 1) + 1;
+      for (let x = 0; x < pass.w; x++) {
+        const input3 = start + x * channels;
+        let r, g, b, a;
+        if (color === 3) {
+          const bit = x * depth, index = raw[start + (bit >>> 3)] >>> 8 - depth - (bit & 7) & sampleMask;
+          r = palette2[index * 3];
+          g = palette2[index * 3 + 1];
+          b = palette2[index * 3 + 2];
+          a = transparency && index < transparency.length ? transparency[index] : 255;
+        } else if (color === 0 || color === 4) {
+          const bit = x * depth, sample = depth < 8 ? raw[start + (bit >>> 3)] >>> 8 - depth - (bit & 7) & sampleMask : raw[input3];
+          r = g = b = Math.round(sample * 255 / sampleMask);
+          a = color === 4 ? raw[input3 + 1] : keys && sample === keys[0] ? 0 : 255;
+        } else {
+          r = raw[input3];
+          g = raw[input3 + 1];
+          b = raw[input3 + 2];
+          a = color === 6 ? raw[input3 + 3] : keys && r === keys[0] && g === keys[1] && b === keys[2] ? 0 : 255;
+        }
+        pixels[(pass.y + y * pass.dy) * w + pass.x + x * pass.dx] = (r | g << 8 | b << 16 | a << 24) >>> 0;
       }
-      pixels[y * w + x] = (r | g << 8 | b << 16 | a << 24) >>> 0;
     }
+    offset += (pass.rowBytes + 1) * pass.h;
   }
   return { kind: "decoded", w, h, pixels, warnings };
+}
+
+// gallery/pixel-art-production.ts
+var el6 = (id) => document.getElementById(id);
+var field5 = (id) => el6(id);
+var select3 = (id) => el6(id);
+var button5 = (id) => el6(id);
+function numeric(id) {
+  const text = field5(id).value.trim(), value = Number(text);
+  if (!text || !Number.isFinite(value)) throw new RangeError("\uC720\uD6A8\uD55C \uC218\uCE58\uB97C \uC785\uB825\uD574 \uC8FC\uC138\uC694.");
+  return value;
+}
+function installPixelArtProduction(host) {
+  const attempt2 = (fn) => {
+    try {
+      fn();
+    } catch (error) {
+      host.status(error instanceof Error ? error.message : String(error), true);
+    }
+  };
+  function applyColor(edit, name2) {
+    host.finishStroke();
+    const operation = (document2) => {
+      const source = renderPixelArtDocument2D(document2), result = edit(source, document2);
+      const touched = Uint8Array.from(source.pixels, (color, i) => Number(color !== result.pixels[i]));
+      if (!touched.some(Boolean)) return document2;
+      const next = writePixelArtPaintLayer2D(document2, result, touched);
+      return { ...next, layers: next.layers.map((layer) => layer.id === next.activeLayerId ? { ...layer, name: name2 } : layer) };
+    };
+    let changed2;
+    if (field5("color-all-frames").checked) changed2 = host.applyToFrames(operation);
+    if (changed2 === void 0) {
+      const current = host.outputDocument(), next = operation(current);
+      changed2 = Number(next !== current);
+      if (changed2) host.commit(next);
+    }
+    host.status(changed2 ? `${name2} \xB7 ${changed2}\uAC1C \uD504\uB808\uC784\uC5D0 \uC801\uC6A9\uD588\uC2B5\uB2C8\uB2E4. \uC2E4\uD589 \uCDE8\uC18C\uB85C \uD55C \uBC88\uC5D0 \uB418\uB3CC\uB9B4 \uC218 \uC788\uC2B5\uB2C8\uB2E4.` : "\uD604\uC7AC \uC0C9\uACFC \uC120\uD0DD \uBC94\uC704\uC5D0\uC11C \uBC14\uB014 \uD53D\uC140\uC774 \uC5C6\uC2B5\uB2C8\uB2E4.");
+  }
+  const region = (document2) => {
+    const material = document2.layers.filter((layer) => layer.kind === "material").at(-1);
+    const protection = document2.protectedMask ?? material?.protectedMask;
+    return {
+      ...field5("color-selection-only").checked ? { selection: document2.selection ?? material?.selection ?? Uint8Array.from(document2.pixels, (color, i) => (document2.mask?.[i] ?? 1) && color >>> 24 ? 1 : 0) } : {},
+      ...protection ? { protectedMask: protection } : {}
+    };
+  };
+  button5("color-use-picked").onclick = () => {
+    field5("color-from").value = field5("paint-color").value;
+  };
+  button5("replace-exact-color").onclick = () => attempt2(() => {
+    const from = field5("color-from").value, to = field5("color-to").value;
+    const replacements = [{ from, to }];
+    if (field5("color-swap").checked && from !== to) replacements.push({ from: to, to: from });
+    const replacer = createPixelColorReplacer2D(replacements);
+    applyColor((source, document2) => replacer.replace(source, region(document2)), field5("color-swap").checked ? "\uB450 \uC0C9 \uB9DE\uAD50\uD658" : "\uC815\uD655\uD55C \uC0C9 \uAD50\uCCB4");
+  });
+  button5("sort-working-palette").onclick = () => attempt2(() => {
+    host.setPalette(sortPixelColorsByLightness2D(host.palette()));
+    host.status("\uC791\uC5C5 \uD314\uB808\uD2B8\uB97C \uC5B4\uB450\uC6B4 \uC0C9\uBD80\uD130 \uC815\uB82C\uD588\uC2B5\uB2C8\uB2E4. \uADF8\uB9BC\uC758 \uC0C9\uC740 \uC801\uC6A9\uD560 \uB54C \uBC14\uB01D\uB2C8\uB2E4.");
+  });
+  button5("reverse-working-palette").onclick = () => attempt2(() => {
+    host.setPalette([...host.palette()].reverse());
+    host.status("\uC791\uC5C5 \uD314\uB808\uD2B8\uC758 \uC21C\uC11C\uB97C \uB4A4\uC9D1\uC5C8\uC2B5\uB2C8\uB2E4.");
+  });
+  button5("gradient-fit-horizontal").onclick = () => {
+    const document2 = host.outputDocument();
+    field5("gradient-start-x").value = "0";
+    field5("gradient-start-y").value = "0";
+    field5("gradient-end-x").value = String(Math.max(1, document2.width - 1));
+    field5("gradient-end-y").value = "0";
+  };
+  button5("apply-ramp-map").onclick = () => attempt2(() => {
+    const mode = select3("gradient-mode").value;
+    const mapper = createPixelRampMapper2D(host.palette(), {
+      mode,
+      start: [numeric("gradient-start-x"), numeric("gradient-start-y")],
+      end: [numeric("gradient-end-x"), numeric("gradient-end-y")],
+      valueRange: [numeric("gradient-low"), numeric("gradient-high")],
+      gamma: numeric("gradient-gamma"),
+      dither: select3("gradient-dither").value
+    });
+    const name2 = mode === "value" ? "\uD314\uB808\uD2B8 \uBA85\uC554 \uB9E4\uD551" : mode === "radial" ? "\uBC29\uC0AC\uD615 \uD53D\uC140 \uBA85\uC554" : "\uC120\uD615 \uD53D\uC140 \uBA85\uC554";
+    applyColor((source, document2) => mapper.map(source, region(document2)), name2);
+  });
+  function gradientControls() {
+    const value = select3("gradient-mode").value === "value";
+    el6("gradient-spatial-controls").hidden = value;
+    el6("gradient-value-controls").hidden = !value;
+  }
+  select3("gradient-mode").onchange = gradientControls;
+  gradientControls();
+  function sheetControls() {
+    const manifest = select3("sheet-import-mode").value === "manifest";
+    el6("sheet-grid-controls").hidden = manifest;
+    el6("sheet-manifest-control").hidden = !manifest;
+  }
+  select3("sheet-import-mode").onchange = sheetControls;
+  sheetControls();
+  button5("import-animation-sheet").onclick = () => {
+    if (!host.beginImport()) return;
+    void (async () => {
+      try {
+        const file = field5("animation-sheet-file").files?.[0];
+        if (!file) throw new Error("\uAC00\uC838\uC62C \uC2A4\uD504\uB77C\uC774\uD2B8\uC2DC\uD2B8 PNG\uB97C \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.");
+        const manifestMode = select3("sheet-import-mode").value === "manifest";
+        const manifestFile = field5("animation-sheet-manifest").files?.[0];
+        if (manifestMode && !manifestFile) throw new Error("PNG\uC640 \uD568\uAED8 \uB0B4\uBCF4\uB0B8 \uC2DC\uAC04 JSON\uC744 \uC120\uD0DD\uD574 \uC8FC\uC138\uC694.");
+        if (file.size > 64 * 1024 * 1024) throw new RangeError("\uC2DC\uD2B8 PNG\uB294 64 MiB \uC774\uD558\uB85C \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
+        if (manifestMode && manifestFile && manifestFile.size > 4 * 1024 * 1024) throw new RangeError("\uC2DC\uD2B8 \uC2DC\uAC04 JSON\uC740 4 MiB \uC774\uD558\uB85C \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
+        host.finishStroke();
+        const before = host.outputDocument();
+        const options = manifestMode ? void 0 : {
+          frameWidth: numeric("slice-width"),
+          frameHeight: numeric("slice-height"),
+          margin: [numeric("slice-margin-x"), numeric("slice-margin-y")],
+          gap: [numeric("slice-gap-x"), numeric("slice-gap-y")],
+          order: select3("slice-order").value,
+          start: numeric("slice-start"),
+          ...numeric("slice-count") ? { count: numeric("slice-count") } : {},
+          skipEmpty: field5("slice-skip-empty").checked,
+          durationMs: numeric("slice-duration"),
+          name: file.name.replace(/\.png$/i, "").slice(0, 160) || "Imported animation"
+        };
+        host.status("\uC6D0\uBCF8 \uD53D\uC140\uC744 \uC77D\uACE0 \uD504\uB808\uC784 \uACBD\uACC4\uC640 \uC7AC\uC0DD \uC2DC\uAC04\uC744 \uD655\uC778\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4\u2026");
+        const decoded = await decodePixelArtPNG(new Uint8Array(await file.arrayBuffer()), {
+          maxDimension: 16384,
+          maxPixels: 16777216,
+          maxFileBytes: 64 * 1024 * 1024,
+          maxInflatedBytes: 128 * 1024 * 1024
+        });
+        if (decoded.kind !== "decoded") throw new Error("\uC2DC\uD2B8\uC758 \uC815\uD655\uD55C RGB\xB7\uC54C\uD30C\uB97C \uC720\uC9C0\uD558\uB824\uBA74 8\uBE44\uD2B8 PNG\uB85C \uC800\uC7A5\uD574 \uC8FC\uC138\uC694.");
+        const { w, h, pixels } = decoded, source = { w, h, pixels, mask: { w, h, data: Uint8Array.from(pixels, (color) => color >>> 24 ? 1 : 0) } };
+        const animation = manifestMode ? importPixelArtAnimationSheet2D(source, JSON.parse(await manifestFile.text())) : slicePixelArtAnimationSheet2D(source, options);
+        host.finishStroke();
+        if (host.outputDocument() !== before) throw new Error("\uAC00\uC838\uC624\uB294 \uB3D9\uC548 \uC791\uC5C5\uC774 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4. \uD604\uC7AC \uC791\uC5C5\uC744 \uC720\uC9C0\uD588\uC2B5\uB2C8\uB2E4. \uC2DC\uD2B8 \uAC00\uC838\uC624\uAE30\uB97C \uB2E4\uC2DC \uB20C\uB7EC \uC8FC\uC138\uC694.");
+        host.importAnimation(animation);
+        const note = `${w} \xD7 ${h} \uC2DC\uD2B8 \u2192 ${animation.frames.length}\uAC1C \uD504\uB808\uC784 \xB7 ${animation.width} \xD7 ${animation.height} px. RGB\xB7\uC54C\uD30C\uC640 \uC7AC\uC0DD \uC2DC\uAC04\uC744 \uBCF4\uC874\uD588\uC2B5\uB2C8\uB2E4.`;
+        el6("sheet-import-note").textContent = note + (decoded.warnings.length ? " \uC0C9\uC0C1 \uD504\uB85C\uD30C\uC77C\uC740 \uC6D0\uBCF8 \uC218\uCE58\uB97C \uC720\uC9C0\uD558\uAE30 \uC704\uD574 \uBCC0\uD658\uD558\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4." : "");
+        host.status(note);
+      } finally {
+        host.endImport();
+      }
+    })().catch((error) => host.status(error instanceof Error ? error.message : String(error), true));
+  };
 }
 
 // gallery/pixel-art-lab.ts
 var element = (id) => document.getElementById(id);
 var input2 = (id) => element(id);
-var select3 = (id) => element(id);
-var button5 = (id) => element(id);
+var select4 = (id) => element(id);
+var button6 = (id) => element(id);
 var number2 = (id) => Number(input2(id).value);
 var canvas = (id) => element(id);
 var labels = { stone: "\uB3CC", metal: "\uAE08\uC18D", wood: "\uB098\uBB34", fabric: "\uCC9C", crystal: "\uC218\uC815" };
@@ -3729,6 +4152,23 @@ var canvasFrames = /* @__PURE__ */ new Map();
 function status(message, error = false) {
   element("status").textContent = message;
   element("status").classList.toggle("error", error);
+}
+function beginImport() {
+  if (busy) {
+    status("\uB2E4\uB978 \uD30C\uC77C\uC744 \uAC00\uC838\uC624\uB294 \uC911\uC785\uB2C8\uB2E4. \uC644\uB8CC\uD55C \uB4A4 \uB2E4\uC2DC \uC2DC\uB3C4\uD574 \uC8FC\uC138\uC694.", true);
+    return false;
+  }
+  busy = true;
+  for (const id of ["import-png", "open-project", "import-animation-sheet"]) button6(id).disabled = true;
+  return true;
+}
+function endImport() {
+  busy = false;
+  for (const id of ["import-png", "open-project", "import-animation-sheet"]) button6(id).disabled = false;
+}
+function requireUnchangedImport(before) {
+  workbench?.finishStroke();
+  if (outputProject() !== before) throw new Error("\uAC00\uC838\uC624\uB294 \uB3D9\uC548 \uC791\uC5C5\uC774 \uBCC0\uACBD\uB418\uC5C8\uC2B5\uB2C8\uB2E4. \uD604\uC7AC \uC791\uC5C5\uC744 \uC720\uC9C0\uD588\uC2B5\uB2C8\uB2E4. \uD30C\uC77C\uC744 \uB2E4\uC2DC \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
 }
 function attempt(fn) {
   try {
@@ -3773,7 +4213,7 @@ function loadSettings(options) {
   const p = createPixelMaterial2D(options).options;
   workingOptions = structuredClone(p);
   for (const id of rangeIds) input2(id).step = "any";
-  select3("material").value = p.kind;
+  select4("material").value = p.kind;
   for (const id of ["seed", "scale", "detail", "relief", "bevel", "roughness", "ambient"]) {
     const control = input2(id), value = Number(p[id]);
     if (control.type === "range") {
@@ -3813,7 +4253,7 @@ function pendingLayer() {
   return {
     kind: "material",
     id: editingMaterialId ?? nextPixelArtLayerId2D(project, "material"),
-    name: existing?.name ?? `${labels[select3("material").value]} \xB7 ${number2("seed")}`,
+    name: existing?.name ?? `${labels[select4("material").value]} \xB7 ${number2("seed")}`,
     ...existing?.visible !== void 0 ? { visible: existing.visible } : {},
     ...existing?.locked !== void 0 ? { locked: existing.locked } : {},
     material: settings(),
@@ -3834,7 +4274,18 @@ function outputProject() {
   if (outputDocumentCache && outputDocumentKey === key) return outputDocumentCache;
   const layers = draft && canAddLayer() ? editingMaterialId ? project.layers.map((layer) => layer.id === editingMaterialId ? pendingLayer() : layer) : [...project.layers, pendingLayer()] : project.layers;
   outputDocumentKey = key;
-  return outputDocumentCache = { ...project, layers, selection: Array.from(selection), protectedMask: Array.from(protectedMask), ...sourceAuthoredHeight ? { authoredHeight: Array.from(sourceAuthoredHeight) } : {} };
+  const { workingPalette: _previousPalette, ...base } = project, workingPalette = workbench?.storedPalette();
+  const last = project.layers.filter((layer) => layer.kind === "material").at(-1);
+  const saveSelection = project.selection !== void 0 || !selection.every((value, i) => value === (last?.selection?.[i] ?? ((project.mask?.[i] ?? 1) && project.pixels[i] >>> 24 ? 1 : 0)));
+  const saveProtection = project.protectedMask !== void 0 || !protectedMask.every((value, i) => value === (last?.protectedMask?.[i] ?? 0));
+  return outputDocumentCache = {
+    ...base,
+    layers,
+    ...saveSelection ? { selection: Array.from(selection) } : {},
+    ...saveProtection ? { protectedMask: Array.from(protectedMask) } : {},
+    ...sourceAuthoredHeight ? { authoredHeight: Array.from(sourceAuthoredHeight) } : {},
+    ...workingPalette ? { workingPalette: [...workingPalette] } : {}
+  };
 }
 function resetHistory() {
   const { activeLayerId, ...base } = project;
@@ -3843,6 +4294,8 @@ function resetHistory() {
   if (!project.layers.length) history = new PixelArtDocumentHistory2D(project);
 }
 function commitDocument(next) {
+  const workingPalette = workbench?.storedPalette();
+  if (workingPalette) next = { ...next, workingPalette: [...workingPalette] };
   if (timeline?.enabled) {
     timeline.commitFrame(next);
     return;
@@ -3867,15 +4320,15 @@ function commitDocument(next) {
   paintPreview = void 0;
   schedule();
 }
-function moveHistory(direction) {
+function moveHistory(direction2) {
   if (timeline?.enabled) {
-    timeline[direction]();
+    timeline[direction2]();
     return;
   }
-  prepareImported(direction === "undo" ? history.undo() : history.redo(), false);
+  prepareImported(direction2 === "undo" ? history.undo() : history.redo(), false);
 }
 function sizeCanvases() {
-  const dpr = window.devicePixelRatio || 1, requested = select3("zoom").value;
+  const dpr = window.devicePixelRatio || 1, requested = select4("zoom").value;
   for (const id of ["source", "result"]) {
     const c = canvas(id), host = element(id + "-host");
     const scale = requested === "auto" ? Math.max(1, Math.floor(Math.min((host.clientWidth - 12) * dpr / c.width, (host.clientHeight - 12) * dpr / c.height))) : Number(requested) * dpr;
@@ -3963,7 +4416,7 @@ function update() {
       outputKey = nextOutputKey;
     }
     rendered = paintPreview ?? cachedOutput;
-    const style = select3("expected-style").value;
+    const style = select4("expected-style").value;
     const options = { expectedStyle: style, protected: protectedMask };
     const key = `${revision}:${style}:${protectionVersion}`;
     if (key !== beforeAnalysisKey || !beforeAnalysis) {
@@ -3977,7 +4430,7 @@ function update() {
     }
     const before = beforeAnalysis, after = afterAnalysis;
     paint("source", committed);
-    paint("result", rendered, select3("view").value, after.heatmap);
+    paint("result", rendered, select4("view").value, after.heatmap);
     sizeCanvases();
     element("source-size").textContent = `${project.width} \xD7 ${project.height}`;
     element("metric-flat").textContent = `${(after.metrics.dominantFlatRegionRatio * 100).toFixed(1)}%`;
@@ -4004,12 +4457,12 @@ function update() {
     element("layer-count").textContent = String(project.layers.length);
     workbench?.sync();
     element("empty-layers").hidden = project.layers.length > 0;
-    button5("undo").disabled = !history.canUndo;
-    button5("redo").disabled = !history.canRedo;
+    button6("undo").disabled = !history.canUndo;
+    button6("redo").disabled = !history.canRedo;
     timeline?.sync();
-    button5("apply-material").disabled = !draft || !count || !hasLayerRoom;
-    button5("apply-material").textContent = editingMaterialId ? "\uC218\uC815\uD55C \uC7AC\uC9C8 \uC801\uC6A9" : "\uC120\uD0DD \uC601\uC5ED\uC5D0 \uC7AC\uC9C8 \uC801\uC6A9";
-    button5("cancel-preview").disabled = !draft;
+    button6("apply-material").disabled = !draft || !count || !hasLayerRoom;
+    button6("apply-material").textContent = editingMaterialId ? "\uC218\uC815\uD55C \uC7AC\uC9C8 \uC801\uC6A9" : "\uC120\uD0DD \uC601\uC5ED\uC5D0 \uC7AC\uC9C8 \uC801\uC6A9";
+    button6("cancel-preview").disabled = !draft;
     if (!element("status").classList.contains("error")) status(hasLayerRoom ? `${paintPreview ? "\uD3B8\uC9D1 \uC911" : draft ? "\uBBF8\uB9AC\uBCF4\uAE30" : "\uC801\uC6A9 \uC644\uB8CC"} \xB7 ${Math.round(performance.now() - started)} ms \xB7 ${after.metrics.paletteSize}\uC0C9` : `\uC774 \uD574\uC0C1\uB3C4\uC758 \uB808\uC774\uC5B4 \uD55C\uB3C4 ${pixelArtLayerLimit2D(project.width, project.height)}\uAC1C \xB7 \uC2E4\uD589 \uCDE8\uC18C\uD558\uBA74 \uACC4\uC18D \uD3B8\uC9D1\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4.`);
     element("result").dataset.ready = "true";
     valid = true;
@@ -4036,9 +4489,10 @@ function masksChanged() {
   schedule();
 }
 function study() {
-  const shape = select3("shape").value;
+  const shape = select4("shape").value;
   if (shape === "imported") return;
   timeline?.close();
+  workbench?.restoreAuthoredPalette(void 0);
   const result = createPixelArtStudy2D(shape, number2("seed"), input2("organic").checked);
   project = { ...createPixelArtDocument2D(result.sprite, `POKU ${shape}`), authoredHeight: Array.from(result.height) };
   sourceAuthoredHeight = result.height;
@@ -4057,7 +4511,7 @@ function study() {
   schedule();
 }
 function resetMaterial() {
-  const kind = select3("material").value;
+  const kind = select4("material").value;
   const seed = number2("seed");
   loadSettings({ kind, seed, roughness: kind === "metal" ? 0.25 : kind === "crystal" ? 0.3 : 0.65, scale: kind === "fabric" ? 12 : 15, light: [-0.67, -0.74, 0.8], ambient: 0.18 });
   changed();
@@ -4091,71 +4545,72 @@ function savePNG() {
 }
 for (const id of [...rangeIds, "seed", "use-height", "seamless-material"]) element(id).addEventListener("input", () => editSetting(id));
 for (const id of ["view", "expected-style", "zoom"]) element(id).addEventListener("change", schedule);
-select3("material").addEventListener("change", () => attempt(resetMaterial));
-select3("shape").addEventListener("change", () => attempt(() => {
-  const shape = select3("shape").value;
+select4("material").addEventListener("change", () => attempt(resetMaterial));
+select4("shape").addEventListener("change", () => attempt(() => {
+  const shape = select4("shape").value;
   if (shape !== "imported") {
-    select3("material").value = shape === "blade" ? "metal" : shape === "cloth" ? "fabric" : shape === "crystal" ? "crystal" : "stone";
-    select3("expected-style").value = shape === "crystal" ? "geometric" : "organic";
+    select4("material").value = shape === "blade" ? "metal" : shape === "cloth" ? "fabric" : shape === "crystal" ? "crystal" : "stone";
+    select4("expected-style").value = shape === "crystal" ? "geometric" : "organic";
     resetMaterial();
     study();
   }
 }));
 input2("organic").addEventListener("change", () => attempt(study));
-button5("new-seed").onclick = () => attempt(() => {
+button6("new-seed").onclick = () => attempt(() => {
   input2("seed").value = String(number2("seed") + 1 >>> 0);
   editSetting("seed");
 });
-button5("reset-palette").onclick = () => attempt(() => {
-  workingOptions.palette = [...PIXEL_MATERIAL_PALETTES_2D[select3("material").value]];
+button6("reset-palette").onclick = () => attempt(() => {
+  workingOptions.palette = [...PIXEL_MATERIAL_PALETTES_2D[select4("material").value]];
   delete workingOptions.thresholds;
   palette(workingOptions.palette);
   changed();
 });
-button5("select-all").onclick = () => {
+button6("select-all").onclick = () => {
   selection = Uint8Array.from(committed.pixels, (c, i) => committed.mask.data[i] && c >>> 24 ? 1 : 0);
   masksChanged();
 };
-button5("clear-selection").onclick = () => {
+button6("clear-selection").onclick = () => {
   selection.fill(0);
   masksChanged();
 };
-button5("clear-protection").onclick = () => {
+button6("clear-protection").onclick = () => {
   protectedMask.fill(0);
   protectionVersion++;
   masksChanged();
 };
-button5("apply-material").onclick = () => attempt(() => {
+button6("apply-material").onclick = () => attempt(() => {
   if (draft) commitDocument(outputProject());
 });
-button5("cancel-preview").onclick = () => {
+button6("cancel-preview").onclick = () => {
   draft = false;
   editingMaterialId = void 0;
   paintPreview = void 0;
   schedule();
 };
-button5("undo").onclick = () => attempt(() => moveHistory("undo"));
-button5("redo").onclick = () => attempt(() => moveHistory("redo"));
-button5("save-png").onclick = () => attempt(savePNG);
-button5("save-project").onclick = () => attempt(() => {
+button6("undo").onclick = () => attempt(() => moveHistory("undo"));
+button6("redo").onclick = () => attempt(() => moveHistory("redo"));
+button6("save-png").onclick = () => attempt(savePNG);
+button6("save-project").onclick = () => attempt(() => {
   if (update()) addDownload(new Blob([timeline?.serialize() ?? serializePixelArtDocument2D(outputProject())], { type: "application/json" }), filename() + ".poku-pixel-art.json");
 });
-button5("focus-workspace").onclick = () => {
+button6("focus-workspace").onclick = () => {
   const enabled = document.body.classList.toggle("focus-mode");
-  button5("focus-workspace").setAttribute("aria-pressed", String(enabled));
-  button5("focus-workspace").textContent = enabled ? "\uBE44\uAD50 \uD654\uBA74\uC73C\uB85C" : "\uC791\uC5C5 \uD654\uBA74 \uD655\uB300";
+  button6("focus-workspace").setAttribute("aria-pressed", String(enabled));
+  button6("focus-workspace").textContent = enabled ? "\uBE44\uAD50 \uD654\uBA74\uC73C\uB85C" : "\uC791\uC5C5 \uD654\uBA74 \uD655\uB300";
   schedule();
 };
-button5("import-png").onclick = () => input2("png-file").click();
-button5("open-project").onclick = () => input2("project-file").click();
+button6("import-png").onclick = () => input2("png-file").click();
+button6("open-project").onclick = () => input2("project-file").click();
 function prepareImported(next, replaceHistory = true, preparedRaster) {
   if (next.width > 4096 || next.height > 4096) throw new RangeError("\uBE0C\uB77C\uC6B0\uC800 \uC791\uC5C5\uC2E4\uC5D0\uC11C\uB294 \uAC00\uB85C\xB7\uC138\uB85C 4096\uD53D\uC140 \uC774\uD558\uC758 \uD504\uB85C\uC81D\uD2B8\uB97C \uC0AC\uC6A9\uD574 \uC8FC\uC138\uC694.");
   serializePixelArtDocument2D(next);
   const raster = preparedRaster ?? renderPixelArtDocument2D(next);
   element("status").classList.remove("error");
   project = next;
-  select3("shape").value = "imported";
+  select4("shape").value = "imported";
   input2("organic").disabled = true;
+  workbench?.restoreAuthoredPalette(next.workingPalette);
   const last = project.layers.filter((layer) => layer.kind === "material").at(-1);
   sourceAuthoredHeight = next.authoredHeight ? Float32Array.from(next.authoredHeight) : last?.height ? Float32Array.from(last.height) : void 0;
   authoredHeight = renderPixelArtAuthoredHeight2D(sourceAuthoredHeight && !next.authoredHeight ? { ...next, authoredHeight: Array.from(sourceAuthoredHeight) } : next);
@@ -4180,33 +4635,49 @@ function prepareImported(next, replaceHistory = true, preparedRaster) {
 }
 input2("project-file").onchange = async () => {
   const file = input2("project-file").files?.[0];
-  if (!file || busy) return;
-  busy = true;
+  if (!file) return;
+  if (!beginImport()) {
+    input2("project-file").value = "";
+    return;
+  }
   try {
     if (file.size > 64 * 1024 * 1024) throw new RangeError("\uD504\uB85C\uC81D\uD2B8\uB294 64 MiB \uC774\uD558\uB85C \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
+    workbench?.finishStroke();
+    const before = outputProject();
+    status("\uD504\uB85C\uC81D\uD2B8\uC758 \uD53D\uC140\uACFC \uD3B8\uC9D1 \uC815\uBCF4\uB97C \uC77D\uACE0 \uC788\uC2B5\uB2C8\uB2E4\u2026");
     const json = await file.text(), header = JSON.parse(json);
-    if (header?.schema === "poku-pixel-art/v3") timeline.open(json);
-    else {
+    if (header?.schema === "poku-pixel-art/v3") {
+      requireUnchangedImport(before);
+      timeline.open(json);
+    } else {
       const next = parsePixelArtDocument2D(json);
       if (next.width > 4096 || next.height > 4096) throw new RangeError("\uBE0C\uB77C\uC6B0\uC800 \uC791\uC5C5\uC2E4\uC5D0\uC11C\uB294 \uAC00\uB85C\xB7\uC138\uB85C 4096\uD53D\uC140 \uC774\uD558\uC758 \uD504\uB85C\uC81D\uD2B8\uB97C \uC0AC\uC6A9\uD574 \uC8FC\uC138\uC694.");
       const raster = renderPixelArtDocument2D(next);
+      requireUnchangedImport(before);
       timeline?.close();
       prepareImported(next, true, raster);
     }
+    status("\uD504\uB85C\uC81D\uD2B8\uB97C \uBD88\uB7EC\uC654\uC2B5\uB2C8\uB2E4.");
   } catch (error) {
     status(String(error), true);
   } finally {
-    busy = false;
     input2("project-file").value = "";
+    endImport();
   }
 };
 input2("png-file").onchange = async () => {
   const file = input2("png-file").files?.[0];
-  if (!file || busy) return;
-  busy = true;
+  if (!file) return;
+  if (!beginImport()) {
+    input2("png-file").value = "";
+    return;
+  }
   let bitmap;
   try {
     if (file.size > 16 * 1024 * 1024) throw new RangeError("PNG\uB294 16 MiB \uC774\uD558\uB85C \uC5F4\uC5B4 \uC8FC\uC138\uC694.");
+    workbench?.finishStroke();
+    const before = outputProject();
+    status("PNG \uC6D0\uBCF8 \uD53D\uC140\uC744 \uC77D\uACE0 \uC788\uC2B5\uB2C8\uB2E4\u2026");
     const decoded = await decodePixelArtPNG(new Uint8Array(await file.arrayBuffer())), { w, h } = decoded;
     let pixels;
     if (decoded.kind === "decoded") pixels = decoded.pixels;
@@ -4222,15 +4693,17 @@ input2("png-file").onchange = async () => {
       for (let i = 0; i < pixels.length; i++) pixels[i] = (rgba[i * 4] | rgba[i * 4 + 1] << 8 | rgba[i * 4 + 2] << 16 | rgba[i * 4 + 3] << 24) >>> 0;
     }
     const next = createPixelArtDocument2D({ w, h, pixels, mask: { w, h, data: Uint8Array.from(pixels, (p) => p >>> 24 ? 1 : 0) } }, file.name.replace(/\.png$/i, ""));
+    requireUnchangedImport(before);
     timeline?.close();
     prepareImported(next);
     element("import-note").textContent = decoded.kind === "decoded" ? `PNG \uC6D0\uBCF8 RGB\xB7\uC54C\uD30C\uB97C \uADF8\uB300\uB85C \uAC00\uC838\uC654\uC2B5\uB2C8\uB2E4.${decoded.warnings.length ? " \uC0C9\uC0C1 \uD504\uB85C\uD30C\uC77C\uC740 \uC6D0\uBCF8 \uC218\uCE58 \uBCF4\uC874\uC744 \uC704\uD574 \uBCC0\uD658\uD558\uC9C0 \uC54A\uC558\uC2B5\uB2C8\uB2E4." : ""}` : `${decoded.reason === "16-bit" ? "16\uBE44\uD2B8" : "Adam7 \uC778\uD130\uB808\uC774\uC2A4"} PNG\uB97C \uBE0C\uB77C\uC6B0\uC800\uC5D0\uC11C \uBCC0\uD658\uD588\uC2B5\uB2C8\uB2E4. \uC6D0\uBCF8 \uC218\uCE58\uB97C \uADF8\uB300\uB85C \uD3B8\uC9D1\uD558\uB824\uBA74 \uBE44\uC778\uD130\uB808\uC774\uC2A4 8\uBE44\uD2B8 PNG\uB97C \uC0AC\uC6A9\uD558\uC138\uC694.`;
+    status("PNG\uB97C \uBD88\uB7EC\uC654\uC2B5\uB2C8\uB2E4.");
   } catch (error) {
     status(String(error), true);
   } finally {
     bitmap?.close();
-    busy = false;
     input2("png-file").value = "";
+    endImport();
   }
 };
 function point(event) {
@@ -4259,7 +4732,7 @@ function connected(x, y, add) {
   }
 }
 function brush(x, y) {
-  const tool = select3("selection-tool").value, r = Math.max(1, Math.min(32, number2("brush-size"))) / 2;
+  const tool = select4("selection-tool").value, r = Math.max(1, Math.min(32, number2("brush-size"))) / 2;
   const target = tool === "protect" || tool === "unprotect" ? protectedMask : selection, value = tool === "erase" || tool === "unprotect" ? 0 : 1;
   if (target === protectedMask) protectionVersion++;
   for (let py = Math.max(0, Math.floor(y - r)); py <= Math.min(project.height - 1, Math.ceil(y + r)); py++) for (let px = Math.max(0, Math.floor(x - r)); px <= Math.min(project.width - 1, Math.ceil(x + r)); px++) {
@@ -4273,7 +4746,7 @@ canvas("source").onpointerdown = (event) => {
   if (event.button !== 0 || !canEditMasks()) return;
   const [x, y] = point(event);
   event.preventDefault();
-  if (select3("selection-tool").value === "connected") {
+  if (select4("selection-tool").value === "connected") {
     connected(x, y, event.shiftKey);
     masksChanged();
     return;
@@ -4313,6 +4786,10 @@ workbench = installPixelArtWorkbench({
     delete workingOptions.thresholds;
     palette(colors);
     changed();
+  },
+  workingPaletteChanged: () => {
+    previewVersion++;
+    schedule();
   },
   setSelection: (mask2) => {
     selection = mask2;
@@ -4375,6 +4852,18 @@ timeline = installPixelArtTimeline({
   filename
 });
 installPixelArtViewport();
+installPixelArtProduction({
+  outputDocument: outputProject,
+  finishStroke: () => workbench.finishStroke(),
+  commit: commitDocument,
+  palette: () => workbench.palette(),
+  setPalette: (colors) => workbench.setAuthoredPalette(colors),
+  applyToFrames: (edit) => timeline.editDocuments(edit),
+  importAnimation: (animation) => timeline.importAnimation(animation),
+  beginImport,
+  endImport,
+  status
+});
 attempt(() => {
   resetMaterial();
   study();

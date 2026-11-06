@@ -14,3 +14,4 @@ export * from './review.js';
 export * from './pixel-art-project.js';
 export * from './pixel-art-document.js';
 export * from './pixel-art-animation.js';
+export * from './pixel-art-sheet.js';
