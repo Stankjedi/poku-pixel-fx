@@ -437,12 +437,18 @@ try {
     await upload('animation-for-palette.json', animationSaved);
 
     phase = 'shared palette across independently authored frames';
+    const beforePaletteExtraction = await exportFile('save-png', '.png');
     await change('palette-count', 3); await click('extract-animation-palette'); await ready();
     const paletteValues = await evaluate(() => [...document.querySelectorAll('#workbench-palette input')].map(input => input.value));
-    const paletteRGB = new Set(paletteValues.map(value => { const n = Number.parseInt(value.slice(1), 16); return color(n >>> 16, n >>> 8 & 255, n & 255) & 0xffffff; }));
-    assert(paletteValues.length === 3 && isDeepStrictEqual((await exportProject()), animationSaved)
+    const extractedPalette = paletteValues.map(value => { const n = Number.parseInt(value.slice(1), 16); return color(n >>> 16, n >>> 8 & 255, n & 255); });
+    const paletteRGB = new Set(extractedPalette.map(value => value & 0xffffff));
+    const expectedExtraction = structuredClone(animationSaved);
+    expectedExtraction.frames.find(frame => frame.id === expectedExtraction.activeFrameId).document.workingPalette = extractedPalette;
+    assert(paletteValues.length === 3 && isDeepStrictEqual((await exportProject()), expectedExtraction)
       && await evaluate("document.getElementById('palette-note').textContent.includes('3개 프레임')"),
-    'Common-palette extraction considers every frame and leaves the animation artwork unchanged until application');
+    'Common-palette extraction considers every frame, persists the active cel working palette, and preserves every other project field');
+    assert(beforePaletteExtraction.bytes.equals((await exportFile('save-png', '.png')).bytes),
+      'Common-palette extraction preserves every native PNG byte before palette application');
     await change('palette-dither', 'none'); await click('apply-animation-palette'); await ready();
     const commonSaved = await exportProject();
     assert(commonSaved.frames.every(frame => frame.document.layers.at(-1).kind === 'palette')
