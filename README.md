@@ -4,6 +4,18 @@
 
 > **Origin:** POKU Pixel FX is a Korean-localized, TypeScript-based open-source fork/derivative of [PixelFX by Patch](https://github.com/patch-gg/pixelfx). This repository is maintained separately and is not linked as a GitHub network fork. The upstream MIT license credits Patch and Hugo Duprez; see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for copyright and third-party notices.
 
+## Pixel Art Lab · 곡선 형태와 세밀한 재질
+
+**긴 직선 윤곽과 넓은 단색 면에만 의존하지 않고** 곡선 실루엣, 높이 기반 명암,
+여러 크기의 재질 무늬, 가장자리 마모를 함께 작성하는 도구를 추가했습니다.
+돌·금속·나무·천·수정 재질, 영역 선택과 디테일 보호, 재질 레이어,
+네이티브 PNG·프로젝트 저장/열기를 제공합니다. 기존 274개 이펙트의 원화와 기본 동작은 변경하지 않습니다.
+
+`npm ci && npm run build && npm run gallery` 후 **Pixel Art Lab** 링크 또는
+`http://127.0.0.1:8080/gallery/pixel-art-lab.html`을 엽니다.
+[사용법·API·표현 범위](docs/PIXEL_ART_LAB.md)를 읽거나
+`npm run preview:pixel-art`로 같은 입력 형태의 재질 비교 이미지를 생성하세요.
+
 ## 0.5 · 시퀀스 제작 · 타일 GPU 렌더링 · 도트 스타일
 
 여러 이펙트를 시간표로 합치는 **시퀀스 편집**, 동작과 접촉을 함께 바꾸는 길이 조정,

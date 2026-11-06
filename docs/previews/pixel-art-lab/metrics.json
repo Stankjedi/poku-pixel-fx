@@ -1,0 +1,265 @@
+{
+  "schema": "poku.pixel-art-evidence/v1",
+  "cases": [
+    {
+      "kind": "stone",
+      "shape": "stone-path",
+      "seed": 41,
+      "nativeSize": [
+        192,
+        112
+      ],
+      "palette": [
+        4280621586,
+        4281739548,
+        4282989352,
+        4284042804,
+        4285161794,
+        4286281556,
+        4287335529,
+        4288323714,
+        4289181085,
+        4289972409,
+        4290893779,
+        4291815150
+      ],
+      "before": {
+        "occupied": 9518,
+        "analyzed": 9518,
+        "paletteSize": 4,
+        "nearFlatRegionCount": 6,
+        "largestFlatRegion": 2082,
+        "dominantFlatRegionRatio": 0.2187434334944316,
+        "silhouetteCells": 815,
+        "longestStraightRun": 24,
+        "interiorCells": 8418,
+        "isolatedColorCells": 0,
+        "isolatedColorRatio": 0
+      },
+      "after": {
+        "occupied": 9518,
+        "analyzed": 9518,
+        "paletteSize": 12,
+        "nearFlatRegionCount": 46,
+        "largestFlatRegion": 309,
+        "dominantFlatRegionRatio": 0.032464803530153394,
+        "silhouetteCells": 815,
+        "longestStraightRun": 24,
+        "interiorCells": 8418,
+        "isolatedColorCells": 83,
+        "isolatedColorRatio": 0.008720319394830848
+      },
+      "sameAlpha": true,
+      "sameSilhouette": true,
+      "artisticQualityCertified": false
+    },
+    {
+      "kind": "metal",
+      "shape": "blade",
+      "seed": 41,
+      "nativeSize": [
+        192,
+        112
+      ],
+      "palette": [
+        4280423186,
+        4282000930,
+        4283579445,
+        4285224521,
+        4287264354,
+        4289107327,
+        4290227611,
+        4291282615,
+        4291811536,
+        4292273638,
+        4292538359,
+        4293786623
+      ],
+      "before": {
+        "occupied": 3032,
+        "analyzed": 3032,
+        "paletteSize": 1,
+        "nearFlatRegionCount": 1,
+        "largestFlatRegion": 3032,
+        "dominantFlatRegionRatio": 1,
+        "silhouetteCells": 309,
+        "longestStraightRun": 17,
+        "interiorCells": 2574,
+        "isolatedColorCells": 0,
+        "isolatedColorRatio": 0
+      },
+      "after": {
+        "occupied": 3032,
+        "analyzed": 3032,
+        "paletteSize": 12,
+        "nearFlatRegionCount": 18,
+        "largestFlatRegion": 281,
+        "dominantFlatRegionRatio": 0.09267810026385224,
+        "silhouetteCells": 309,
+        "longestStraightRun": 17,
+        "interiorCells": 2574,
+        "isolatedColorCells": 196,
+        "isolatedColorRatio": 0.06464379947229551
+      },
+      "sameAlpha": true,
+      "sameSilhouette": true,
+      "artisticQualityCertified": false
+    },
+    {
+      "kind": "wood",
+      "shape": "boulder",
+      "seed": 41,
+      "nativeSize": [
+        192,
+        112
+      ],
+      "palette": [
+        4280161568,
+        4280950835,
+        4281346892,
+        4281743720,
+        4282207109,
+        4282868129,
+        4283792056,
+        4285044171,
+        4286492633,
+        4288005093,
+        4289779438,
+        4291750392
+      ],
+      "before": {
+        "occupied": 7530,
+        "analyzed": 7530,
+        "paletteSize": 1,
+        "nearFlatRegionCount": 1,
+        "largestFlatRegion": 7530,
+        "dominantFlatRegionRatio": 1,
+        "silhouetteCells": 297,
+        "longestStraightRun": 16,
+        "interiorCells": 7110,
+        "isolatedColorCells": 0,
+        "isolatedColorRatio": 0
+      },
+      "after": {
+        "occupied": 7530,
+        "analyzed": 7530,
+        "paletteSize": 12,
+        "nearFlatRegionCount": 48,
+        "largestFlatRegion": 205,
+        "dominantFlatRegionRatio": 0.027224435590969456,
+        "silhouetteCells": 297,
+        "longestStraightRun": 16,
+        "interiorCells": 7110,
+        "isolatedColorCells": 34,
+        "isolatedColorRatio": 0.0045152722443559095
+      },
+      "sameAlpha": true,
+      "sameSilhouette": true,
+      "artisticQualityCertified": false
+    },
+    {
+      "kind": "fabric",
+      "shape": "cloth",
+      "seed": 41,
+      "nativeSize": [
+        192,
+        112
+      ],
+      "palette": [
+        4281275937,
+        4282458165,
+        4283443788,
+        4284233320,
+        4285023621,
+        4286077348,
+        4287132348,
+        4288515279,
+        4289767390,
+        4291019242,
+        4292139250,
+        4293062396
+      ],
+      "before": {
+        "occupied": 9656,
+        "analyzed": 9656,
+        "paletteSize": 1,
+        "nearFlatRegionCount": 1,
+        "largestFlatRegion": 9656,
+        "dominantFlatRegionRatio": 1,
+        "silhouetteCells": 414,
+        "longestStraightRun": 27,
+        "interiorCells": 9197,
+        "isolatedColorCells": 0,
+        "isolatedColorRatio": 0
+      },
+      "after": {
+        "occupied": 9656,
+        "analyzed": 9656,
+        "paletteSize": 11,
+        "nearFlatRegionCount": 20,
+        "largestFlatRegion": 1517,
+        "dominantFlatRegionRatio": 0.15710439105219554,
+        "silhouetteCells": 414,
+        "longestStraightRun": 27,
+        "interiorCells": 9197,
+        "isolatedColorCells": 406,
+        "isolatedColorRatio": 0.04204639602319801
+      },
+      "sameAlpha": true,
+      "sameSilhouette": true,
+      "artisticQualityCertified": false
+    },
+    {
+      "kind": "crystal",
+      "shape": "crystal",
+      "seed": 41,
+      "nativeSize": [
+        192,
+        112
+      ],
+      "palette": [
+        4281736211,
+        4283641120,
+        4285350953,
+        4286799917,
+        4288184116,
+        4289633863,
+        4290689126,
+        4291874188,
+        4292665009,
+        4293258192,
+        4293850856,
+        4294115324
+      ],
+      "before": {
+        "occupied": 6386,
+        "analyzed": 6386,
+        "paletteSize": 1,
+        "nearFlatRegionCount": 1,
+        "largestFlatRegion": 6386,
+        "dominantFlatRegionRatio": 1,
+        "silhouetteCells": 261,
+        "longestStraightRun": 13,
+        "interiorCells": 5998,
+        "isolatedColorCells": 0,
+        "isolatedColorRatio": 0
+      },
+      "after": {
+        "occupied": 6386,
+        "analyzed": 6386,
+        "paletteSize": 12,
+        "nearFlatRegionCount": 27,
+        "largestFlatRegion": 1030,
+        "dominantFlatRegionRatio": 0.16129032258064516,
+        "silhouetteCells": 261,
+        "longestStraightRun": 13,
+        "interiorCells": 5998,
+        "isolatedColorCells": 42,
+        "isolatedColorRatio": 0.0065768869401816475
+      },
+      "sameAlpha": true,
+      "sameSilhouette": true,
+      "artisticQualityCertified": false
+    }
+  ]
+}

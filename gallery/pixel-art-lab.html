@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pixel Art Lab · POKU</title>
+  <meta name="description" content="유기적인 실루엣과 재질의 결, 높이, 명암을 조절하는 네이티브 픽셀아트 작업실">
+  <link rel="stylesheet" href="pixel-art-lab.css">
+</head>
+<body>
+<header><a class="brand" href="index.html"><span class="brand-dot"></span>POKU <span>PIXEL ART LAB</span></a><nav aria-label="작업실 이동"><a href="studio.html">FX Studio ↗</a><a href="gpu-lab.html">GPU Lab ↗</a><a href="index.html">갤러리 ↗</a></nav></header>
+<section class="intro"><div><div class="eyebrow">FORM / MATERIAL / LIGHT</div><h1>픽셀에 형태와 재질을.</h1><p>곡선 윤곽, 큰 명암 덩어리, 작은 재질의 결을 따로 조절하세요.</p></div><div class="file-actions"><button id="import-png">PNG 가져오기</button><button id="open-project">프로젝트 열기</button></div></section>
+<main class="layout">
+  <section class="workspace">
+    <div class="workspace-toolbar"><label>형태 <select id="shape"><option value="stone-path">돌길</option><option value="boulder">바위</option><option value="blade">검날</option><option value="cloth">천</option><option value="crystal">수정</option><option value="imported" disabled>가져온 원화</option></select></label><label class="inline"><input id="organic" type="checkbox" checked>유기적 윤곽</label><div class="toolbar-end"><label>배율 <select id="zoom"><option value="auto">정수 맞춤</option><option>1</option><option>2</option><option>4</option><option>8</option></select></label><label>보기 <select id="view"><option value="color">색상</option><option value="value">명암</option><option value="height">높이</option><option value="normal">법선</option><option value="analysis">진단 위치</option></select></label></div></div>
+    <div class="comparison">
+      <section class="art-panel"><div class="panel-label"><strong>01 <span>원본 / 영역 선택</span></strong><span id="source-size">192 × 112</span></div><div class="canvas-host" id="source-host"><canvas id="source" aria-label="원본 픽셀아트. 아래 선택 도구를 고른 뒤 클릭하거나 드래그하세요"></canvas></div><p class="panel-caption">원본 위에서 편집할 영역과 보존할 디테일을 선택하세요.</p></section>
+      <section class="art-panel result-panel"><div class="panel-label"><strong>02 <span>재질 미리보기</span></strong><span class="live-dot" id="render-state">PREVIEW</span></div><div class="canvas-host" id="result-host"><canvas id="result" aria-label="팔레트와 픽셀 경계를 보존한 재질 결과"></canvas></div><p class="panel-caption" id="result-caption">새 설정은 적용하기 전까지 미리보기로 유지됩니다.</p></section>
+    </div>
+    <div class="selection-bar"><label>영역 도구 <select id="selection-tool"><option value="connected">비슷한 색 연결 선택</option><option value="paint">선택 칠하기</option><option value="erase">선택 지우기</option><option value="protect">디테일 보호</option><option value="unprotect">보호 지우기</option></select></label><label>크기 <input id="brush-size" type="number" min="1" max="32" value="4"></label><label>색 허용차 <input id="tolerance" type="number" min="0" max="100" value="18"></label><button id="select-all">전체 선택</button><button id="clear-selection">선택 해제</button><button id="clear-protection">보호 해제</button></div>
+    <div class="status-line"><span id="status" role="status" aria-live="polite">작업실을 준비하고 있습니다.</span><span id="selection-count"></span></div>
+    <section class="analysis"><div class="section-title"><h2>표현 점검</h2><label>의도한 스타일 <select id="expected-style"><option value="organic">자연스러운 재질</option><option value="cel-shaded">셀 셰이딩</option><option value="geometric">기하학적 디자인</option></select></label></div><div class="metrics"><div><span>가장 큰 유사색 영역</span><strong id="metric-flat">—</strong><small id="metric-flat-before">원본 —</small></div><div><span>사용한 표면 색</span><strong id="metric-colors">—</strong><small id="metric-colors-before">원본 —</small></div><div><span>긴 직선 윤곽</span><strong id="metric-edge">—</strong><small>네이티브 픽셀 기준</small></div><div><span>고립된 색 점</span><strong id="metric-noise">—</strong><small>작은 하이라이트도 포함됩니다</small></div></div><ul id="issues"></ul><p class="hint">점검 결과는 살펴볼 위치를 안내합니다. 단색 면, 직선, 한 픽셀 장식은 의도한 디자인일 수 있습니다.</p></section>
+    <section class="layers"><div class="section-title"><h2>재질 레이어 <span id="layer-count">0</span></h2><div><button id="undo" disabled>실행 취소</button><button id="redo" disabled>다시 실행</button></div></div><ol id="layer-list"></ol><p class="hint" id="empty-layers">영역을 골라 재질을 적용하면 원본을 유지한 채 레이어가 쌓입니다.</p></section>
+  </section>
+  <aside class="inspector">
+    <div class="section-title"><h2>재질 설계</h2><span class="small-label">NATIVE PIXELS</span></div>
+    <label>재질<select id="material"><option value="stone">돌 · 균열과 풍화</option><option value="metal">금속 · 반사와 마모</option><option value="wood">나무 · 나뭇결</option><option value="fabric">천 · 짜임과 주름</option><option value="crystal">수정 · 내부 결</option></select></label>
+    <div class="palette-head"><span>그림자 → 밝은 면</span><button id="reset-palette">기본 팔레트</button></div><div id="palette" class="palette"></div>
+    <label>재현 시드<div class="seed-row"><input id="seed" type="number" min="0" max="4294967295" step="1" value="41"><button id="new-seed" title="다음 시드">↻</button></div></label>
+    <label>큰 무늬 간격 <output for="scale" id="scale-value"></output><input id="scale" type="range" min="4" max="40" value="15" step="1"></label>
+    <label>세부 표현 <output for="detail" id="detail-value"></output><input id="detail" type="range" min="0" max="1" value=".65" step=".05"></label>
+    <label>표면 높낮이 <output for="relief" id="relief-value"></output><input id="relief" type="range" min="0" max="8" value="3" step=".25"></label>
+    <label>가장자리 입체감 <output for="bevel" id="bevel-value"></output><input id="bevel" type="range" min="0" max="12" value="5" step=".5"></label>
+    <label>거칠기 <output for="roughness" id="roughness-value"></output><input id="roughness" type="range" min="0" max="1" value=".65" step=".05"></label>
+    <div class="separator"></div><div class="section-title"><h2>빛과 형태</h2><span id="light-direction">↖</span></div>
+    <label>빛 방향 <output for="light-angle" id="light-angle-value"></output><input id="light-angle" type="range" min="-180" max="180" value="-132" step="1"></label>
+    <label>빛 고도 <output for="light-height" id="light-height-value"></output><input id="light-height" type="range" min="-90" max="90" value="39" step="1"></label>
+    <label>주변 밝기 <output for="ambient" id="ambient-value"></output><input id="ambient" type="range" min="0" max=".6" value=".18" step=".02"></label>
+    <label>결 방향 <output for="grain-angle" id="grain-angle-value"></output><input id="grain-angle" type="range" min="-180" max="180" value="0" step="1"></label>
+    <label class="inline"><input id="use-height" type="checkbox" checked>형태의 높이 사용</label><p class="hint">예제의 부피와 천의 주름을 조명에 반영합니다. 가져온 PNG는 선택한 재질의 요철과 가장자리로 표현합니다.</p>
+    <div class="separator"></div><button class="primary wide" id="apply-material">선택 영역에 재질 적용</button><div class="export-actions"><button id="save-png">원본 크기 PNG</button><button id="save-project">프로젝트 저장</button></div><div id="downloads" class="downloads"></div>
+  </aside>
+</main>
+<footer><span>POKU Pixel Art Lab</span><span>원본 픽셀 · 팔레트 명암 · 재현 가능한 재질</span></footer>
+<input id="png-file" type="file" accept="image/png" hidden><input id="project-file" type="file" accept=".json" hidden>
+<script type="module" src="pixel-art-lab.js"></script>
+</body>
+</html>

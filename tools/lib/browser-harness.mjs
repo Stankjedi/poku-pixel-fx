@@ -30,7 +30,7 @@ export async function withHarnessBrowser(task, options = {}) {
     try {
       let pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
       if (pathname.startsWith('/effects/')) pathname = '/site/public' + pathname;
-      if (['app.js', '3d.js', 'studio.js', 'studio-worker.js', 'gpu-lab.js', 'gpu-lab-worker.js'].some(name => pathname === `/gallery/${name}`)) pathname = pathname.replace('/gallery/', '/build-gallery/');
+      if (['app.js', '3d.js', 'studio.js', 'studio-worker.js', 'gpu-lab.js', 'gpu-lab-worker.js', 'pixel-art-lab.js'].some(name => pathname === `/gallery/${name}`)) pathname = pathname.replace('/gallery/', '/build-gallery/');
       if (pathname.startsWith('/gallery/chunks/')) pathname = pathname.replace('/gallery/chunks/', '/build-gallery/chunks/');
       const path = resolve(root, '.' + pathname); if (!path.startsWith(root + sep)) throw new Error('Invalid path');
       res.setHeader('Content-Type', ({ '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2' })[extname(path)] ?? 'application/octet-stream');

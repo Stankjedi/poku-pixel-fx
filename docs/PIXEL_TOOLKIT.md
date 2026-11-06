@@ -1,5 +1,9 @@
 # Native pixel style, diagnostics and material tools
 
+For curved native silhouettes, coherent multiscale material authoring, selected/protected
+surface edits and a browser workbench, see [Pixel Art Lab](PIXEL_ART_LAB.md). These new
+operations complement the pattern brushes below; existing effects and styles stay opt-in.
+
 These APIs make raster policy explicit and keep edits reproducible. They operate
 on native sprites, so a display zoom does not add detail to a small source.
 `src/examples/pixel-toolkit.ts` contains twelve executable native studies; inspect
