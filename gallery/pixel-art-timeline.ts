@@ -4,10 +4,12 @@ import {
   removePixelArtAnimationFrame2D, movePixelArtAnimationFrame2D, updatePixelArtAnimationFrame2D,
   createPixelArtAnimationTimeline2D, createPixelArtOnionSkin2D,
   exportPixelArtAnimationSheet2D, exportPixelArtAnimationClip2D, PixelArtAnimationHistory2D,
+  validatePixelArtAnimation2D,
   type PixelArtAnimation2D, type PixelArtAnimationFrame2D,
 } from '../src/authoring/pixel-art-animation.js';
 import { renderPixelArtDocument2D, nextPixelArtLayerId2D, type PixelArtDocument2D, type PixelArtDocumentRaster2D } from '../src/authoring/pixel-art-document.js';
 import { extractPixelAnimationPalette2D } from '../src/core/pixel-palette.js';
+import { sortPixelColorsByLightness2D } from '../src/core/pixel-color-edit.js';
 import { encodeRGBAPNG } from './png.js';
 
 interface TimelineHost {
@@ -17,7 +19,7 @@ interface TimelineHost {
   palette(): readonly number[];
   setPalette(colors: number[]): void;
   workingPalette(): number[] | undefined;
-  restorePalette(colors?: readonly number[]): void;
+  restorePalette(colors?: readonly number[], fallback?: readonly number[]): void;
   refresh(): void;
   status(message: string, error?: boolean): void;
   download(blob: Blob, filename: string): void;
@@ -81,7 +83,11 @@ export function installPixelArtTimeline(host: TimelineHost) {
   function showActive(raster?: PixelArtDocumentRaster2D) {
     if (!state) return;
     const frame = active(state);
-    host.restore(frame.document, raster ?? rasterForFrame(frame)); version++; clock = undefined; host.refresh();
+    host.restore(frame.document, raster ?? rasterForFrame(frame));
+    // A cel's authored swatches take priority. Merely viewing the animation fallback
+    // must not copy it into a cel or create an otherwise empty navigation Undo step.
+    host.restorePalette(frame.document.workingPalette, state.workingPalette);
+    version++; clock = undefined; host.refresh();
   }
   function ensure() {
     if (!state) {
@@ -172,13 +178,13 @@ export function installPixelArtTimeline(host: TimelineHost) {
     capture(); const animation = ensure(), count = Number(field('palette-count').value);
     const palette = extractPixelAnimationPalette2D(animation.frames.map((frame, i) => ({ sprite: frameRaster(i), duration: frame.durationMs })), { colors: count, weighting: 'equal-frame' });
     if (!palette.length) throw new Error('색을 추출할 프레임이 비어 있습니다.');
-    host.setPalette(palette); el('palette-note').textContent = `${animation.frames.length}개 프레임에서 공통 ${palette.length}색을 추출했습니다. 프레임마다 팔레트가 달라지는 현상을 줄일 수 있습니다.`;
+    host.setPalette(sortPixelColorsByLightness2D(palette)); el('palette-note').textContent = `${animation.frames.length}개 프레임에서 공통 ${palette.length}색을 추출해 명도순으로 정렬했습니다.`;
   });
   button('apply-animation-palette').onclick = () => attempt(() => {
     capture(); const animation = ensure(), palette = [...host.palette()];
     const frames = animation.frames.map(frame => {
       const doc = frame.document, id = nextPixelArtLayerId2D(doc, 'palette');
-      const document: PixelArtDocument2D = { ...doc, activeLayerId: id, layers: [...doc.layers, { kind: 'palette', id, name: `공통 팔레트 · ${palette.length}색`, palette,
+      const document: PixelArtDocument2D = { ...doc, workingPalette:[...palette], activeLayerId: id, layers: [...doc.layers, { kind: 'palette', id, name: `공통 팔레트 · ${palette.length}색`, palette,
         dither: select('palette-dither').value as 'none' | 'bayer4' | 'bayer8', strength: 1,
         ...(doc.protectedMask ? { protectedMask: doc.protectedMask } : {}) }] };
       return { ...frame, document };
@@ -252,6 +258,27 @@ export function installPixelArtTimeline(host: TimelineHost) {
     get enabled() { return !!state; },
     get frameCount() { return state?.frames.length ?? 1; },
     sync, stop,
+    /** One transaction for every cel; a failed mapping never commits a partial sequence. */
+    editDocuments(edit:(document:PixelArtDocument2D)=>PixelArtDocument2D):number|undefined {
+      if(!state)return undefined;
+      host.finishStroke();
+      const current=replacePixelArtAnimationFrame2D(state,host.outputDocument());
+      let changed=0;
+      const frames=current.frames.map(frame=>{
+        const document=edit(frame.document);if(document!==frame.document)changed++;
+        return document===frame.document?frame:{...frame,document};
+      });
+      if(changed)commit({...current,frames},true);
+      return changed;
+    },
+    /** Sheet import is undoable, including when the preceding artwork was a still image. */
+    importAnimation(animation:PixelArtAnimation2D) {
+      const next=validatePixelArtAnimation2D(animation);
+      if(next.width>4096||next.height>4096)throw new RangeError('가져올 프레임은 가로·세로 4096픽셀 이하로 지정해 주세요.');
+      renderPixelArtDocument2D(active(next).document);
+      serializePixelArtAnimation2D(next);
+      capture();ensure();commit(next,true);
+    },
     commitFrame(document: PixelArtDocument2D) { if (state) commit(replacePixelArtAnimationFrame2D(state, document)); },
     newDocument(document: PixelArtDocument2D) { if (state) commit(createPixelArtAnimation2D(document), true); },
     close() { stop(); state = undefined; history = undefined; playbackFrames=undefined; cache.clear(); cacheBytes = 0; version++; onionVersion = ''; player.getContext('2d')!.clearRect(0,0,player.width,player.height);el('animation-playhead').textContent='프레임을 추가하거나 복제하세요';host.refresh(); },
@@ -259,14 +286,13 @@ export function installPixelArtTimeline(host: TimelineHost) {
       const next = parsePixelArtAnimation2D(json);
       if(next.width>4096||next.height>4096)throw new RangeError('브라우저 작업실에서는 가로·세로 4096픽셀 이하의 프로젝트를 사용해 주세요.');
       const raster = renderPixelArtDocument2D(active(next).document), nextHistory = new PixelArtAnimationHistory2D(next);
-      host.restorePalette(next.workingPalette ?? active(next).document.workingPalette);
       stop(); playbackFrames=undefined;state = next; history = nextHistory;
       cache.clear(); cacheBytes = 0; for (const frame of state.frames) dirtyThumbnails.add(frame.id); showActive(raster);
     },
     serialize() {
       if (!state) return undefined;
-      const next = replacePixelArtAnimationFrame2D(state, host.outputDocument()), workingPalette = host.workingPalette();
-      return serializePixelArtAnimation2D({ ...next, workingPalette });
+      // Keep the stored animation fallback independent of the active cel's palette.
+      return serializePixelArtAnimation2D(replacePixelArtAnimationFrame2D(state, host.outputDocument()));
     },
     undo() { if (history) { stop(); playbackFrames=undefined;state = history.undo(); for (const frame of state.frames) dirtyThumbnails.add(frame.id); showActive(); } },
     redo() { if (history) { stop(); playbackFrames=undefined;state = history.redo(); for (const frame of state.frames) dirtyThumbnails.add(frame.id); showActive(); } },

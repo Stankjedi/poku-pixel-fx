@@ -3,6 +3,7 @@ import type { EditableSprite2D } from '../src/core/sprite-edit.js';
 import { rasterizePixelBrush2D, rasterizePixelShape2D, paintPixelMask2D, shadePixelMask2D, selectPixelRegion2D, resizePixelSelection2D,
   type PixelBrushPoint2D, type PixelBrushOptions2D, type PixelShapeKind2D } from '../src/core/pixel-brush.js';
 import { extractPixelPalette2D, createPixelPaletteRamp2D } from '../src/core/pixel-palette.js';
+import { sortPixelColorsByLightness2D } from '../src/core/pixel-color-edit.js';
 import { exportPixelSurfaceMaps2D } from '../src/core/pixel-surface-maps.js';
 import { installPixelArtSelection, selectionDrawingTools } from './pixel-art-selection.js';
 import { installPixelArtCraft, craftDrawingTools } from './pixel-art-craft.js';
@@ -23,6 +24,7 @@ export interface PixelArtWorkbenchHost {
   palette(): readonly number[];
   setPalette(colors: readonly number[]): void;
   paletteChanged?(): void;
+  workingPaletteChanged?(): void;
   setSelection(mask: Uint8Array): void;
   commit(document: PixelArtDocument2D): void;
   load(document: PixelArtDocument2D): void;
@@ -53,7 +55,7 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
   const tileHost = document.createElement('section'), tileLabel = document.createElement('div'), tileInfo = document.createElement('span'), tileCanvas = document.createElement('canvas');
   const mainSurface: PixelArtBrushSurface = { canvas: result }, tileSurface: PixelArtBrushSurface = { canvas: tileCanvas, tile: true };
   const attempt = (fn: () => void) => { try { fn(); } catch (error) { host.status(error instanceof Error ? error.message : String(error), true); } };
-  let rowsKey = '', authoredPalette: number[] | undefined, strokeFrame:number|undefined, stroke: {
+  let rowsKey = '', authoredPalette: number[] | undefined, fallbackPalette: number[] | undefined, strokeFrame:number|undefined, stroke: {
     pointer: number; surface: PixelArtBrushSurface; owner: PixelArtDocument2D; points: PixelBrushPoint2D[]; tool: string; document: PixelArtDocument2D; options: PixelBrushOptions2D;
     source: EditableSprite2D; merged:EditableSprite2D; layerId?: string; candidate?: PixelArtDocument2D;
   } | undefined;
@@ -83,7 +85,7 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     // Existing paint layers store pre-opacity RGBA. Shading those authored cells avoids
     // applying layer opacity twice when the visible composite has reduced alpha.
     const baseline = source;
-    const output = shadeStep ? shadePixelMask2D(baseline, mask, authoredPalette ?? host.palette(), shadeStep, {
+    const output = shadeStep ? shadePixelMask2D(baseline, mask, currentPalette(), shadeStep, {
       protectedMask: host.protection(), selection: field('paint-in-selection').checked ? host.selection() : undefined,
     }) : paintPixelMask2D(source, mask, erase ? null : hex(field('paint-color').value), {
       mode: 'replace', protectedMask: host.protection(), selection: field('paint-in-selection').checked ? host.selection() : undefined, alphaLock: field('alpha-lock').checked,
@@ -254,33 +256,45 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     const doc = host.document(); host.setSelection(resizePixelSelection2D(doc.width, doc.height, host.selection(), radius));
   });
 
+  function currentPalette(): readonly number[] { return authoredPalette ?? fallbackPalette ?? host.palette(); }
+  function paletteChanged() {
+    if (host.workingPaletteChanged) host.workingPaletteChanged(); else host.paletteChanged?.();
+  }
+  function editSwatch(index: number, value: string) {
+    const displayed = authoredPalette ?? fallbackPalette;
+    if (!displayed || index >= displayed.length) return;
+    // A shared fallback becomes cel-owned only when the artist edits a swatch.
+    authoredPalette ??= displayed.slice();
+    authoredPalette[index] = hex(value) >>> 0;
+    paletteChanged();
+  }
   function renderAuthoredPalette() {
-    el('workbench-palette').replaceChildren(...(authoredPalette??[]).map((color,i)=>{
+    el('workbench-palette').replaceChildren(...(authoredPalette??fallbackPalette??[]).map((color,i)=>{
       const swatch=document.createElement('input');swatch.type='color';swatch.value=cssColor(color);swatch.setAttribute('aria-label',`작업 팔레트 ${i+1}`);
-      swatch.oninput=()=>{if(authoredPalette){authoredPalette[i]=hex(swatch.value)>>>0;host.paletteChanged?.();}};
-      swatch.onchange=()=>{if(authoredPalette){authoredPalette[i]=hex(swatch.value)>>>0;adjustments?.paletteChanged();host.paletteChanged?.();}};
+      swatch.oninput=()=>editSwatch(i,swatch.value);
+      swatch.onchange=()=>{editSwatch(i,swatch.value);adjustments?.paletteChanged();};
       swatch.ondblclick=()=>{field('paint-color').value=swatch.value;};return swatch;
     }));
   }
   function setAuthoredPalette(colors:readonly number[]) {
     authoredPalette=colors.map(color=>color>>>0);renderAuthoredPalette();
     adjustments?.paletteChanged();
-    host.paletteChanged?.();
+    paletteChanged();
   }
-  function restorePalette(colors?:readonly number[]) {
-    authoredPalette=colors===undefined?undefined:[...colors];renderAuthoredPalette();
+  function restorePalette(colors?:readonly number[],fallback?:readonly number[]) {
+    authoredPalette=colors?.map(color=>color>>>0);fallbackPalette=fallback?.map(color=>color>>>0);renderAuthoredPalette();
   }
   btn('extract-palette').onclick = () => attempt(() => {
     const colors = extractPixelPalette2D(host.output(), { colors: integer('palette-count', 2, 64), locked: field('lock-paint-color').checked ? [field('paint-color').value] : [],
       ...(field('paint-in-selection').checked ? { selection: host.selection() } : {}) });
     if (!colors.length) throw new Error('색을 추출할 불투명한 픽셀이 없습니다. 먼저 그리거나 PNG를 가져오세요.');
-    setAuthoredPalette(colors); el('palette-note').textContent = `현재 그림에서 ${colors.length}색을 추출했습니다. 팔레트 조정 레이어로 적용할 수 있습니다.`;
+    setAuthoredPalette(sortPixelColorsByLightness2D(colors)); el('palette-note').textContent = `현재 그림에서 ${colors.length}색을 추출해 어두운 색부터 정렬했습니다. 고정한 색의 값은 그대로 유지합니다.`;
   });
   btn('generate-ramp').onclick = () => attempt(() => {
     const colors = createPixelPaletteRamp2D({ shadow: field('ramp-shadow').value, midtone: field('ramp-midtone').value, highlight: field('ramp-highlight').value, colors: integer('palette-count', 2, 64) });
     setAuthoredPalette(colors); el('palette-note').textContent = `${colors.length}색 명암 팔레트 · 그림자와 밝은 면 사이에서 색상과 채도를 함께 조절했습니다.`;
   });
-  btn('use-material-palette').onclick=()=>attempt(()=>host.setPalette(authoredPalette??host.palette()));
+  btn('use-material-palette').onclick=()=>attempt(()=>host.setPalette(currentPalette()));
   // These controls are independent of the material inspector. Changing a light must never
   // create a material draft that would replace a hand-painted multicolor albedo on apply.
   const relightRanges = ['angle', 'elevation', 'intensity', 'fill', 'ambient', 'roughness', 'ao', 'shadow', 'strength'];
@@ -387,10 +401,10 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
   const selections = installPixelArtSelection(host, finishStroke);
   bindPaintSurface(mainSurface);bindPaintSurface(tileSurface);
   craft=installPixelArtCraft(host);
-  adjustments=installPixelArtAdjustments(host,()=>authoredPalette??host.palette(),setAuthoredPalette,()=>{finishStroke();brushes?.finish();craft?.finish();});
+  adjustments=installPixelArtAdjustments(host,currentPalette,setAuthoredPalette,()=>{finishStroke();brushes?.finish();craft?.finish();});
   brushes=installPixelArtBrushes(host,[mainSurface,tileSurface],()=>{finishStroke();selections.finish();craft?.finish();adjustments?.finish();});
   return { finishStroke() { finishStroke();brushes?.finish();selections.finish();craft?.finish();adjustments?.finish(); }, setAuthoredPalette,restorePalette,
-    authoredPalette:()=>authoredPalette?.slice(),palette:()=>authoredPalette??host.palette(), sync() {
+    restoreAuthoredPalette:restorePalette,storedPalette:()=>authoredPalette?.slice(),authoredPalette:()=>authoredPalette?.slice(),palette:currentPalette, sync() {
     if(stroke&&stroke.owner!==host.document())cancelStroke();
     syncLayers(); syncOverlays(); syncCursor(); selections.sync();
     const mapsAvailable = !!(host.output() as PixelArtDocumentRaster2D)?.channels;

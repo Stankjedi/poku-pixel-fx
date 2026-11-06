@@ -10,6 +10,7 @@ import { installPixelArtWorkbench } from './pixel-art-workbench.js';
 import { installPixelArtTimeline } from './pixel-art-timeline.js';
 import { installPixelArtViewport } from './pixel-art-viewport.js';
 import { installPixelArtRecovery } from './pixel-art-recovery.js';
+import { installPixelArtProduction } from './pixel-art-production.js';
 import { encodeRGBAPNG } from './png.js';
 import { decodePixelArtPNG } from './png-import.js';
 
@@ -44,6 +45,21 @@ const canvasFrames = new Map<string, { sprite: EditableSprite2D; mode: string; h
 
 function status(message: string, error = false) {
   element('status').textContent = message; element('status').classList.toggle('error', error);
+}
+function beginImport(): boolean {
+  // All readers share this gate: an older file must never replace a newer import.
+  if(busy){status('다른 파일을 가져오는 중입니다. 완료한 뒤 다시 시도해 주세요.',true);return false;}
+  busy=true;
+  for(const id of ['import-png','open-project','import-animation-sheet'])button(id).disabled=true;
+  return true;
+}
+function endImport() {
+  busy=false;
+  for(const id of ['import-png','open-project','import-animation-sheet'])button(id).disabled=false;
+}
+function requireUnchangedImport(before: PixelArtDocument2D) {
+  workbench?.finishStroke();
+  if(outputProject()!==before)throw new Error('가져오는 동안 작업이 변경되었습니다. 현재 작업을 유지했습니다. 파일을 다시 열어 주세요.');
 }
 function attempt(fn: () => void) { try { fn(); } catch (error) { status(error instanceof Error ? error.message : String(error), true); } }
 function colorHex(c: string | number): string {
@@ -127,9 +143,14 @@ function outputProject(): PixelArtDocument2D {
   if(outputDocumentCache&&outputDocumentKey===key)return outputDocumentCache;
   const layers=draft&&canAddLayer()?(editingMaterialId?project.layers.map(layer=>layer.id===editingMaterialId?pendingLayer():layer):[...project.layers,pendingLayer()]):project.layers;
   outputDocumentKey=key;
-  const workingPalette=workbench?.authoredPalette()??project.workingPalette;
-  return outputDocumentCache={...project,layers,selection:Array.from(selection),protectedMask:Array.from(protectedMask),...(sourceAuthoredHeight?{authoredHeight:Array.from(sourceAuthoredHeight)}:{}),
-    ...(workingPalette?{workingPalette:[...workingPalette]}:{})};
+  const {workingPalette:_previousPalette,...base}=project, workingPalette=workbench?.storedPalette();
+  const last=project.layers.filter((layer):layer is PixelArtMaterialLayer2D=>layer.kind==='material').at(-1);
+  // Merely displaying an imported cel must not add an Undo step on navigation.
+  // Keep implicit default masks implicit until the artist actually changes them.
+  const saveSelection=project.selection!==undefined||!selection.every((value,i)=>value===(last?.selection?.[i]??((project.mask?.[i]??1)&&(project.pixels[i]>>>24)?1:0)));
+  const saveProtection=project.protectedMask!==undefined||!protectedMask.every((value,i)=>value===(last?.protectedMask?.[i]??0));
+  return outputDocumentCache={...base,layers,...(saveSelection?{selection:Array.from(selection)}:{}),...(saveProtection?{protectedMask:Array.from(protectedMask)}:{}),
+    ...(sourceAuthoredHeight?{authoredHeight:Array.from(sourceAuthoredHeight)}:{}),...(workingPalette?{workingPalette:[...workingPalette]}:{})};
 }
 function resetHistory() {
   const {activeLayerId,...base}=project;
@@ -138,6 +159,8 @@ function resetHistory() {
   if(!project.layers.length)history=new PixelArtDocumentHistory2D(project);
 }
 function commitDocument(next:PixelArtDocument2D) {
+  const workingPalette=workbench?.storedPalette();
+  if(workingPalette)next={...next,workingPalette:[...workingPalette]};
   if(timeline?.enabled){timeline.commitFrame(next);return;}
   const raster=renderPixelArtDocument2D(next);
   element('status').classList.remove('error');
@@ -255,9 +278,9 @@ function study() {
   const shape=select('shape').value;
   if(shape==='imported')return;
   timeline?.close();
+  workbench?.restoreAuthoredPalette(undefined);
   const result=createPixelArtStudy2D(shape as PixelArtStudyShape2D,number('seed'),input('organic').checked);
   project={...createPixelArtDocument2D(result.sprite,`POKU ${shape}`),authoredHeight:Array.from(result.height)};
-  workbench?.restorePalette();
   sourceAuthoredHeight=result.height;authoredHeight=result.height;materialOrigin=undefined;editingMaterialId=undefined;paintPreview=undefined;
   selection=result.sprite.mask.data.slice();protectedMask=new Uint8Array(selection.length);resetHistory();revision++;draft=true;
   input('use-height').disabled=false;input('use-height').checked=true;
@@ -311,13 +334,14 @@ button('focus-workspace').onclick=()=>{const enabled=document.body.classList.tog
 button('import-png').onclick=()=>input('png-file').click();
 button('open-project').onclick=()=>input('project-file').click();
 
-function prepareImported(next: PixelArtDocument2D,replaceHistory=true,preparedRaster?: EditableSprite2D,restoreWorkingPalette=true) {
+function prepareImported(next: PixelArtDocument2D,replaceHistory=true,preparedRaster?: EditableSprite2D) {
   if(next.width>4096||next.height>4096)throw new RangeError('브라우저 작업실에서는 가로·세로 4096픽셀 이하의 프로젝트를 사용해 주세요.');
   serializePixelArtDocument2D(next);
   const raster=preparedRaster??renderPixelArtDocument2D(next);
-  if(restoreWorkingPalette)workbench?.restorePalette(next.workingPalette);
+  endStroke();
   element('status').classList.remove('error');
   project=next;select('shape').value='imported';input('organic').disabled=true;
+  workbench?.restoreAuthoredPalette(next.workingPalette);
   const last=project.layers.filter((layer):layer is PixelArtMaterialLayer2D=>layer.kind==='material').at(-1);
   sourceAuthoredHeight=next.authoredHeight?Float32Array.from(next.authoredHeight):last?.height?Float32Array.from(last.height):undefined;
   authoredHeight=renderPixelArtAuthoredHeight2D(sourceAuthoredHeight&&!next.authoredHeight?{...next,authoredHeight:Array.from(sourceAuthoredHeight)}:next);
@@ -343,18 +367,31 @@ function restoreProjectJSON(json:string) {
   }
 }
 input('project-file').onchange=async()=>{
-  const file=input('project-file').files?.[0];if(!file||busy)return;busy=true;
+  const file=input('project-file').files?.[0];if(!file)return;
+  if(!beginImport()){input('project-file').value='';return;}
   try{
     if(file.size>64*1024*1024)throw new RangeError('프로젝트는 64 MiB 이하로 열어 주세요.');
-    restoreProjectJSON(await file.text());
+    workbench?.finishStroke();const before=outputProject();
+    status('프로젝트의 픽셀과 편집 정보를 읽고 있습니다…');
+    const json=await file.text(),header=JSON.parse(json);
+    if(header?.schema==='poku-pixel-art/v3'){requireUnchangedImport(before);timeline!.open(json);}
+    else {
+      const next=parsePixelArtDocument2D(json);
+      if(next.width>4096||next.height>4096)throw new RangeError('브라우저 작업실에서는 가로·세로 4096픽셀 이하의 프로젝트를 사용해 주세요.');
+      const raster=renderPixelArtDocument2D(next);requireUnchangedImport(before);timeline?.close();prepareImported(next,true,raster);
+    }
+    status('프로젝트를 불러왔습니다.');
   }
-  catch(error){status(String(error),true);}finally{busy=false;input('project-file').value='';}
+  catch(error){status(String(error),true);}finally{input('project-file').value='';endImport();}
 };
 input('png-file').onchange=async()=>{
-  const file=input('png-file').files?.[0];if(!file||busy)return;busy=true;
+  const file=input('png-file').files?.[0];if(!file)return;
+  if(!beginImport()){input('png-file').value='';return;}
   let bitmap:ImageBitmap|undefined;
   try{
     if(file.size>16*1024*1024)throw new RangeError('PNG는 16 MiB 이하로 열어 주세요.');
+    workbench?.finishStroke();const before=outputProject();
+    status('PNG 원본 픽셀을 읽고 있습니다…');
     const decoded=await decodePixelArtPNG(new Uint8Array(await file.arrayBuffer())),{w,h}=decoded;
     let pixels:Uint32Array;
     if(decoded.kind==='decoded')pixels=decoded.pixels;
@@ -364,11 +401,12 @@ input('png-file').onchange=async()=>{
       for(let i=0;i<pixels.length;i++)pixels[i]=(rgba[i*4]|rgba[i*4+1]<<8|rgba[i*4+2]<<16|rgba[i*4+3]<<24)>>>0;
     }
     const next=createPixelArtDocument2D({w,h,pixels,mask:{w,h,data:Uint8Array.from(pixels,p=>p>>>24?1:0)}},file.name.replace(/\.png$/i,''));
-    timeline?.close();prepareImported(next);
+    requireUnchangedImport(before);timeline?.close();prepareImported(next);
     element('import-note').textContent=decoded.kind==='decoded'
       ?`PNG 원본 RGB·알파를 그대로 가져왔습니다.${decoded.warnings.length?' 색상 프로파일은 원본 수치 보존을 위해 변환하지 않았습니다.':''}`
       :`${decoded.reason==='16-bit'?'16비트':'Adam7 인터레이스'} PNG를 브라우저에서 변환했습니다. 원본 수치를 그대로 편집하려면 비인터레이스 8비트 PNG를 사용하세요.`;
-  }catch(error){status(String(error),true);}finally{bitmap?.close();busy=false;input('png-file').value='';}
+    status('PNG를 불러왔습니다.');
+  }catch(error){status(String(error),true);}finally{bitmap?.close();input('png-file').value='';endImport();}
 };
 
 function point(event: PointerEvent): [number,number] {
@@ -414,7 +452,7 @@ workbench=installPixelArtWorkbench({
   palette:()=>createPixelMaterial2D(settings()).options.palette,
   setPalette:colors=>{workingOptions.palette=[...colors];delete workingOptions.thresholds;palette(colors);changed();},
   setSelection:mask=>{selection=mask;previewVersion++;element('status').classList.remove('error');schedule();recovery?.changed();},
-  paletteChanged:()=>{previewVersion++;schedule();recovery?.changed();},
+  workingPaletteChanged:()=>{previewVersion++;schedule();recovery?.changed();},
   commit:commitDocument, load:prepareImported,
   newCanvas:next=>{if(timeline?.enabled){timeline.newDocument(next);return;}history.commit(outputProject());prepareImported(next,false);history.commit(project);},
   preview:sprite=>{paintPreview=sprite;if(sprite)element('status').classList.remove('error');schedule();},
@@ -431,12 +469,19 @@ workbench=installPixelArtWorkbench({
   }),
 });
 timeline=installPixelArtTimeline({
-  outputDocument:outputProject,restore:(next,raster)=>prepareImported(next,false,raster,false),finishStroke:()=>workbench?.finishStroke(),
+  outputDocument:outputProject,restore:(next,raster)=>prepareImported(next,false,raster),finishStroke:()=>workbench?.finishStroke(),
   palette:()=>workbench!.palette(),setPalette:colors=>workbench!.setAuthoredPalette(colors),
-  workingPalette:()=>workbench!.authoredPalette(),restorePalette:colors=>workbench!.restorePalette(colors),
+  workingPalette:()=>workbench!.storedPalette(),restorePalette:(colors,fallback)=>workbench!.restoreAuthoredPalette(colors,fallback),
   refresh:schedule,status,download:addDownload,filename,
 });
 installPixelArtViewport();
+installPixelArtProduction({
+  outputDocument:outputProject,finishStroke:()=>workbench!.finishStroke(),commit:commitDocument,
+  palette:()=>workbench!.palette(),setPalette:colors=>workbench!.setAuthoredPalette(colors),
+  applyToFrames:edit=>timeline!.editDocuments(edit),
+  importAnimation:animation=>timeline!.importAnimation(animation),
+  beginImport,endImport,status,
+});
 attempt(()=>{resetMaterial();study();});
 recovery=installPixelArtRecovery({
   snapshot:()=>({json:timeline?.serialize()??serializePixelArtDocument2D(outputProject()),name:project.name,frames:timeline?.frameCount??1}),

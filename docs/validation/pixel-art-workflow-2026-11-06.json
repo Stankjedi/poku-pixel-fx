@@ -1,8 +1,8 @@
 {
   "schema": "poku-pixel-art-workflow-validation/v1",
   "date": "2026-11-06",
-  "baseCommit": "f39a2fea51e54120c0d7fcfcf0575bd3d329d89f",
-  "sourceHash": "7dfcd869fdb231eda2cb6bfd125f002fee36f54065d1d9262020093d3f17044f",
+  "baseCommit": "4d88053e3463bc517aa95e99452ccd6afbee4bbe",
+  "sourceHash": "e67072143b462fc7c7094762a8b41e244bb59283c43e84db1dd9e5d4467096b4",
   "build": {
     "command": "npm run build",
     "result": "passed"
@@ -12,27 +12,18 @@
     "result": "passed"
   },
   "node": {
-    "initialFullRun": {
-      "command": "node --test tests/*.test.mjs",
-      "tests": 1059,
-      "passed": 1057,
-      "failed": 2,
-      "skipped": 0
-    },
-    "resolvedFindings": [
+    "command": "node --test tests/*.test.mjs",
+    "tests": 1102,
+    "passed": 1102,
+    "failed": 0,
+    "skipped": 0,
+    "cancelled": 0,
+    "durationMs": 50003.945932,
+    "scope": "Complete local suite against the integrated production build, including the concurrent precision-color, Adam7 and sheet-import changes from main.",
+    "resolvedPreIntegrationFindings": [
       "Long-distance cluster interpolation lost native cells through floating-point cancellation; fixed interpolation and added two regression tests with 20 cases.",
       "The new workspace test incorrectly treated palette dither strength 0 as disabling color remapping. Corrected its reference to the same rendered palette layer without workspace metadata, and clarified the UI label."
-    ],
-    "targetedFinalRun": {
-      "command": "node --test tests/pixel-cluster-brush.test.mjs tests/pixel-workspace-state.test.mjs",
-      "tests": 22,
-      "passed": 22,
-      "failed": 0,
-      "skipped": 0
-    },
-    "finalVerifiedDistinctTests": 1061,
-    "unresolvedFailures": 0,
-    "scope": "One complete local suite, followed by only the affected test files against the rebuilt production modules. The other 1039 tests passed unchanged; 22 final targeted tests include two additional regressions. CI runs the required suites again."
+    ]
   },
   "preparedAssets": {
     "command": "node site/scripts/prepare-engine.mjs --check",
@@ -45,15 +36,27 @@
     "bufferComparisons": 10960,
     "mismatches": 0,
     "errors": 0,
-    "scope": "Default settings at five deterministic times, including opt-in HDR; source library and prepared public bundle compared with ad18d8a."
+    "scope": "Default settings at five deterministic times, including opt-in HDR; source library and prepared public bundle compared with ad18d8a.",
+    "aggregateSHA256": "99f028c377f0d2f74aeb8ed87a9fd951661fa61fbe2598f2cc15789518d5818a"
   },
   "browser": {
     "status": "pending",
     "requiredHarnesses": [
+      "tools/pixel-art-browser-harness.mjs",
+      "tools/pixel-workbench-browser-harness.mjs",
+      "tools/pixel-art-pro-browser-harness.mjs",
+      "tools/pixel-art-production-browser-harness.mjs",
+      "tools/pixel-art-craft-browser-harness.mjs",
       "tools/pixel-art-brushes-browser-harness.mjs",
       "tools/pixel-art-recovery-browser-harness.mjs"
     ],
     "localEnvironment": "Chromium Unix socket creation is restricted. The existing browser sandbox is retained; required CI provides actual browser validation."
   },
-  "scope": "Native editor, exact brush/clone operations, explicit tile painting, workspace swatches and browser-local recovery. No existing catalog artwork or renderer default is intentionally changed."
+  "scope": "Native editor, exact brush/clone operations, explicit tile painting, workspace swatches and browser-local recovery. No existing catalog artwork or renderer default is intentionally changed.",
+  "integration": {
+    "mainCommit": "4d88053e3463bc517aa95e99452ccd6afbee4bbe",
+    "preserved": "Precision color editing, independent cel palettes, exact Adam7 input, sheet import and import-race protection.",
+    "palettePolicy": "Explicit cel workingPalette takes priority over optional animation fallback; simply displaying fallback does not materialize metadata or add an Undo step. Exact packed RGBA, including alpha 0 and partial alpha, is normalized unsigned and retained.",
+    "pointerPolicy": "Validated document replacement releases the previous source-selection pointer before installing the new document."
+  }
 }

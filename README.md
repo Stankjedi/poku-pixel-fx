@@ -14,6 +14,18 @@
 [군집·복제·타일 도구 사용법](docs/PIXEL_ART_BRUSHES.md) · [정확한 붓 API](docs/PIXEL_CLUSTER_BRUSH.md) ·
 [작업 팔레트와 복구](docs/PIXEL_ART_RECOVERY.md)
 
+## Pixel Art Lab · 정확한 색 설계와 시트 가져오기
+
+RGB가 정확히 일치하는 색 교체와 두 색 맞교환, 원화 명도·선형·방사형 팔레트 명암을
+새 그림 레이어로 적용할 수 있습니다. 선택·보호·알파·높이를 유지하며, 전체 애니메이션의
+색 편집도 한 번에 실행 취소합니다. 작업 팔레트는 프로젝트와 각 프레임에 저장됩니다.
+
+스프라이트시트를 격자로 분할하거나 POKU 시간 JSON과 함께 가져오면 편집 가능한 프레임과
+이름·길이·재생 방향을 복원합니다. 8비트 Adam7 PNG도 숨은 RGB와 낮은 알파를 직접 읽습니다.
+
+[제작 흐름](docs/PIXEL_ART_PRODUCTION.md) · [정확한 색 편집 API](docs/PIXEL_COLOR_EDIT.md) ·
+[스프라이트시트 가져오기](docs/PIXEL_ART_SHEET_IMPORT.md) · [PNG 정밀 입력](docs/PIXEL_PNG_IMPORT.md)
+
 ## Pixel Art Lab · 높이 조각과 편집 가능한 곡선
 
 가져온 PNG의 색을 그대로 두고 높이를 올리거나 깎고, 맞추고, 정리할 수 있습니다.

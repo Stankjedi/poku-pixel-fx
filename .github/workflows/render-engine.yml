@@ -164,6 +164,13 @@ jobs:
           PIXEL_ART_PRO_REPORT_PATH: pixel-art-pro-browser-result.json
           PIXEL_ART_PRO_SCREENSHOT_PATH: pixel-art-pro-browser.png
         run: node tools/pixel-art-pro-browser-harness.mjs
+      - name: Exercise precision recoloring, sheet import and exact Adam7 PNG round trips
+        if: ${{ !cancelled() && steps.browser_assets.outcome == 'success' && steps.browser_executable.outcome == 'success' }}
+        env:
+          PIXEL_ART_PRODUCTION_REQUIRED: "1"
+          PIXEL_ART_PRODUCTION_REPORT_PATH: pixel-art-production-browser-result.json
+          PIXEL_ART_PRODUCTION_SCREENSHOT_PATH: pixel-art-production-browser.png
+        run: node tools/pixel-art-production-browser-harness.mjs
       - name: Exercise sculpted height, editable curves and adjustment reediting
         if: ${{ !cancelled() && steps.browser_assets.outcome == 'success' && steps.browser_executable.outcome == 'success' }}
         env:
@@ -201,6 +208,8 @@ jobs:
             pixel-workbench-browser.png
             pixel-art-pro-browser-result.json
             pixel-art-pro-browser.png
+            pixel-art-production-browser-result.json
+            pixel-art-production-browser.png
             pixel-art-craft-browser-result.json
             pixel-art-craft-browser.png
             pixel-art-brushes-browser-result.json

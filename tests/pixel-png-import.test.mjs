@@ -12,6 +12,8 @@ const bundle = await build({ entryPoints: [fileURLToPath(new URL('../gallery/png
 const { decodePixelArtPNG } = await import('data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 const fixture = name => readFileSync(new URL(`./fixtures/aseprite/${name}`, import.meta.url));
 const manifest = JSON.parse(fixture('manifest.json'));
+const adam7Fixture = name => readFileSync(new URL(`./fixtures/pixel-png/${name}`, import.meta.url));
+const adam7Manifest = JSON.parse(adam7Fixture('manifest.json'));
 const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
 function rgba(decoded) {
@@ -127,15 +129,63 @@ test('profile metadata is reported while encoded RGB is retained unchanged', asy
   assert.match(decoded.warnings.join(' '), /gAMA, sRGB.*not transformed.*straight/);
 });
 
-test('valid 16-bit and Adam7 inputs explicitly request fallback after complete data validation', async () => {
+test('valid 16-bit inputs explicitly request fallback after complete data validation', async () => {
   const sixteen = await decodePixelArtPNG(synthetic({ depth: 16, raw: Buffer.from([0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0x01, 0x02]) }));
   assert.deepEqual(sixteen, { kind: 'unsupported', w: 1, h: 1, reason: '16-bit', warnings: [] });
-  // A 2×2 Adam7 image has rows in passes 1, 6 and 7, not seven full-size rows.
-  const raw = Buffer.from([0, 1, 2, 3, 4, 0, 5, 6, 7, 8, 0, 9, 10, 11, 12, 13, 14, 15, 16]);
-  const interlaced = await decodePixelArtPNG(synthetic({ width: 2, height: 2, interlace: 1, raw }));
-  assert.deepEqual(interlaced, { kind: 'unsupported', w: 2, h: 2, reason: 'adam7', warnings: [] });
+  const interlacedSixteen = await decodePixelArtPNG(synthetic({ depth: 16, interlace: 1,
+    raw: Buffer.from([0, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0x01, 0x02]) }));
+  assert.deepEqual(interlacedSixteen, sixteen);
   await assert.rejects(() => decodePixelArtPNG(synthetic({ depth: 16 })), /length does not match/);
   await assert.rejects(() => decodePixelArtPNG(synthetic({ interlace: 1, raw: Buffer.from([5, 10, 20, 30, 128]) })), /row filter 5/);
+});
+
+test('Adam7 reconstructs native RGBA positions without losing hidden or low-alpha color', async () => {
+  // A 2×2 Adam7 image has rows in passes 1, 6 and 7, not seven full-size rows.
+  const expected = [37, 211, 19, 0, 44, 198, 36, 1, 51, 185, 53, 2, 58, 172, 70, 128];
+  const raw = Buffer.from([0, ...expected.slice(0, 4), 0, ...expected.slice(4, 8), 0, ...expected.slice(8)]);
+  const interlaced = await decodePixelArtPNG(synthetic({ width: 2, height: 2, interlace: 1, raw }));
+  assert.deepEqual(rgba(interlaced), expected);
+  assert.deepEqual(interlaced.warnings, []);
+  await assert.rejects(() => decodePixelArtPNG(synthetic({ width: 2, height: 2, interlace: 1,
+    raw: Buffer.from([0, 37, 211, 19, 0, 0, 44, 198, 36, 1, 5, 51, 185, 53, 2, 58, 172, 70, 128]) })), /row filter 5/);
+});
+
+test('independently encoded Adam7 samples match Pillow for all supported color types and packed depths', async () => {
+  assert.match(adam7Manifest.encoder, /ImageMagick/);
+  assert.match(adam7Manifest.referenceDecoder, /^Pillow /);
+  for (const [name, reference] of Object.entries(adam7Manifest.images)) {
+    const bytes = adam7Fixture(`${name}.png`), original = Buffer.from(bytes);
+    assert.equal(reference.interlace, 1, `${name}: external fixture must actually use Adam7`);
+    const decoded = await decodePixelArtPNG(bytes);
+    assert.deepEqual([decoded.w, decoded.h], [reference.width, reference.height], name);
+    assert.deepEqual(rgba(decoded), reference.rgba, name);
+    assert.deepEqual(bytes, original, `${name}: keep encoded source untouched`);
+  }
+  for (const depth of [1, 2, 4, 8]) {
+    const indexed = adam7Manifest.images[`indexed-${depth}`], gray = adam7Manifest.images[`gray-${depth}`];
+    assert.deepEqual([indexed.colorType, indexed.bitDepth], [3, depth]);
+    assert.deepEqual([gray.colorType, gray.bitDepth], [0, depth]);
+    assert.ok(indexed.rgba.some((value, i) => i % 4 === 3 && value === 1), `indexed ${depth}-bit needs tRNS alpha 1`);
+    assert.ok(gray.rgba.some((value, i) => i % 4 === 3 && value === 0), `gray ${depth}-bit needs a transparent key`);
+  }
+});
+
+test('Adam7 packed passes discard padding and validate palette indices in later passes', async () => {
+  // Fixed 2×2 pass bytes make row-padding behavior independent of the decoder's pass loop.
+  for (const [depth, raw, samples] of [
+    [1, [0, 0xff, 0, 0x7f, 0, 0x7f], [1, 0, 0, 1]],
+    [2, [0, 0xff, 0, 0x7f, 0, 0x2f], [3, 1, 0, 2]],
+    [4, [0, 0x7f, 0, 0x3f, 0, 0x1f], [7, 3, 1, 15]],
+  ]) {
+    const decoded = await decodePixelArtPNG(synthetic({ width: 2, height: 2, depth, color: 0, interlace: 1,
+      raw: Buffer.from(raw), before: [chunk('tRNS', Buffer.from([0xff, 1]))] }));
+    assert.deepEqual(rgba(decoded), samples.flatMap(sample => {
+      const gray = Math.round(sample * 255 / ((1 << depth) - 1));
+      return [gray, gray, gray, sample === 1 ? 0 : 255];
+    }), `gray ${depth}-bit`);
+  }
+  await assert.rejects(() => decodePixelArtPNG(synthetic({ width: 2, height: 2, depth: 1, color: 3, interlace: 1,
+    raw: Buffer.from([0, 0, 0, 0, 0, 0x40]), before: [chunk('PLTE', Buffer.from([37, 211, 19]))] })), /palette index 1/);
 });
 
 test('corrupt or truncated PNG structure never becomes an unsupported fallback signal', async () => {
@@ -169,6 +219,40 @@ test('PNG import enforces native dimensions and validates palette references and
   ]) await assert.rejects(() => decodePixelArtPNG(png), error);
   const huge = new Uint8Array(16 * 1024 * 1024 + 1); huge.set(signature);
   await assert.rejects(() => decodePixelArtPNG(huge), /16 MiB/);
+});
+
+test('sprite-sheet limits are explicit and cannot weaken the still-image defaults', async () => {
+  const width = 16_384, pixels = Uint8Array.from({ length: width * 4 }, (_, i) => (i * 71 + 13) % 256);
+  const encoded = encodePNG(width, 1, pixels), limits = { maxDimension: width, maxPixels: width };
+  await assert.rejects(() => decodePixelArtPNG(encoded), /1\.\.512/);
+  const decoded = await decodePixelArtPNG(encoded, limits);
+  assert.deepEqual(rgba(decoded), [...pixels]);
+  assert.deepEqual(limits, { maxDimension: width, maxPixels: width });
+  await assert.rejects(() => decodePixelArtPNG(encoded, { maxDimension: width - 1, maxPixels: width }), /1\.\.16383/);
+  await assert.rejects(() => decodePixelArtPNG(encoded, { maxDimension: width, maxPixels: width - 1 }), /native pixel limit/);
+  await assert.rejects(() => decodePixelArtPNG(synthetic({ width: 1024, height: 1024 }), { maxDimension: 1024 }), /262144 native pixel limit/);
+  await assert.rejects(() => decodePixelArtPNG(encoded), /1\.\.512/, 'one larger import must not change subsequent defaults');
+});
+
+test('pixel, encoded-byte and filtered-byte budgets reject before decompression', async () => {
+  const badZlib = Buffer.from([0, 1, 2]);
+  await assert.rejects(() => decodePixelArtPNG(synthetic({ width: 512, height: 512, compressed: badZlib }), { maxPixels: 100 }), /100 native pixel limit/);
+  await assert.rejects(() => decodePixelArtPNG(synthetic({ width: 2, height: 2, interlace: 1, compressed: badZlib }), { maxInflatedBytes: 18 }), /18 inflated byte limit/);
+  // Even valid 16-bit fallback candidates must satisfy the full sample budget first.
+  await assert.rejects(() => decodePixelArtPNG(synthetic({ width: 512, height: 512, depth: 16, compressed: badZlib }), { maxInflatedBytes: 1024 }), /1024 inflated byte limit/);
+  const png = synthetic();
+  await assert.rejects(() => decodePixelArtPNG(png, { maxFileBytes: png.length - 1 }), /file limit/);
+  assert.deepEqual(rgba(await decodePixelArtPNG(png, { maxFileBytes: png.length, maxInflatedBytes: 5 })), [10, 20, 30, 128]);
+  await assert.rejects(() => decodePixelArtPNG(png, { maxInflatedBytes: 4 }), /4 inflated byte limit/);
+});
+
+test('decode limit options have finite hard ceilings and malformed values fail without allocation', async () => {
+  const png = synthetic();
+  for (const options of [null, [], { maxDimension: 0 }, { maxDimension: 16_385 }, { maxDimension: 1.5 },
+    { maxPixels: 16_777_217 }, { maxPixels: Infinity }, { maxPixels: NaN }, { maxPixels: '100' },
+    { maxFileBytes: 64 * 1024 * 1024 + 1 }, { maxFileBytes: -1 },
+    { maxInflatedBytes: 128 * 1024 * 1024 + 1 }, { maxInflatedBytes: null }])
+    await assert.rejects(() => decodePixelArtPNG(png, options), /PNG.*limit/);
 });
 
 test('inflation rejects oversized, short, truncated and invalid zlib data before producing pixels', async () => {

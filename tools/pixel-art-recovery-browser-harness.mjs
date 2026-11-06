@@ -33,7 +33,14 @@ try {
       });
     });
     const records = () => evaluate('window.__readRecovery()');
-    const reload = async () => { await send('Page.reload'); await ready(); await installReads(); };
+    const reload = async () => {
+      const previousOrigin=await evaluate('performance.timeOrigin');
+      await send('Page.reload');
+      // Page.reload acknowledges the request before navigation necessarily commits.
+      // Never satisfy readiness with the editor from the preceding document.
+      await waitFor(`performance.timeOrigin!==${JSON.stringify(previousOrigin)}`);
+      await ready();await installReads();
+    };
     const auto = async value => {
       await evaluate(`(()=>{const e=document.getElementById('recovery-enabled');if(e.checked!==${value})e.click();})()`);
     };
@@ -58,7 +65,12 @@ try {
       return (await records()).drafts.find(d=>d.json===JSON.stringify(expected));
     };
     const saveNow = async () => {const expected=await project();await click('save-recovery-now');await saved(expected);return expected;};
-    const choose = async id => evaluate(`document.getElementById('recovery-list').value=${JSON.stringify(id)}`);
+    const choose = async id => {
+      // The IDB transaction can commit before the recovery menu finishes refreshing.
+      await waitFor(`(()=>{const e=document.getElementById('recovery-list');return e&&!e.disabled&&[...e.options].some(o=>o.value===${JSON.stringify(id)});})()`);
+      await evaluate(`(()=>{const e=document.getElementById('recovery-list');e.value=${JSON.stringify(id)};e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+      await waitFor("!document.getElementById('restore-recovery').disabled&&!document.getElementById('delete-recovery').disabled");
+    };
     const restore = async id => {await choose(id);await click('restore-recovery');await waitFor("document.getElementById('recovery-status').dataset.state==='restored'");await ready();};
 
     await send('Emulation.setDeviceMetricsOverride',{width:1440,height:1100,deviceScaleFactor:1,mobile:false});
@@ -87,9 +99,14 @@ try {
     phase='restore during an active source-selection gesture';
     await click('clear-selection');
     await evaluate("document.getElementById('selection-tool').value='paint';document.getElementById('brush-size').value='1';document.getElementById('source').scrollIntoView({block:'center'})");
+    await evaluate(()=>document.getElementById('source').addEventListener('pointerdown',event=>{window.__recoverySourcePointer=event.pointerId;},{once:true,capture:true}));
     const sourcePoint=async(x,y)=>evaluate(`(()=>{const c=document.getElementById('source'),r=c.getBoundingClientRect();return{x:r.left+(${x}+.5)*r.width/c.width,y:r.top+(${y}+.5)*r.height/c.height};})()`);
     await send('Input.dispatchMouseEvent',{type:'mousePressed',...await sourcePoint(1,1),button:'left',buttons:1,clickCount:1});
+    assert(await evaluate("Number.isInteger(window.__recoverySourcePointer)&&document.getElementById('source').hasPointerCapture(window.__recoverySourcePointer)"),
+      'The source-selection regression begins with a real captured pointer on the source canvas');
     await restore(first.id);
+    assert(!await evaluate("document.getElementById('source').hasPointerCapture(window.__recoverySourcePointer)"),
+      'Recovery releases the source canvas pointer before editing resumes');
     await evaluate("document.getElementById('source').scrollIntoView({block:'center'})");
     const moved=await sourcePoint(8,8);
     await send('Input.dispatchMouseEvent',{type:'mouseMoved',...moved,button:'left',buttons:1});
@@ -154,19 +171,34 @@ try {
     await saveNow();assert((await records()).drafts.some(d=>d.json===JSON.stringify(afterOff)),
       'The manual recovery-save button still works when automatic saving is disabled');
 
-    phase='animation and shared palette recovery';
+    phase='animation, per-cel palette priority and fallback recovery';
     let animation=duplicatePixelArtAnimationFrame2D(createPixelArtAnimation2D(original,{durationMs:75,direction:'pingpong'}));
     animation.name='Independent cel recovery';animation.frames[1].durationMs=180;
     animation.frames[1].document.layers[0].deltas[1]=7.25;
+    delete animation.frames[1].document.workingPalette;
     animation.workingPalette=[color(31,49,73),color(216,167,102)];
+    animation.activeFrameId=animation.frames[0].id;
     await upload('recovery-animation.json',animation);const sequence=await saveNow(),sequenceRecord=await saved(sequence);
-    assert(sequence.schema==='poku-pixel-art/v3'&&sequence.frames.length===2&&isDeepStrictEqual(sequence.workingPalette,animation.workingPalette),
-      'A multi-cel project stores its shared workspace palette independently of each cel palette');
-    await evaluate("document.querySelectorAll('#frame-list button')[0].click()");await ready();
+    assert(sequence.schema==='poku-pixel-art/v3'&&sequence.frames.length===2&&isDeepStrictEqual(sequence.workingPalette,animation.workingPalette)
+      &&isDeepStrictEqual(sequence.frames[0].document.workingPalette,palette)&&sequence.frames[1].document.workingPalette===undefined,
+      'Animation recovery retains a cel palette including partial alpha and a distinct optional top-level fallback without creating a palette on the other cel');
+    assert(isDeepStrictEqual(await evaluate("[...document.querySelectorAll('#workbench-palette input')].map(e=>e.value)"),['#173042','#67a990','#f5e0b0']),
+      'A cel with its own working palette takes precedence over the animation fallback');
+    assert(sequence.frames.every(frame=>isDeepStrictEqual(frame.document.pixels,original.pixels)&&isDeepStrictEqual(frame.document.mask,original.mask))
+      &&isDeepStrictEqual(sequence.frames.map(frame=>frame.document.layers[0].deltas),[[1.5,3,1.5],[1.5,7.25,1.5]])
+      &&isDeepStrictEqual(sequence.frames.map(frame=>frame.durationMs),[75,180])&&sequence.direction==='pingpong',
+      'Per-cel palette selection preserves source RGB, partial and hidden alpha, silhouette, independent height edits and authored frame timing');
+    await evaluate("document.querySelectorAll('#frame-list button')[1].click()");await ready();
     assert(isDeepStrictEqual(await evaluate("[...document.querySelectorAll('#workbench-palette input')].map(e=>e.value)"),['#1f3149','#d8a766']),
-      'Switching cels retains the shared working palette');
+      'A cel without a working palette displays the optional animation fallback');
+    const fallbackView=await project();
+    assert(isDeepStrictEqual({...fallbackView,activeFrameId:sequence.activeFrameId},sequence),
+      'Viewing and saving the fallback cel changes only navigation and does not materialize fallback swatches or modify any cel artwork');
+    await evaluate("document.querySelectorAll('#frame-list button')[0].click()");await ready();
+    assert(isDeepStrictEqual(await project(),sequence),
+      'Returning to the first cel preserves the exact project, both palette scopes and all authored pixels');
     await reload();await restore(sequenceRecord.id);
-    assert(isDeepStrictEqual(await project(),sequence),'Reload and recovery preserve independent cel geometry, authored frame durations, direction and shared swatches');
+    assert(isDeepStrictEqual(await project(),sequence),'Reload and recovery reproduce the exact animation with independent cel geometry, frame durations, direction, per-cel swatches and top-level fallback');
 
     phase='existing full-size palette compatibility';
     const fullPalette=Array.from({length:256},(_,i)=>color(i,255-i,i));

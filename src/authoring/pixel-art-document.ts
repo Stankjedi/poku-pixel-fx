@@ -87,9 +87,9 @@ export interface PixelArtDocument2D {
   selection?: number[];
   protectedMask?: number[];
   authoredHeight?: number[];
-  activeLayerId?: string;
-  /** Editor swatches, independent of rendered palette-adjustment layers. */
+  /** Ordered authoring swatches; independent of any palette applied to the artwork. */
   workingPalette?: number[];
+  activeLayerId?: string;
 }
 export type PixelArtDocumentRaster2D = EditableSprite2D & { channels?: MaterialChannels2D };
 
