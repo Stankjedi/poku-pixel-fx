@@ -1,0 +1,36 @@
+{
+  "schema": "poku.pixel-workbench-local-validation/v1",
+  "baselineCommit": "a3198219c4d15f98958ee13b87e1bb516347d8a4",
+  "date": "2026-11-06",
+  "build": {
+    "command": "npm run build",
+    "status": "passed",
+    "nodeVersion": "v24.22.1"
+  },
+  "nodeTests": {
+    "command": "node --test --test-concurrency=4 tests/*.test.mjs",
+    "status": "passed",
+    "tests": 925,
+    "passed": 925,
+    "failed": 0,
+    "skipped": 0,
+    "cancelled": 0,
+    "durationMs": 61010.080877
+  },
+  "preservation": {
+    "report": "pixel-workbench-preservation-2026-11-06.json",
+    "effects": 274,
+    "frames": 1370,
+    "binaryComparisons": 10960,
+    "mismatches": 0,
+    "errors": 0
+  },
+  "localBrowser": {
+    "status": "unavailable",
+    "checksExecuted": 0,
+    "reason": "Chromium process-singleton Unix socket creation is denied by the local execution sandbox. Browser sandbox was not disabled.",
+    "authoritativeBrowserValidation": "GitHub Actions browser-studio job runs both pixel-art-browser-harness.mjs and pixel-workbench-browser-harness.mjs with REQUIRED=1 and uploads reports/screenshots."
+  },
+  "visualEvidence": "../previews/pixel-workbench/evidence.json",
+  "scope": "Core contracts and source-preservation evidence, not an aesthetic score or physical GPU performance claim."
+}

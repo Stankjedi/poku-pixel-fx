@@ -12,3 +12,4 @@ export * from './runtime.js';
 export * from './registry.js';
 export * from './review.js';
 export * from './pixel-art-project.js';
+export * from './pixel-art-document.js';

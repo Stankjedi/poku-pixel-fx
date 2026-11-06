@@ -1,17 +1,18 @@
 import {
   createProjectRuntime
-} from "./chunks/chunk-4ESGOXNR.js";
+} from "./chunks/chunk-HJSHOSDI.js";
 import "./chunks/chunk-I2CEDLVF.js";
-import "./chunks/chunk-RHXKHBDF.js";
-import "./chunks/chunk-6HAS6H5C.js";
+import "./chunks/chunk-4FYKTDHS.js";
+import "./chunks/chunk-BTOTHK6M.js";
 import "./chunks/chunk-FLVIEPJE.js";
 import {
   separateFrameLayers
-} from "./chunks/chunk-ROMX66BI.js";
+} from "./chunks/chunk-VBA4AN6M.js";
 import "./chunks/chunk-LCIPQSGQ.js";
-import "./chunks/chunk-3L2ANF6Q.js";
+import "./chunks/chunk-MIW2CWC4.js";
 import "./chunks/chunk-JQMAFXP4.js";
 import "./chunks/chunk-MBWWV6CB.js";
+import "./chunks/chunk-G6VBW32E.js";
 import "./chunks/chunk-WSFCRVEQ.js";
 
 // gallery/studio-worker.ts

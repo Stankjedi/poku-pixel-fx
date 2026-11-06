@@ -144,6 +144,12 @@ jobs:
           PIXEL_ART_REPORT_PATH: pixel-art-browser-result.json
           PIXEL_ART_SCREENSHOT_PATH: pixel-art-browser.png
         run: node tools/pixel-art-browser-harness.mjs
+      - name: Exercise native painting, editable layers, palettes and surface-map export
+        env:
+          PIXEL_WORKBENCH_REQUIRED: "1"
+          PIXEL_WORKBENCH_REPORT_PATH: pixel-workbench-browser-result.json
+          PIXEL_WORKBENCH_SCREENSHOT_PATH: pixel-workbench-browser.png
+        run: node tools/pixel-workbench-browser-harness.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -156,6 +162,8 @@ jobs:
             production-browser.png
             pixel-art-browser-result.json
             pixel-art-browser.png
+            pixel-workbench-browser-result.json
+            pixel-workbench-browser.png
 
   native-wgpu:
     runs-on: ubuntu-latest

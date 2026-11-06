@@ -3,7 +3,12 @@ import { diagnosePixelArt2D } from '../src/core/pixel-art-analysis.js';
 import type { EditableSprite2D } from '../src/core/sprite-edit.js';
 import type { MaterialChannels2D } from '../src/core/material-surface.js';
 import { createPixelArtStudy2D, type PixelArtStudyShape2D } from '../src/examples/pixel-art-study.js';
-import { createPixelArtProject2D, renderPixelArtProject2D, parsePixelArtProject2D, serializePixelArtProject2D, pixelArtLayerLimit2D, type PixelArtLayer2D, type PixelArtProject2D } from '../src/authoring/pixel-art-project.js';
+import { pixelArtLayerLimit2D } from '../src/authoring/pixel-art-project.js';
+import { createPixelArtDocument2D, renderPixelArtDocument2D, parsePixelArtDocument2D, serializePixelArtDocument2D, nextPixelArtLayerId2D, PixelArtDocumentHistory2D,
+  type PixelArtMaterialLayer2D, type PixelArtDocument2D } from '../src/authoring/pixel-art-document.js';
+import { installPixelArtWorkbench } from './pixel-art-workbench.js';
+import { encodeRGBAPNG } from './png.js';
+import { decodePixelArtPNG } from './png-import.js';
 
 const element = (id: string) => document.getElementById(id)!;
 const input = (id: string) => element(id) as HTMLInputElement;
@@ -12,14 +17,19 @@ const button = (id: string) => element(id) as HTMLButtonElement;
 const number = (id: string) => Number(input(id).value);
 const canvas = (id: string) => element(id) as HTMLCanvasElement;
 const labels: Record<PixelMaterialKind2D,string> = {stone:'돌',metal:'금속',wood:'나무',fabric:'천',crystal:'수정'};
-const rangeIds = ['scale','detail','relief','bevel','roughness','light-angle','light-height','ambient','grain-angle'];
-let project: PixelArtProject2D;
+const rangeIds = ['scale','detail','relief','bevel','roughness','light-angle','light-height','ambient','grain-angle','ambient-occlusion','cast-shadow'];
+let project: PixelArtDocument2D;
 let committed: EditableSprite2D, rendered: EditableSprite2D;
 let selection: Uint8Array, protectedMask: Uint8Array, authoredHeight: Float32Array | undefined;
 let draft = true, queued = false, busy = false;
 let workingOptions: PixelMaterialOptions2D = {};
 let materialOrigin: [number,number] | undefined;
-let redo: PixelArtLayer2D[] = [];
+let history: PixelArtDocumentHistory2D;
+let revision = 0, renderedRevision = -1;
+let paintPreview: EditableSprite2D | undefined;
+let editingMaterialId: string | undefined;
+let workbench: ReturnType<typeof installPixelArtWorkbench> | undefined;
+let protectionVersion=0,beforeAnalysisKey='',beforeAnalysis:ReturnType<typeof diagnosePixelArt2D>|undefined;
 const urls: string[] = [];
 
 function status(message: string, error = false) {
@@ -54,6 +64,8 @@ function loadSettings(options: PixelMaterialOptions2D) {
   input('light-angle').value = String(Math.atan2(p.light[1],p.light[0]) * 180 / Math.PI);
   input('light-height').value = String(Math.atan2(p.light[2],Math.hypot(p.light[0],p.light[1])) * 180 / Math.PI);
   input('grain-angle').value = String(((p.grainAngle * 180 / Math.PI + 180) % 360 + 360) % 360 - 180);
+  input('ambient-occlusion').value=String(p.ambientOcclusion);
+  input('cast-shadow').value=String(p.castShadow);
   palette(p.palette);
 }
 function editSetting(id:string) {
@@ -62,20 +74,42 @@ function editSetting(id:string) {
     const a=number('light-angle')*Math.PI/180,e=number('light-height')*Math.PI/180;
     workingOptions.light=[Math.cos(a)*Math.cos(e),Math.sin(a)*Math.cos(e),Math.sin(e)];
   }else if(id==='grain-angle')workingOptions.grainAngle=number(id)*Math.PI/180;
+  else if(id==='ambient-occlusion')workingOptions.ambientOcclusion=number(id);
+  else if(id==='cast-shadow')workingOptions.castShadow=number(id);
   else if(id!=='use-height')workingOptions={...workingOptions,[id]:number(id)};
   changed();
 }
-function pendingLayer(): PixelArtLayer2D {
-  return {name: `${labels[select('material').value as PixelMaterialKind2D]} · ${number('seed')}`,material:settings(),
+function pendingLayer(): PixelArtMaterialLayer2D {
+  const existing=project.layers.find(layer=>layer.id===editingMaterialId);
+  return {kind:'material',id:editingMaterialId??nextPixelArtLayerId2D(project,'material'),name: existing?.name??`${labels[select('material').value as PixelMaterialKind2D]} · ${number('seed')}`,
+    ...(existing?.visible!==undefined?{visible:existing.visible}:{}),...(existing?.locked!==undefined?{locked:existing.locked}:{}),material:settings(),
     selection:Array.from(selection), protectedMask:Array.from(protectedMask),
     ...(materialOrigin ? {origin:[...materialOrigin] as [number,number]} : {}),
     ...(input('use-height').checked && authoredHeight ? {height:Array.from(authoredHeight)} : {})};
 }
 function canAddLayer(): boolean {
-  return !project || project.layers.length < pixelArtLayerLimit2D(project.width,project.height);
+  return !!editingMaterialId || !project || project.layers.length < pixelArtLayerLimit2D(project.width,project.height);
 }
-function outputProject(): PixelArtProject2D {
-  return draft && canAddLayer() ? {...project,layers:[...project.layers,pendingLayer()]} : project;
+function canEditMasks(): boolean {
+  return canAddLayer()||project.layers.some(layer=>layer.kind==='paint'&&!layer.locked&&layer.visible!==false);
+}
+function outputProject(): PixelArtDocument2D {
+  const layers=draft&&canAddLayer()?(editingMaterialId?project.layers.map(layer=>layer.id===editingMaterialId?pendingLayer():layer):[...project.layers,pendingLayer()]):project.layers;
+  return {...project,layers,selection:Array.from(selection),protectedMask:Array.from(protectedMask),...(authoredHeight?{authoredHeight:Array.from(authoredHeight)}:{})};
+}
+function resetHistory() {
+  const {activeLayerId,...base}=project;
+  history=new PixelArtDocumentHistory2D({...base,layers:[]});
+  for(let i=1;i<=project.layers.length;i++)history.commit({...base,layers:project.layers.slice(0,i),...(activeLayerId&&project.layers.slice(0,i).some(layer=>layer.id===activeLayerId)?{activeLayerId}:{})});
+  if(!project.layers.length)history=new PixelArtDocumentHistory2D(project);
+}
+function commitDocument(next:PixelArtDocument2D) {
+  const raster=renderPixelArtDocument2D(next);
+  if(history.commit(next)){project=history.value;revision++;committed=raster;renderedRevision=revision;}
+  draft=false;editingMaterialId=undefined;paintPreview=undefined;schedule();
+}
+function moveHistory(direction:'undo'|'redo') {
+  prepareImported(direction==='undo'?history.undo():history.redo(),false);
 }
 function sizeCanvases() {
   const dpr = window.devicePixelRatio || 1, requested = select('zoom').value;
@@ -115,21 +149,24 @@ function update() {
   attempt(() => {
     const hasLayerRoom=canAddLayer();
     if(!hasLayerRoom)draft=false;
-    for(const control of document.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('.inspector input,.inspector select,#new-seed,#reset-palette,.selection-bar input,.selection-bar select,.selection-bar button'))control.disabled=!hasLayerRoom;
+    for(const control of document.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('.inspector input,.inspector select,#new-seed,#reset-palette'))control.disabled=!hasLayerRoom;
+    for(const control of document.querySelectorAll<HTMLInputElement|HTMLSelectElement|HTMLButtonElement>('.selection-bar input,.selection-bar select,.selection-bar button'))control.disabled=!canEditMasks();
     input('use-height').disabled=!hasLayerRoom||!authoredHeight;
-    canvas('source').setAttribute('aria-disabled',String(!hasLayerRoom));
-    canvas('source').style.cursor=hasLayerRoom?'crosshair':'default';
+    canvas('source').setAttribute('aria-disabled',String(!canEditMasks()));
+    canvas('source').style.cursor=canEditMasks()?'crosshair':'default';
     for (const id of rangeIds) {
       const out=element(id+'-value'),value=number(id),rounded=Math.round(value*1000)/1000;
       out.textContent=(value!==rounded?'≈':'')+String(rounded)+(['light-angle','light-height','grain-angle'].includes(id)?'°':id==='scale'||id==='bevel'?' px':'');
       out.title=String(value);
     }
     const started=performance.now();
-    committed=renderPixelArtProject2D(project);
-    rendered=draft?createPixelMaterial2D(settings()).shade(committed,pendingLayer()):committed;
+    if(renderedRevision!==revision){committed=renderPixelArtDocument2D(project);renderedRevision=revision;}
+    rendered=paintPreview??(draft?(editingMaterialId?renderPixelArtDocument2D(outputProject()):createPixelMaterial2D(settings()).shade(committed,pendingLayer())):committed);
     const style=select('expected-style').value as 'organic'|'cel-shaded'|'geometric';
     const options={expectedStyle:style,protected:protectedMask};
-    const before=diagnosePixelArt2D(committed,options),after=diagnosePixelArt2D(rendered,options);
+    const key=`${revision}:${style}:${protectionVersion}`;
+    if(key!==beforeAnalysisKey||!beforeAnalysis){beforeAnalysis=diagnosePixelArt2D(committed,options);beforeAnalysisKey=key;}
+    const before=beforeAnalysis,after=diagnosePixelArt2D(rendered,options);
     paint('source',committed);paint('result',rendered,select('view').value,after.heatmap);sizeCanvases();
     element('source-size').textContent=`${project.width} × ${project.height}`;
     element('metric-flat').textContent=`${(after.metrics.dominantFlatRegionRatio*100).toFixed(1)}%`;
@@ -146,10 +183,12 @@ function update() {
     element('render-state').textContent=draft?'PREVIEW':'APPLIED';
     element('result-caption').textContent=!hasLayerRoom?'적용한 결과를 표시합니다. 실행 취소로 레이어를 줄이면 재질 편집을 계속할 수 있습니다.':draft?'설정을 바꿔 비교한 뒤, 선택 영역에 재질을 적용하세요.':'적용한 레이어를 원본에서 다시 계산한 결과입니다.';
     element('layer-count').textContent=String(project.layers.length);
-    element('layer-list').replaceChildren(...project.layers.map(layer=>{const li=document.createElement('li');li.textContent=layer.name;return li;}));
+    workbench?.sync();
     element('empty-layers').hidden=project.layers.length>0;
-    button('undo').disabled=!project.layers.length;button('redo').disabled=!redo.length;
+    button('undo').disabled=!history.canUndo;button('redo').disabled=!history.canRedo;
     button('apply-material').disabled=!draft||!count||!hasLayerRoom;
+    button('apply-material').textContent=editingMaterialId?'수정한 재질 적용':'선택 영역에 재질 적용';
+    button('cancel-preview').disabled=!draft;
     status(hasLayerRoom?`${draft?'미리보기':'적용 완료'} · ${Math.round(performance.now()-started)} ms · ${after.metrics.paletteSize}색`:`이 해상도의 레이어 한도 ${pixelArtLayerLimit2D(project.width,project.height)}개 · 실행 취소하면 계속 편집할 수 있습니다.`);
     element('result').dataset.ready='true';
     valid=true;
@@ -157,13 +196,13 @@ function update() {
   return valid;
 }
 function schedule() {if(!queued){queued=true;requestAnimationFrame(update);}}
-function changed() {draft=canAddLayer();schedule();}
+function changed() {paintPreview=undefined;draft=canAddLayer();schedule();}
 function study() {
   const shape=select('shape').value;
   if(shape==='imported')return;
   const result=createPixelArtStudy2D(shape as PixelArtStudyShape2D,number('seed'),input('organic').checked);
-  project=createPixelArtProject2D(result.sprite,`POKU ${shape}`);authoredHeight=result.height;materialOrigin=undefined;
-  selection=result.sprite.mask.data.slice();protectedMask=new Uint8Array(selection.length);redo=[];draft=true;
+  project=createPixelArtDocument2D(result.sprite,`POKU ${shape}`);authoredHeight=result.height;materialOrigin=undefined;editingMaterialId=undefined;paintPreview=undefined;
+  selection=result.sprite.mask.data.slice();protectedMask=new Uint8Array(selection.length);resetHistory();revision++;draft=true;
   input('use-height').disabled=false;input('use-height').checked=true;
   input('organic').disabled=!['stone-path','boulder'].includes(shape);
   schedule();
@@ -181,10 +220,9 @@ function addDownload(blob: Blob, filename: string) {
 }
 function filename() {return (project.name.replace(/[^a-z0-9가-힣_-]+/gi,'-').replace(/^-|-$/g,'')||'poku-pixel-art').slice(0,80);}
 function savePNG() {
-  if(!update())return;const target=document.createElement('canvas');target.width=rendered.w;target.height=rendered.h;
-  const ctx=target.getContext('2d')!,img=ctx.createImageData(target.width,target.height);
-  for(let i=0;i<rendered.pixels.length;i++){const c=rendered.pixels[i];img.data.set([c&255,(c>>>8)&255,(c>>>16)&255,rendered.mask.data[i]?c>>>24:0],i*4);}
-  ctx.putImageData(img,0,0);target.toBlob(blob=>{if(blob)addDownload(blob,filename()+'.png');else status('PNG를 만들 수 없습니다.',true);},'image/png');
+  if(!update())return;const rgba=new Uint8Array(rendered.w*rendered.h*4),name=filename()+'.png';
+  for(let i=0;i<rendered.pixels.length;i++){const c=rendered.pixels[i];rgba.set([c&255,(c>>>8)&255,(c>>>16)&255,rendered.mask.data[i]?c>>>24:0],i*4);}
+  void encodeRGBAPNG(rendered.w,rendered.h,rgba).then(blob=>addDownload(blob,name)).catch(error=>status(String(error),true));
 }
 
 for(const id of [...rangeIds,'seed','use-height'])element(id).addEventListener('input',()=>editSetting(id));
@@ -201,29 +239,32 @@ select('shape').addEventListener('change',()=>attempt(()=>{
 input('organic').addEventListener('change',()=>attempt(study));
 button('new-seed').onclick=()=>attempt(()=>{input('seed').value=String((number('seed')+1)>>>0);editSetting('seed');});
 button('reset-palette').onclick=()=>attempt(()=>{workingOptions.palette=[...PIXEL_MATERIAL_PALETTES_2D[select('material').value as PixelMaterialKind2D]];delete workingOptions.thresholds;palette(workingOptions.palette);changed();});
-button('select-all').onclick=()=>{selection=Uint8Array.from(project.pixels,(c,i)=>(project.mask?.[i]??1)&&c>>>24?1:0);changed();};
+button('select-all').onclick=()=>{selection=Uint8Array.from(committed.pixels,(c,i)=>committed.mask.data[i]&&c>>>24?1:0);changed();};
 button('clear-selection').onclick=()=>{selection.fill(0);changed();};
-button('clear-protection').onclick=()=>{protectedMask.fill(0);changed();};
-button('apply-material').onclick=()=>attempt(()=>{if(!draft)return;const next=outputProject();serializePixelArtProject2D(next);project=next;redo=[];draft=false;schedule();});
-button('undo').onclick=()=>{const layer=project.layers.pop();if(layer)redo.push(layer);draft=false;schedule();};
-button('redo').onclick=()=>{const layer=redo.pop();if(layer)project.layers.push(layer);draft=false;schedule();};
+button('clear-protection').onclick=()=>{protectedMask.fill(0);protectionVersion++;changed();};
+button('apply-material').onclick=()=>attempt(()=>{if(draft)commitDocument(outputProject());});
+button('cancel-preview').onclick=()=>{draft=false;editingMaterialId=undefined;paintPreview=undefined;schedule();};
+button('undo').onclick=()=>attempt(()=>moveHistory('undo'));
+button('redo').onclick=()=>attempt(()=>moveHistory('redo'));
 button('save-png').onclick=()=>attempt(savePNG);
-button('save-project').onclick=()=>attempt(()=>addDownload(new Blob([serializePixelArtProject2D(outputProject())],{type:'application/json'}),filename()+'.poku-pixel-art.json'));
+button('save-project').onclick=()=>attempt(()=>{if(update())addDownload(new Blob([serializePixelArtDocument2D(outputProject())],{type:'application/json'}),filename()+'.poku-pixel-art.json');});
 button('import-png').onclick=()=>input('png-file').click();
 button('open-project').onclick=()=>input('project-file').click();
 
-function prepareImported(next: PixelArtProject2D) {
+function prepareImported(next: PixelArtDocument2D,replaceHistory=true) {
   if(next.width>4096||next.height>4096)throw new RangeError('브라우저 작업실에서는 가로·세로 4096픽셀 이하의 프로젝트를 사용해 주세요.');
+  serializePixelArtDocument2D(next);
+  const raster=renderPixelArtDocument2D(next);
   project=next;select('shape').value='imported';input('organic').disabled=true;
-  const last=project.layers.at(-1);authoredHeight=last?.height?Float32Array.from(last.height):undefined;materialOrigin=last?.origin?[...last.origin]:undefined;
+  const last=project.layers.filter((layer):layer is PixelArtMaterialLayer2D=>layer.kind==='material').at(-1);authoredHeight=next.authoredHeight?Float32Array.from(next.authoredHeight):last?.height?Float32Array.from(last.height):undefined;materialOrigin=last?.origin?[...last.origin]:undefined;
   input('use-height').checked=!!authoredHeight;input('use-height').disabled=!authoredHeight;
-  selection=last?.selection?Uint8Array.from(last.selection):Uint8Array.from(project.pixels,(c,i)=>(project.mask?.[i]??1)&&c>>>24?1:0);
-  protectedMask=last?.protectedMask?Uint8Array.from(last.protectedMask):new Uint8Array(selection.length);
-  if(last)loadSettings(last.material);redo=[];draft=false;schedule();
+  selection=next.selection?Uint8Array.from(next.selection):last?.selection?Uint8Array.from(last.selection):Uint8Array.from(project.pixels,(c,i)=>(project.mask?.[i]??1)&&c>>>24?1:0);
+  protectedMask=next.protectedMask?Uint8Array.from(next.protectedMask):last?.protectedMask?Uint8Array.from(last.protectedMask):new Uint8Array(selection.length);
+  if(last)loadSettings(last.material);if(replaceHistory)resetHistory();revision++;committed=raster;renderedRevision=revision;draft=false;editingMaterialId=undefined;paintPreview=undefined;schedule();
 }
 input('project-file').onchange=async()=>{
   const file=input('project-file').files?.[0];if(!file||busy)return;busy=true;
-  try{if(file.size>64*1024*1024)throw new RangeError('프로젝트는 64 MiB 이하로 열어 주세요.');prepareImported(parsePixelArtProject2D(await file.text()));}
+  try{if(file.size>64*1024*1024)throw new RangeError('프로젝트는 64 MiB 이하로 열어 주세요.');prepareImported(parsePixelArtDocument2D(await file.text()));}
   catch(error){status(String(error),true);}finally{busy=false;input('project-file').value='';}
 };
 input('png-file').onchange=async()=>{
@@ -231,14 +272,18 @@ input('png-file').onchange=async()=>{
   let bitmap:ImageBitmap|undefined;
   try{
     if(file.size>16*1024*1024)throw new RangeError('PNG는 16 MiB 이하로 열어 주세요.');
-    const signature=new Uint8Array(await file.slice(0,24).arrayBuffer());
-    if(signature.length<24||![137,80,78,71,13,10,26,10].every((v,i)=>signature[i]===v))throw new RangeError('PNG 파일을 선택해 주세요.');
-    const header=new DataView(signature.buffer),w=header.getUint32(16),h=header.getUint32(20);
-    if(w<1||h<1||w>512||h>512)throw new RangeError('작업실에서는 512 × 512 이하의 원본 픽셀 PNG를 사용해 주세요.');
-    bitmap=await createImageBitmap(file);const c=document.createElement('canvas');c.width=bitmap.width;c.height=bitmap.height;
-    const ctx=c.getContext('2d')!;ctx.drawImage(bitmap,0,0);const rgba=ctx.getImageData(0,0,c.width,c.height).data,pixels=new Uint32Array(w*h);
-    for(let i=0;i<pixels.length;i++)pixels[i]=(rgba[i*4]|rgba[i*4+1]<<8|rgba[i*4+2]<<16|rgba[i*4+3]<<24)>>>0;
-    prepareImported(createPixelArtProject2D({w,h,pixels,mask:{w,h,data:Uint8Array.from(pixels,p=>p>>>24?1:0)}},file.name.replace(/\.png$/i,'')));
+    const decoded=await decodePixelArtPNG(new Uint8Array(await file.arrayBuffer())),{w,h}=decoded;
+    let pixels:Uint32Array;
+    if(decoded.kind==='decoded')pixels=decoded.pixels;
+    else{
+      bitmap=await createImageBitmap(file);const c=document.createElement('canvas');c.width=w;c.height=h;
+      const ctx=c.getContext('2d')!;ctx.drawImage(bitmap,0,0);const rgba=ctx.getImageData(0,0,w,h).data;pixels=new Uint32Array(w*h);
+      for(let i=0;i<pixels.length;i++)pixels[i]=(rgba[i*4]|rgba[i*4+1]<<8|rgba[i*4+2]<<16|rgba[i*4+3]<<24)>>>0;
+    }
+    prepareImported(createPixelArtDocument2D({w,h,pixels,mask:{w,h,data:Uint8Array.from(pixels,p=>p>>>24?1:0)}},file.name.replace(/\.png$/i,'')));
+    element('import-note').textContent=decoded.kind==='decoded'
+      ?`PNG 원본 RGB·알파를 그대로 가져왔습니다.${decoded.warnings.length?' 색상 프로파일은 원본 수치 보존을 위해 변환하지 않았습니다.':''}`
+      :`${decoded.reason==='16-bit'?'16비트':'Adam7 인터레이스'} PNG를 브라우저에서 변환했습니다. 원본 수치를 그대로 편집하려면 비인터레이스 8비트 PNG를 사용하세요.`;
   }catch(error){status(String(error),true);}finally{bitmap?.close();busy=false;input('png-file').value='';}
 };
 
@@ -259,18 +304,19 @@ function connected(x:number,y:number,add:boolean) {
 function brush(x:number,y:number) {
   const tool=select('selection-tool').value,r=Math.max(1,Math.min(32,number('brush-size')))/2;
   const target=tool==='protect'||tool==='unprotect'?protectedMask:selection,value=tool==='erase'||tool==='unprotect'?0:1;
+  if(target===protectedMask)protectionVersion++;
   for(let py=Math.max(0,Math.floor(y-r));py<=Math.min(project.height-1,Math.ceil(y+r));py++)for(let px=Math.max(0,Math.floor(x-r));px<=Math.min(project.width-1,Math.ceil(x+r));px++){
     const i=py*project.width+px;if((px-x)**2+(py-y)**2<=r*r&&committed.mask.data[i]&&(committed.pixels[i]>>>24))target[i]=value;
   }
 }
 let pointer:number|undefined,lastPoint:[number,number]|undefined;
 canvas('source').onpointerdown=event=>{
-  if(event.button!==0||!canAddLayer())return;const [x,y]=point(event);event.preventDefault();
+  if(event.button!==0||!canEditMasks())return;const [x,y]=point(event);event.preventDefault();
   if(select('selection-tool').value==='connected'){connected(x,y,event.shiftKey);changed();return;}
   pointer=event.pointerId;lastPoint=[x,y];canvas('source').setPointerCapture(pointer);brush(x,y);changed();
 };
 canvas('source').onpointermove=event=>{
-  if(pointer!==event.pointerId||!lastPoint||!canAddLayer())return;const next=point(event),dx=next[0]-lastPoint[0],dy=next[1]-lastPoint[1],steps=Math.max(1,Math.abs(dx),Math.abs(dy));
+  if(pointer!==event.pointerId||!lastPoint||!canEditMasks())return;const next=point(event),dx=next[0]-lastPoint[0],dy=next[1]-lastPoint[1],steps=Math.max(1,Math.abs(dx),Math.abs(dy));
   for(let i=1;i<=steps;i++)brush(Math.round(lastPoint[0]+dx*i/steps),Math.round(lastPoint[1]+dy*i/steps));lastPoint=next;changed();
 };
 const endStroke=()=>{pointer=undefined;lastPoint=undefined;};
@@ -278,4 +324,24 @@ canvas('source').onpointerup=endStroke;canvas('source').onpointercancel=endStrok
 new ResizeObserver(sizeCanvases).observe(element('source-host'));
 window.addEventListener('resize',sizeCanvases);
 window.addEventListener('beforeunload',()=>urls.forEach(url=>URL.revokeObjectURL(url)));
+workbench=installPixelArtWorkbench({
+  document:()=>project, outputDocument:outputProject, committed:()=>committed, output:()=>rendered,
+  selection:()=>selection, protection:()=>protectedMask,
+  palette:()=>createPixelMaterial2D(settings()).options.palette,
+  setPalette:colors=>{workingOptions.palette=[...colors];delete workingOptions.thresholds;palette(colors);changed();},
+  setSelection:mask=>{selection=mask;schedule();},
+  commit:commitDocument, load:prepareImported,
+  newCanvas:next=>{history.commit(outputProject());prepareImported(next,false);history.commit(project);},
+  preview:sprite=>{paintPreview=sprite;schedule();},
+  refresh:schedule, status, download:addDownload, filename,
+  editMaterial:id=>attempt(()=>{
+    const layer=project.layers.find((layer):layer is PixelArtMaterialLayer2D=>layer.id===id&&layer.kind==='material');
+    if(!layer||layer.locked)return;
+    editingMaterialId=id;loadSettings(layer.material);
+    selection=layer.selection?Uint8Array.from(layer.selection):new Uint8Array(project.width*project.height).fill(1);
+    protectedMask=layer.protectedMask?Uint8Array.from(layer.protectedMask):new Uint8Array(selection.length);protectionVersion++;
+    authoredHeight=layer.height?Float32Array.from(layer.height):undefined;materialOrigin=layer.origin?[...layer.origin]:undefined;
+    input('use-height').checked=!!authoredHeight;draft=true;schedule();
+  }),
+});
 attempt(()=>{resetMaterial();study();});
