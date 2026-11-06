@@ -20,6 +20,20 @@ export interface PixelPaletteExtractionOptions2D extends PixelPaletteRegion2D {
   iterations?: number;
 }
 
+export interface PixelAnimationPaletteFrame2D extends PixelPaletteRegion2D {
+  sprite: EditableSprite2D;
+  /** Positive relative display duration; only used by duration weighting. Default: 1. */
+  duration?: number;
+}
+
+export interface PixelAnimationPaletteExtractionOptions2D
+  extends Omit<PixelPaletteExtractionOptions2D, keyof PixelPaletteRegion2D> {
+  /** equal-frame: every nonempty cel has equal total weight (default).
+   * duration: normalize each cel's coverage, then weight by its display duration.
+   * pixel: each covered native cell contributes its alpha, as in one larger raster. */
+  weighting?: 'equal-frame' | 'duration' | 'pixel';
+}
+
 export interface PixelPaletteRemapOptions2D extends PixelPaletteRegion2D {
   /** Explicit color dithering. It never dithers alpha or changes source coverage. Default: none. */
   dither?: PixelPaletteDither2D;
@@ -47,6 +61,7 @@ export interface PixelPaletteRampOptions2D {
 
 type Vector = [number, number, number];
 interface Sample { color: number; lab: Vector; weight: number }
+interface PaletteSource { sprite: EditableSprite2D; region: PixelPaletteRegion2D; factor: number }
 interface Mixture { a: number; b: number; amount: number }
 
 const LINEAR = Float64Array.from({ length: 256 }, (_, i) => {
@@ -150,10 +165,10 @@ function labToColor(lab: Vector): number {
   return (0xff000000 | encodeChannel(rgb[2]) << 16 | encodeChannel(rgb[1]) << 8 | encodeChannel(rgb[0])) >>> 0;
 }
 
-/** The exact histogram grows only to 8,192 colors. Larger images switch to 32,768 fixed
+/** The exact histogram grows only to 8,192 colors. Larger inputs switch to 32,768 fixed
  * 5-bit RGB bins with alpha-weighted original color sums, not arbitrarily skipped pixels.
- * Integer sums keep this reduction independent of traversal order. */
-function samplesFrom(source: EditableSprite2D, region: PixelPaletteRegion2D): Sample[] {
+ * Single-image/pixel weighting retains integer sums independent of traversal order. */
+function samplesFrom(sources: readonly PaletteSource[]): Sample[] {
   let exact: Map<number, number> | undefined = new Map();
   let weight: Float64Array | undefined, red: Float64Array | undefined;
   let green: Float64Array | undefined, blue: Float64Array | undefined;
@@ -162,20 +177,21 @@ function samplesFrom(source: EditableSprite2D, region: PixelPaletteRegion2D): Sa
     const bin = (r >>> 3) | (g >>> 3) << 5 | (b >>> 3) << 10;
     weight![bin] += alpha; red![bin] += r * alpha; green![bin] += g * alpha; blue![bin] += b * alpha;
   };
-  for (let i = 0; i < source.pixels.length; i++) {
+  for (const { sprite: source, region, factor } of sources) for (let i = 0; i < source.pixels.length; i++) {
     const packed = source.pixels[i], alpha = packed >>> 24;
     if (!alpha || !source.mask.data[i] || region.selection && !region.selection[i] || region.protectedMask?.[i]) continue;
-    const color = (packed | 0xff000000) >>> 0;
+    const color = (packed | 0xff000000) >>> 0, contribution = alpha * factor;
+    if (!contribution) continue;
     if (exact) {
       const previous = exact.get(color);
-      if (previous !== undefined) { exact.set(color, previous + alpha); continue; }
-      if (exact.size < MAX_EXACT_COLORS) { exact.set(color, alpha); continue; }
+      if (previous !== undefined) { exact.set(color, previous + contribution); continue; }
+      if (exact.size < MAX_EXACT_COLORS) { exact.set(color, contribution); continue; }
       weight = new Float64Array(HISTOGRAM_BINS); red = new Float64Array(HISTOGRAM_BINS);
       green = new Float64Array(HISTOGRAM_BINS); blue = new Float64Array(HISTOGRAM_BINS);
       for (const [entry, coverage] of exact) addBin(entry, coverage);
       exact = undefined;
     }
-    addBin(color, alpha);
+    addBin(color, contribution);
   }
   if (exact) return [...exact].sort((a, b) => a[0] - b[0])
     .map(([color, weight]) => ({ color, weight, lab: colorToLab(color) }));
@@ -203,14 +219,23 @@ function sortByLightness(colors: number[]): number[] {
  */
 export function extractPixelPalette2D(source: EditableSprite2D, options: PixelPaletteExtractionOptions2D = {}): number[] {
   validateRegion(source, options);
+  const settings = extractionSettings(options);
+  if (settings.locked.length === settings.colors) return settings.locked;
+  return extractFromSamples(samplesFrom([{ sprite: source, region: options, factor: 1 }]), settings);
+}
+
+function extractionSettings(options: PixelPaletteExtractionOptions2D) {
   const colors = countInRange(options.colors ?? 16, 1, 256, 'Pixel palette size');
   const iterations = countInRange(options.iterations ?? 4, 1, 16, 'Palette refinement passes');
   if (options.locked !== undefined && !Array.isArray(options.locked))
     throw new RangeError('Locked pixel palette colors must be an array');
   const locked = Array.from(new Set((options.locked ?? []).map(opaqueColor)));
   if (locked.length > colors) throw new RangeError('Locked colors exceed the requested palette size');
-  if (locked.length === colors) return locked;
-  const samples = samplesFrom(source, options), used = new Set(locked);
+  return { colors, iterations, locked };
+}
+
+function extractFromSamples(samples: Sample[], { colors, iterations, locked }: ReturnType<typeof extractionSettings>): number[] {
+  const used = new Set(locked);
   if (!samples.length) return locked;
   const unpinned = samples.filter(sample => !used.has(sample.color));
   if (unpinned.length + locked.length <= colors)
@@ -269,6 +294,47 @@ export function extractPixelPalette2D(source: EditableSprite2D, options: PixelPa
     if (!used.has(color)) { used.add(color); additions.push(color); }
   }
   return [...locked, ...sortByLightness(additions)];
+}
+
+/** Fit one palette to all cels, then reuse one mapper for the entire animation. This prevents
+ * per-frame color-cluster drift without temporal filtering, changing alpha, or concatenating
+ * full rasters. Empty cels do not dilute the shared histogram. Locks retain rare accent colors.
+ * Memory for color samples stays bounded independently of the frame count.
+ */
+export function extractPixelAnimationPalette2D(frames: readonly PixelAnimationPaletteFrame2D[],
+  options: PixelAnimationPaletteExtractionOptions2D = {}): number[] {
+  if (!Array.isArray(frames) || frames.length > 4096)
+    throw new RangeError('Animation palette extraction accepts at most 4,096 frame descriptors');
+  const settings = extractionSettings(options), weighting = options.weighting ?? 'equal-frame';
+  if (!['equal-frame', 'duration', 'pixel'].includes(weighting)) throw new RangeError('Unknown animation palette weighting');
+  let cells = 0;
+  for (const frame of frames) {
+    cells += validateRegion(frame.sprite, frame);
+    if (cells > 134_217_728)
+      throw new RangeError('Animation palette extraction exceeds 134,217,728 source cells');
+    const duration = frame.duration ?? 1;
+    if (!Number.isFinite(duration) || duration <= 0) throw new RangeError('Palette frame durations must be finite and positive');
+  }
+  if (settings.locked.length === settings.colors) return settings.locked;
+  const occupied: { frame: PixelAnimationPaletteFrame2D; coverage: number }[] = [];
+  let longest = 0;
+  for (const frame of frames) {
+    let coverage = 0;
+    const { sprite } = frame;
+    for (let i = 0; i < sprite.pixels.length; i++)
+      if (sprite.mask.data[i] && (!frame.selection || frame.selection[i]) && !frame.protectedMask?.[i])
+        coverage += sprite.pixels[i] >>> 24;
+    if (!coverage) continue;
+    occupied.push({ frame, coverage }); longest = Math.max(longest, frame.duration ?? 1);
+  }
+  const sources: PaletteSource[] = [];
+  for (const { frame, coverage } of occupied) {
+    // Normalize duration before coverage to keep even very large/small positive durations finite.
+    const factor = weighting === 'pixel' ? 1
+      : (weighting === 'duration' ? (frame.duration ?? 1) / longest : 1) / coverage;
+    sources.push({ sprite: frame.sprite, region: frame, factor });
+  }
+  return extractFromSamples(samplesFrom(sources), settings);
 }
 
 /** Compile a palette once for repeated cel/layer mapping. Oklab chooses the nearest color.

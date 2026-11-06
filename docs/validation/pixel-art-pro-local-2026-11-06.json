@@ -1,0 +1,45 @@
+{
+  "schema": "poku.pixel-art-pro-validation/v1",
+  "baselineCommit": "b55a072d91a9bbdfdff8a30705c7990a49170ffd",
+  "build": "passed",
+  "unitRegression": {
+    "command": "node --test --test-reporter=tap tests/*.test.mjs",
+    "tests": 986,
+    "pass": 986,
+    "fail": 0,
+    "skipped": 0,
+    "cancelled": 0,
+    "durationMs": 49630.419703
+  },
+  "preparedGallery": "source fingerprint and file hashes verified",
+  "localBrowser": {
+    "status": "unavailable",
+    "reason": "Chromium process_singleton socket creation is denied by the execution environment; sandbox configuration was not changed.",
+    "verification": "Required actual browser checks run in GitHub Actions."
+  },
+  "existingEffectSources": "No changes to src/fx or src/3d/effects",
+  "sourceHashes": {
+    "gallery/pixel-art-lab.css": "eb8532e2f2e0198e0f611dec2ec7979ea908d90717c8ee2563617ff1721cb53f",
+    "gallery/pixel-art-lab.html": "2e1f22d7977775fe5aa9dc721dcbf988b88580c6141bcd6f4a5c0202d55ef101",
+    "gallery/pixel-art-lab.ts": "6cb79805b1511068967d9a306a3dff8ca44db487c0024b226d0ddd7db7c1acb5",
+    "gallery/pixel-art-selection.ts": "9fee1579be017889065985a815a424e7ca07812db7b2af958fe07bb70012dd8f",
+    "gallery/pixel-art-timeline.ts": "dfc5017a34e0c4af7144394b53a87c152ee0739b6901618eebc57c2afba609b9",
+    "gallery/pixel-art-viewport.ts": "6ab2c7ff5245bfd69ce096fe1e7c4e30e96b7c95bf1663084117c35a3bd47782",
+    "gallery/pixel-art-workbench.ts": "e5eda083dfb9c7d572bd849894d1c8cc713093e14f9554482432ef07a68deadd",
+    "src/authoring/pixel-art-animation.ts": "02c3ad2af375b8270f99771f8d0e5791b4b4f2c85bd2136843730324f8fcc0b2",
+    "src/authoring/pixel-art-document.ts": "815e4c045ce6af290b9688e35135914e06d75c1c41f9e865f0de2ae117fa6780",
+    "src/authoring/pixel-art-project.ts": "3bc8bb6a1341185ad10837a2c31f705a5f217e6ab629b61bb28c15326b380657",
+    "src/core/pixel-art-analysis.ts": "53fd8f30f737ef847d0ade1fd03fb0dfc54ea773bdd0090673bea29d66513191",
+    "src/core/pixel-brush.ts": "9b3c84ef87bbe38b6b2ae7202beb0d35c7f94a21ab1419839b5c76e5006379dc",
+    "src/core/pixel-contour.ts": "597b8d925fa91acea4584bdb103200f02222076fbc08331f02f4cd1db346f92a",
+    "src/core/pixel-material.ts": "34b6b0bfe0fa06aeba84bffec8c3000551eb29b00a063178222dffac2cc4cc64",
+    "src/core/pixel-palette.ts": "8cb257a1a75edca6c9cf38cf115db365f6646c903ca3237b3b596158d7cb1935",
+    "src/core/pixel-quantize.ts": "3de281e7e44aec5d5524d9ae5bb6f59a224dd88f08802d45d0ccd1b3b392ec75",
+    "src/core/pixel-relight.ts": "22af04b9481aa0af7d376155e7c17905b888ad3e37a186c26e0d7be1c7495c22",
+    "src/core/pixel-selection.ts": "134b7a07d5ee93f648c1cf6d809f46298e5f316a5d20d11ac790cb214e0bc51d",
+    "src/core/pixel-style.ts": "34907cd5bfa9ec679f7664888ae6332e6290f3f2f11540c7380c7be7adb79063",
+    "src/core/pixel-surface-maps.ts": "8eeaca8fec40a359e1624b9261b1ac4dbbed88bf5a245c38b5d5b20284613511",
+    "src/core/pixel-tools.ts": "c490540659870fbac2e25a8bad03d36617267512eb9cd004ae0486bb75108e4a",
+    "src/core/pixel-transform.ts": "2282cec7426cc7d0e263fa40c6f506a14351801dbc9673abe236c9339f9066b2"
+  }
+}

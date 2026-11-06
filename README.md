@@ -4,6 +4,16 @@
 
 > **Origin:** POKU Pixel FX is a Korean-localized, TypeScript-based open-source fork/derivative of [PixelFX by Patch](https://github.com/patch-gg/pixelfx). This repository is maintained separately and is not linked as a GitHub network fork. The upstream MIT license credits Patch and Hugo Duprez; see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) for copyright and third-party notices.
 
+## Pixel Art Lab · 정밀 편집과 프레임 애니메이션
+
+사각·타원·올가미 선택, 픽셀 단위 이동·복제·반전·90° 회전, 필압과 팔레트 명암 브러시를 사용할 수 있습니다.
+변형은 색·실루엣·높이·법선을 함께 보존하는 편집 레이어입니다. 주기적인 재질과 원화 색을 유지하는 재조명,
+독립 레이어를 가진 프레임 애니메이션, 공통 팔레트와 정확한 시트·시간 내보내기를 같은 작업실에 연결했습니다.
+
+`npm ci && npm run build && npm run gallery` 후 `/gallery/pixel-art-lab.html`을 여세요.
+[전체 사용법과 개선 범위](docs/PIXEL_ART_PRO.md) · [선택·변형](docs/PIXEL_SELECTION_TRANSFORMS.md) ·
+[애니메이션](docs/PIXEL_ART_ANIMATION.md) · [재질·재조명](docs/PIXEL_ART_PRO_MATERIALS.md)
+
 ## Pixel Art Lab · 픽셀 제작 작업실 확장
 
 연속 픽셀 붓·지우개·직선·사각형·타원·색 채우기·대칭 그리기를 추가했습니다.

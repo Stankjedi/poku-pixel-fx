@@ -1,9 +1,11 @@
 import { hex } from '../src/core/color.js';
 import type { EditableSprite2D } from '../src/core/sprite-edit.js';
-import { rasterizePixelBrush2D, rasterizePixelShape2D, paintPixelMask2D, selectPixelRegion2D, resizePixelSelection2D,
+import { rasterizePixelBrush2D, rasterizePixelShape2D, paintPixelMask2D, shadePixelMask2D, selectPixelRegion2D, resizePixelSelection2D,
   type PixelBrushPoint2D, type PixelBrushOptions2D, type PixelShapeKind2D } from '../src/core/pixel-brush.js';
 import { extractPixelPalette2D, createPixelPaletteRamp2D } from '../src/core/pixel-palette.js';
 import { exportPixelSurfaceMaps2D } from '../src/core/pixel-surface-maps.js';
+import { installPixelArtSelection, selectionDrawingTools } from './pixel-art-selection.js';
+import { createPixelRelighter2D } from '../src/core/pixel-relight.js';
 import { encodeRGBAPNG } from './png.js';
 import { pixelArtLayerLimit2D } from '../src/authoring/pixel-art-project.js';
 import { createBlankPixelArtDocument2D, flattenPixelArtDocument2D, renderPixelArtDocument2D, writePixelArtPaintLayer2D, nextPixelArtLayerId2D,
@@ -51,7 +53,8 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
   } | undefined;
   const point = (event: PointerEvent): PixelBrushPoint2D => {
     const r = result.getBoundingClientRect();
-    return { x: Math.floor((event.clientX - r.left) * result.width / r.width), y: Math.floor((event.clientY - r.top) * result.height / r.height) };
+    return { x: Math.floor((event.clientX - r.left) * result.width / r.width), y: Math.floor((event.clientY - r.top) * result.height / r.height),
+      ...(event.pointerType === 'pen' && field('pen-pressure').checked ? { pressure: event.pressure } : {}) };
   };
   function brushOptions(): PixelBrushOptions2D {
     return { size: integer('paint-size', 1, 64), tip: choice('paint-tip').value as 'round' | 'square', pixelPerfect: field('pixel-perfect').checked,
@@ -70,12 +73,17 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     layer.indices.forEach((i,j)=>{pixels[i]=layer.pixels[j];data[i]=pixels[i]>>>24?1:0;});
     return{w:doc.width,h:doc.height,pixels,mask:{w:doc.width,h:doc.height,data}};
   }
-  function painted(source: EditableSprite2D, mask: Uint8Array, erase: boolean,merged?:EditableSprite2D) {
-    const output = paintPixelMask2D(source, mask, erase ? null : hex(field('paint-color').value), {
+  function painted(source: EditableSprite2D, mask: Uint8Array, erase: boolean,merged?:EditableSprite2D, shadeStep=0) {
+    // Existing paint layers store pre-opacity RGBA. Shading those authored cells avoids
+    // applying layer opacity twice when the visible composite has reduced alpha.
+    const baseline = source;
+    const output = shadeStep ? shadePixelMask2D(baseline, mask, authoredPalette ?? host.palette(), shadeStep, {
+      protectedMask: host.protection(), selection: field('paint-in-selection').checked ? host.selection() : undefined,
+    }) : paintPixelMask2D(source, mask, erase ? null : hex(field('paint-color').value), {
       mode: 'replace', protectedMask: host.protection(), selection: field('paint-in-selection').checked ? host.selection() : undefined, alphaLock: field('alpha-lock').checked,
     });
     // Store only pixels the action actually changed; protected cells never become hidden overrides.
-    const touched = Uint8Array.from(mask, (v, i) => v && (source.pixels[i] !== output.pixels[i] || source.mask.data[i] !== output.mask.data[i]) ? 1 : 0);
+    const touched = Uint8Array.from(mask, (v, i) => v && (baseline.pixels[i] !== output.pixels[i] || baseline.mask.data[i] !== output.mask.data[i]) ? 1 : 0);
     if(erase&&merged&&!field('alpha-lock').checked)for(let i=0;i<touched.length;i++){
       if(mask[i]&&!host.protection()[i]&&(!field('paint-in-selection').checked||host.selection()[i])&&merged.mask.data[i]&&(merged.pixels[i]>>>24))touched[i]=1;
     }
@@ -87,14 +95,14 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     const mask = ['line', 'rectangle', 'ellipse'].includes(tool)
       ? rasterizePixelShape2D(doc.width, doc.height, tool as PixelShapeKind2D, [points[0].x,points[0].y], [points.at(-1)!.x,points.at(-1)!.y], { ...options, filled: field('paint-filled').checked })
       : rasterizePixelBrush2D(doc.width, doc.height, points, options);
-    const { output, touched } = painted(source, mask, tool === 'eraser',merged);
+    const { output, touched } = painted(source, mask, tool === 'eraser',merged,tool==='shade-light'?1:tool==='shade-dark'?-1:0);
     const next = writePixelArtPaintLayer2D(doc, output, touched, layerId);
     stroke.candidate = next;
     host.preview(!layerId ? output : renderPixelArtDocument2D(next));
   }
   result.addEventListener('pointerdown', event => attempt(() => {
     const tool = choice('paint-tool').value;
-    if (event.button !== 0 || tool === 'inspect') return;
+    if (event.button !== 0 || tool === 'inspect' || selectionDrawingTools.has(tool)) return;
     event.preventDefault();
     const p = point(event), source = host.output(), doc = host.outputDocument();
     if (p.x < 0 || p.y < 0 || p.x >= source.w || p.y >= source.h) return;
@@ -122,7 +130,7 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     if (!stroke || stroke.pointer !== event.pointerId) return;
     for (const sample of event.getCoalescedEvents?.().length ? event.getCoalescedEvents() : [event]) {
       const next = point(sample), last = stroke.points.at(-1)!;
-      if (last.x !== next.x || last.y !== next.y) stroke.points.push(next);
+      if (last.x !== next.x || last.y !== next.y || last.pressure !== next.pressure) stroke.points.push(next);
     }
     if(strokeFrame===undefined)strokeFrame=requestAnimationFrame(()=>{strokeFrame=undefined;attempt(previewStroke);});
   }));
@@ -138,6 +146,8 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
   result.addEventListener('pointerup', event => attempt(() => {
     if (!stroke || stroke.pointer !== event.pointerId) return;
     const next = point(event), last = stroke.points.at(-1)!;
+    // Pointerup reports zero pen pressure even though the final cell was painted while down.
+    if (event.pointerType === 'pen') next.pressure = last.pressure;
     if (last.x !== next.x || last.y !== next.y) { stroke.points.push(next); previewStroke(); }
     finishStroke();
   }));
@@ -150,6 +160,9 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     const tool = choice('paint-tool').value;
     result.style.cursor = tool === 'inspect' ? 'default' : 'crosshair';
     el('paint-hint').textContent = tool === 'inspect' ? '오른쪽 캔버스에 그립니다. 왼쪽에서는 선택과 보호 영역을 편집합니다.'
+      : tool === 'move' ? '선택 영역을 드래그하거나 방향키로 옮기세요. Shift + 방향키: 10px. Escape: 취소.'
+      : selectionDrawingTools.has(tool) ? '영역을 드래그하세요. Shift: 추가 · Alt: 빼기 · Shift + Alt: 교차.'
+      : tool.startsWith('shade-') ? '작업 팔레트에 있는 색을 한 단계 바꿉니다. 팔레트 밖 색·알파·보호 영역은 유지됩니다.'
       : tool === 'picker' ? '오른쪽 그림에서 색을 고른 뒤 B를 누르면 연필로 돌아갑니다.'
         : '오른쪽 캔버스에 그리세요. 한 번의 드래그가 한 번의 실행 취소에 대응합니다. 보호 영역은 유지됩니다.';
   }
@@ -179,7 +192,7 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
       const li = document.createElement('li'); li.dataset.layerId = layer.id;
       li.classList.toggle('active', doc.activeLayerId === layer.id); li.classList.toggle('hidden-layer', layer.visible === false);
       li.append(actionButton(layer.visible === false ? '○' : '●', `${layer.name} 표시 전환`, () => mutateLayer(layer.id, (layers, i) => { layers[i].visible = layers[i].visible === false; })));
-      const kind = document.createElement('span'); kind.className = 'layer-kind'; kind.textContent = { material: '재질', paint: '그림', palette: '색상' }[layer.kind]; li.append(kind);
+      const kind = document.createElement('span'); kind.className = 'layer-kind'; kind.textContent = { material: '재질', paint: '그림', palette: '색상', transform: '변형', relight: '조명' }[layer.kind]; li.append(kind);
       const name = document.createElement('input'); name.value = layer.name; name.className = 'layer-name'; name.maxLength = 160; name.setAttribute('aria-label', `${layer.name} 이름`);
       name.onchange = () => attempt(() => { if (!name.value.trim()) { name.value = layer.name; return; } mutateLayer(layer.id, (layers, i) => { layers[i].name = name.value.trim(); }); });
       li.append(name, actionButton('선택', `${layer.name} 선택`, () => host.commit({ ...host.document(), activeLayerId: layer.id })));
@@ -235,6 +248,34 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
       ...(field('paint-in-selection').checked ? { selection: Array.from(host.selection()) } : {}), protectedMask: Array.from(host.protection()) };
     host.commit({ ...doc, activeLayerId: id, layers: [...doc.layers, layer] });
   });
+  // These controls are independent of the material inspector. Changing a light must never
+  // create a material draft that would replace a hand-painted multicolor albedo on apply.
+  const relightRanges = ['angle', 'elevation', 'intensity', 'fill', 'ambient', 'roughness', 'ao', 'shadow', 'strength'];
+  function showRelightValues() {
+    for (const name of relightRanges) {
+      const value = Number(field(`relight-${name}`).value);
+      el(`relight-${name}-value`).textContent = `${Math.round(value * 1000) / 1000}${name === 'angle' || name === 'elevation' ? '°' : ''}`;
+    }
+  }
+  for (const name of relightRanges) field(`relight-${name}`).addEventListener('input', showRelightValues);
+  showRelightValues();
+  btn('apply-relight').onclick = () => attempt(() => {
+    finishStroke();
+    const doc = host.outputDocument(), source = renderPixelArtDocument2D(doc);
+    if (!source.channels) throw new Error('재질 레이어를 적용해 높이·법선을 만든 뒤 재조명을 사용하세요.');
+    const angle = Number(field('relight-angle').value) * Math.PI / 180, elevation = Number(field('relight-elevation').value) * Math.PI / 180;
+    const lighting = createPixelRelighter2D({
+      lights: [{ direction: [Math.cos(angle) * Math.cos(elevation), Math.sin(angle) * Math.cos(elevation), Math.sin(elevation)], color: field('relight-key-color').value, intensity: Number(field('relight-intensity').value), castShadow: Number(field('relight-shadow').value) },
+        { direction: [-Math.cos(angle), -Math.sin(angle), .7], color: field('relight-fill-color').value, intensity: Number(field('relight-fill').value) }],
+      ambient: Number(field('relight-ambient').value), diffuseBands: integer('relight-bands', 2, 64), roughness: Number(field('relight-roughness').value),
+      ambientOcclusion: Number(field('relight-ao').value), strength: Number(field('relight-strength').value),
+      wrap: field('relight-wrap').checked,
+      ...(field('relight-palette').checked ? { palette: [...(authoredPalette ?? host.palette())] } : {}),
+    }).options;
+    const id = nextPixelArtLayerId2D(doc, 'relight');
+    host.commit({ ...doc, activeLayerId: id, layers: [...doc.layers, { kind: 'relight', id, name: '원화 색 유지 · 재조명', lighting,
+      ...(field('paint-in-selection').checked ? { selection: Array.from(host.selection()) } : {}), protectedMask: Array.from(host.protection()) }] });
+  });
 
   function spriteCanvas(sprite: EditableSprite2D) {
     const c = document.createElement('canvas'); c.width = sprite.w; c.height = sprite.h;
@@ -272,8 +313,10 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
   new ResizeObserver(syncOverlays).observe(el('result-host'));
   function surfaceMaps() {
     const doc=host.outputDocument(),lastMaterial = doc.layers.filter((layer):layer is PixelArtMaterialLayer2D => layer.kind === 'material'&&layer.visible!==false).at(-1);
+    const tileSize=lastMaterial?.material.tileSize;
     return exportPixelSurfaceMaps2D(renderPixelArtDocument2D(doc), { normalConvention: choice('normal-convention').value as 'opengl' | 'directx',
       lighting: { light: lastMaterial?.material.light ?? [-.6, -.7, 1], ambientOcclusion: 1, castShadow: 1,
+        wrap:!!tileSize&&tileSize[0]===doc.width&&tileSize[1]===doc.height&&(lastMaterial?.material.bevel??0)===0,
         occlusionRadius:lastMaterial?.material.occlusionRadius,shadowDistance:lastMaterial?.material.shadowDistance } });
   }
   for (const kind of ['normal', 'height', 'occlusion', 'shadow'] as const) btn(`save-${kind}`).onclick = () => attempt(() => {
@@ -290,7 +333,7 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
       geometry: 'explicit authored and procedural height; no depth inferred from RGB' };
     host.download(new Blob([JSON.stringify(info, null, 2)], { type: 'application/json' }), host.filename() + '-surface-maps.json');
   });
-  for(const id of ['save-png','save-project','undo','redo','save-normal','save-height','save-occlusion','save-shadow','save-map-info','new-canvas','import-png','open-project'])
+  for(const id of ['save-png','save-project','undo','redo','save-normal','save-height','save-occlusion','save-shadow','save-map-info','new-canvas','import-png','open-project','apply-palette','apply-material','apply-relight','flatten-layers'])
     btn(id).addEventListener('click',()=>attempt(finishStroke),{capture:true});
   window.addEventListener('keydown', event => {
     const target = event.target as HTMLElement;
@@ -303,9 +346,11 @@ export function installPixelArtWorkbench(host: PixelArtWorkbenchHost) {
     const tool = shortcuts[event.key.toLowerCase()];
     if (tool) { event.preventDefault(); choice('paint-tool').value = tool; syncCursor(); }
   });
-  return { sync() {
-    syncLayers(); syncOverlays(); syncCursor();
+  const selections = installPixelArtSelection(host, finishStroke);
+  return { finishStroke() { finishStroke(); selections.finish(); }, setAuthoredPalette, palette:()=>authoredPalette??host.palette(), sync() {
+    syncLayers(); syncOverlays(); syncCursor(); selections.sync();
     const mapsAvailable = !!(host.output() as PixelArtDocumentRaster2D)?.channels;
+    btn('apply-relight').disabled = !mapsAvailable || host.outputDocument().layers.length >= pixelArtLayerLimit2D(host.document().width, host.document().height);
     choice('normal-convention').disabled=!mapsAvailable;
     for (const id of ['save-normal', 'save-height', 'save-occlusion', 'save-shadow', 'save-map-info']) btn(id).disabled = !mapsAvailable;
   } };

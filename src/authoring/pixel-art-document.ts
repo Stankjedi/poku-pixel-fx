@@ -2,6 +2,8 @@ import type { EditableSprite2D } from '../core/sprite-edit.js';
 import type { MaterialChannels2D } from '../core/material-surface.js';
 import { createPixelMaterial2D } from '../core/pixel-material.js';
 import { createPixelPaletteMapper2D } from '../core/pixel-palette.js';
+import { transformPixelSelection2D, validatePixelSelectionTransformOptions2D, type PixelSelectionTransformOptions2D } from '../core/pixel-transform.js';
+import { createPixelRelighter2D, type PixelRelightOptions2D } from '../core/pixel-relight.js';
 import { createPixelArtProject2D, validatePixelArtProject2D, pixelArtLayerLimit2D, type PixelArtLayer2D, type PixelArtProject2D } from './pixel-art-project.js';
 
 export interface PixelArtLayerIdentity2D {
@@ -30,7 +32,21 @@ export interface PixelArtPaletteLayer2D extends PixelArtLayerIdentity2D {
   selection?: number[];
   protectedMask?: number[];
 }
-export type PixelArtDocumentLayer2D = PixelArtMaterialLayer2D | PixelArtPaintLayer2D | PixelArtPaletteLayer2D;
+/** Replay an exact grid transform without flattening the editable artwork below it. */
+export interface PixelArtTransformLayer2D extends PixelArtLayerIdentity2D {
+  kind: 'transform';
+  selection: number[];
+  protectedMask?: number[];
+  transform: Omit<PixelSelectionTransformOptions2D, 'protectedMask'>;
+}
+/** Lighting is evaluated from the lower layers each time, so adjustments never accumulate. */
+export interface PixelArtRelightLayer2D extends PixelArtLayerIdentity2D {
+  kind: 'relight';
+  lighting: PixelRelightOptions2D;
+  selection?: number[];
+  protectedMask?: number[];
+}
+export type PixelArtDocumentLayer2D = PixelArtMaterialLayer2D | PixelArtPaintLayer2D | PixelArtPaletteLayer2D | PixelArtTransformLayer2D | PixelArtRelightLayer2D;
 export interface PixelArtDocument2D {
   schema: 'poku-pixel-art/v2';
   name: string;
@@ -104,7 +120,18 @@ export function validatePixelArtDocument2D(input: unknown): PixelArtDocument2D {
       if (layer.opacity !== undefined && (!Number.isFinite(layer.opacity) || layer.opacity < 0 || layer.opacity > 1)) throw new RangeError('Layer opacity must be within 0..1');
       return { ...common, kind: 'paint', indices: layer.indices.slice(), pixels: values(layer.pixels, layer.indices.length, 'Paint pixels', packed), ...(layer.opacity !== undefined ? { opacity: layer.opacity } : {}) };
     }
-    const masks = optionalMasks(layer, n), objectOrigin = origin(layer.origin);
+    const masks = optionalMasks(layer, n);
+    if (layer.kind === 'transform') {
+      const t = layer.transform;
+      if (!t || typeof t !== 'object' || !Array.isArray(layer.selection)) throw new RangeError('Transform layers need a selection and grid transform');
+      const transform = validatePixelSelectionTransformOptions2D(t);
+      return { ...common, kind: 'transform', ...masks, selection: masks.selection!, transform };
+    }
+    if (layer.kind === 'relight') {
+      if (!layer.lighting || typeof layer.lighting !== 'object') throw new RangeError('Relight layers need lighting options');
+      return { ...common, kind: 'relight', lighting: structuredClone(createPixelRelighter2D(layer.lighting).options), ...masks };
+    }
+    const objectOrigin = origin(layer.origin);
     if (layer.kind === 'palette') {
       const options = createPixelPaletteMapper2D(layer.palette, { dither: layer.dither, strength: layer.strength }).options;
       return { ...common, kind: 'palette', palette: [...options.palette], dither: options.dither, strength: options.strength, ...masks, ...(objectOrigin ? { origin: objectOrigin } : {}) };
@@ -150,6 +177,41 @@ function replacement(a: number, b: number, t: number): number {
   return c >>> 0;
 }
 
+/** Shared by visible rendering and the raw form-height replay. A paint operation keeps
+ * existing geometry while the cell remains occupied; new/fully erased cells reset it. */
+function paintRaster(out: PixelArtDocumentRaster2D, layer: PixelArtPaintLayer2D): PixelArtDocumentRaster2D {
+  const t = layer.opacity ?? 1;
+  if (!t) return out;
+  const pixels = out.pixels.slice(), mask = { ...out.mask, data: out.mask.data.slice() };
+  const channels = out.channels ? { ...out.channels, material: out.channels.material.slice(), height: out.channels.height.slice(), normal: out.channels.normal.slice() } : undefined;
+  for (let j = 0; j < layer.indices.length; j++) {
+    const i = layer.indices[j], before = mask.data[i] && pixels[i] >>> 24;
+    pixels[i] = replacement(mask.data[i] ? pixels[i] : 0, layer.pixels[j], t);
+    mask.data[i] = pixels[i] >>> 24 ? 1 : 0;
+    if (channels && (!before || !mask.data[i])) { channels.material[i] = 0; channels.height[i] = 0; channels.normal.set([0, 0, 1], i * 3); }
+  }
+  return { ...out, pixels, mask, ...(channels ? { channels } : {}) };
+}
+
+/** Resolve the editable form height in the currently visible geometry. authoredHeight
+ * remains the immutable original shape: visible transforms and paint occupancy replay in
+ * layer order, while material relief, palette and lighting do not alter this working map.
+ * No material or lighting pass is rendered. Missing authored height stays undefined. */
+export function renderPixelArtAuthoredHeight2D(document: PixelArtDocument2D): Float32Array | undefined {
+  const p = validatePixelArtDocument2D(document);
+  if (!p.authoredHeight) return undefined;
+  let out = sourceRaster(p);
+  const n = p.width * p.height;
+  out.channels = { w: p.width, h: p.height, material: out.channels?.material ?? new Uint16Array(n),
+    height: Float32Array.from(p.authoredHeight), normal: out.channels?.normal ?? new Float32Array(n * 3) };
+  for (const layer of p.layers) {
+    if (layer.visible === false) continue;
+    if (layer.kind === 'transform') out = transformPixelSelection2D(out, layer.selection, { ...layer.transform, protectedMask: layer.protectedMask }).sprite;
+    else if (layer.kind === 'paint') out = paintRaster(out, layer);
+  }
+  return out.channels!.height;
+}
+
 /** Replay only when the document changes; the UI caches this committed raster between previews. */
 export function renderPixelArtDocument2D(document: PixelArtDocument2D): PixelArtDocumentRaster2D {
   const p = validatePixelArtDocument2D(document);
@@ -158,17 +220,9 @@ export function renderPixelArtDocument2D(document: PixelArtDocument2D): PixelArt
     if (layer.visible === false) continue;
     if (layer.kind === 'material') { out = createPixelMaterial2D(layer.material).shade(out, layer); continue; }
     if (layer.kind === 'palette') { out = createPixelPaletteMapper2D(layer.palette, layer).remap(out, layer); continue; }
-    const t = layer.opacity ?? 1;
-    if (!t) continue;
-    const pixels = out.pixels.slice(), mask = { ...out.mask, data: out.mask.data.slice() };
-    const channels = out.channels ? { ...out.channels, material: out.channels.material.slice(), height: out.channels.height.slice(), normal: out.channels.normal.slice() } : undefined;
-    for (let j = 0; j < layer.indices.length; j++) {
-      const i = layer.indices[j], before = mask.data[i] && pixels[i] >>> 24;
-      pixels[i] = replacement(mask.data[i] ? pixels[i] : 0, layer.pixels[j], t);
-      mask.data[i] = pixels[i] >>> 24 ? 1 : 0;
-      if (channels && (!before || !mask.data[i])) { channels.material[i] = 0; channels.height[i] = 0; channels.normal.set([0, 0, 1], i * 3); }
-    }
-    out = { ...out, pixels, mask, ...(channels ? { channels } : {}) };
+    if (layer.kind === 'transform') { out = transformPixelSelection2D(out, layer.selection, { ...layer.transform, protectedMask: layer.protectedMask }).sprite; continue; }
+    if (layer.kind === 'relight') { out = createPixelRelighter2D(layer.lighting).shade(out, layer); continue; }
+    out = paintRaster(out, layer);
   }
   return out;
 }
@@ -203,7 +257,8 @@ export function nextPixelArtLayerId2D(document: PixelArtDocument2D, prefix: stri
 /** Bakes visible layers to an exact source, retaining geometry and current edit masks. Undo belongs to the editor. */
 export function flattenPixelArtDocument2D(document: PixelArtDocument2D): PixelArtDocument2D {
   const p = validatePixelArtDocument2D(document), out = createPixelArtDocument2D(renderPixelArtDocument2D(p), p.name);
-  return { ...out, ...optionalMasks(p, p.width * p.height), ...(p.authoredHeight ? { authoredHeight: p.authoredHeight.slice() } : {}) };
+  const authoredHeight = renderPixelArtAuthoredHeight2D(p);
+  return { ...out, ...optionalMasks(p, p.width * p.height), ...(authoredHeight ? { authoredHeight: Array.from(authoredHeight) } : {}) };
 }
 
 function checkBytes(json: string): void {

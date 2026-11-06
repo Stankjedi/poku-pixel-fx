@@ -1,0 +1,281 @@
+{
+  "schema": "poku.pixel-art-pro-evidence/v1",
+  "nativeSize": [
+    224,
+    160
+  ],
+  "seed": 41,
+  "scope": "New standalone authoring studies; no pre-existing effect artwork is edited.",
+  "technique": "Native contour masks, explicit material/color groups, height, curves and fine pixel strokes; exact 3x nearest enlargement.",
+  "relighting": {
+    "options": {
+      "lights": [
+        {
+          "direction": [
+            -0.8,
+            -0.65,
+            1
+          ],
+          "color": "#ffe5ba",
+          "intensity": 1.15,
+          "castShadow": 0.8,
+          "shadowDistance": 40
+        },
+        {
+          "direction": [
+            0.8,
+            0.15,
+            0.65
+          ],
+          "color": "#8ac3ef",
+          "intensity": 0.42
+        }
+      ],
+      "ambient": 0.3,
+      "ambientColor": "#c8d9e9",
+      "diffuseBands": 12,
+      "ambientOcclusion": 0.55,
+      "occlusionRadius": 10,
+      "strength": 1
+    },
+    "materialResponses": [
+      "silk",
+      "bronze",
+      "enamel",
+      "gem"
+    ],
+    "unchangedCoverage": true,
+    "sourceColors": 19,
+    "outputColors": 2230,
+    "sameGeometryReference": true
+  },
+  "tile": {
+    "size": [
+      112,
+      80
+    ],
+    "options": {
+      "kind": "wood",
+      "seed": 41,
+      "materialId": 1,
+      "palette": [
+        4281082914,
+        4281871406,
+        4282528572,
+        4283054924,
+        4283384669,
+        4283583341,
+        4283520381,
+        4283392138,
+        4283657877,
+        4284316578,
+        4285040815,
+        4285699771,
+        4286489800,
+        4287214548,
+        4288004577,
+        4288794861
+      ],
+      "scale": 24,
+      "detail": 0.68,
+      "relief": 1.5,
+      "bevel": 0,
+      "roughness": 0.73,
+      "light": [
+        -0.6,
+        -0.2,
+        1
+      ],
+      "ambient": 0.24,
+      "grainAngle": 0.11,
+      "ambientOcclusion": 0.25,
+      "occlusionRadius": 8,
+      "castShadow": 0.3,
+      "shadowDistance": 32,
+      "tileSize": [
+        112,
+        80
+      ]
+    },
+    "unchangedCoverage": true,
+    "comparison": "Open versus periodic procedural authoring modes, not an image seam repair."
+  },
+  "animation": {
+    "durationSeconds": [
+      0.1,
+      0.16,
+      0.12,
+      0.18
+    ],
+    "weighting": "duration",
+    "requestedColors": 24,
+    "palette": [
+      4281935122,
+      4289520895,
+      4290958986,
+      4283381015,
+      4283382818,
+      4281154637,
+      4283779101,
+      4284631073,
+      4284698667,
+      4281814379,
+      4285226785,
+      4285490993,
+      4283064435,
+      4281817224,
+      4286544690,
+      4283199643,
+      4287073580,
+      4283070893,
+      4283797447,
+      4288720981,
+      4285902035,
+      4285773286,
+      4286432503,
+      4291425979
+    ],
+    "outputColors": 24,
+    "unchangedCoverage": true
+  },
+  "visualReview": {
+    "status": "pending native-size visual inspection",
+    "artisticQualityCertified": false
+  },
+  "sourceFiles": [
+    {
+      "path": "tools/preview-pixel-art-pro.mjs",
+      "sha256": "dabeea4e8066320bb46ffa07b97102eb119cf37dbaa29036132815dc22915bef"
+    },
+    {
+      "path": "src/core/pixel-relight.ts",
+      "sha256": "22af04b9481aa0af7d376155e7c17905b888ad3e37a186c26e0d7be1c7495c22"
+    },
+    {
+      "path": "src/core/pixel-material.ts",
+      "sha256": "34b6b0bfe0fa06aeba84bffec8c3000551eb29b00a063178222dffac2cc4cc64"
+    },
+    {
+      "path": "src/core/pixel-surface-maps.ts",
+      "sha256": "8eeaca8fec40a359e1624b9261b1ac4dbbed88bf5a245c38b5d5b20284613511"
+    },
+    {
+      "path": "src/core/pixel-palette.ts",
+      "sha256": "8cb257a1a75edca6c9cf38cf115db365f6646c903ca3237b3b596158d7cb1935"
+    }
+  ],
+  "files": [
+    {
+      "name": "relight-albedo-native.png",
+      "width": 224,
+      "height": 160,
+      "rgbaSHA256": "1f7d7a16f500038cfcf3757481a4af7e28251e49bd5592620a204f0182c1abe9",
+      "pngSHA256": "e30ecdd6c215763a60e2f755c54cb0bab3e2d71885f75583e20f6a4b491c40ae"
+    },
+    {
+      "name": "relight-warm-native.png",
+      "width": 224,
+      "height": 160,
+      "rgbaSHA256": "e25d69a95e94efc8623bd2b38609c2e107b26764bdffbc986e75b90767341fb6",
+      "pngSHA256": "5bee51e13820f431ebc581388b1af8c9370006d7f60d1542bb03ef160a5ccbbe"
+    },
+    {
+      "name": "relight-cool-native.png",
+      "width": 224,
+      "height": 160,
+      "rgbaSHA256": "55fd5dee461fb4b8c352f142f11dd0e14ebadf2374ddadd355071c2d3f8c564a",
+      "pngSHA256": "86efe340753a75d2daf174e3495178c17aa776c091462843f42e2c6a02c540d9"
+    },
+    {
+      "name": "tile-open-native.png",
+      "width": 112,
+      "height": 80,
+      "rgbaSHA256": "6ac864e5c1e18fbae8b87c463da591265d8a9e455584a4083299c0b4a162d3c4",
+      "pngSHA256": "8b2db98be3ebe9790ba87f44c604ace0424a160af3e4f968ee603f5f6d0708ce"
+    },
+    {
+      "name": "tile-seamless-native.png",
+      "width": 112,
+      "height": 80,
+      "rgbaSHA256": "5dd7706a5a88e0cf11f6746b5bc218a97c4c172f86209409531e1af213e9056b",
+      "pngSHA256": "a16d41cc798dcbff2a6cea92f42ad5827cea2117eec67b8b90e82b49d887282f"
+    },
+    {
+      "name": "tile-open-repeat-native.png",
+      "width": 224,
+      "height": 160,
+      "rgbaSHA256": "b1ad39baa5b5b670732c10337ebb3acff51c3043aecf6bd6e050f0409bc2d9a7",
+      "pngSHA256": "d4bec94f3e8e7eb7cebb400ecd9b3cda661e7c626e6dea56f90b4f342a563558"
+    },
+    {
+      "name": "tile-seamless-repeat-native.png",
+      "width": 224,
+      "height": 160,
+      "rgbaSHA256": "8d515fed23f648c274c8e736b2e1e7debb5833e18f04e0d4aec0f28338b66b89",
+      "pngSHA256": "01f45367d15af8db4850f09c26db099590555dfcf6561ad22609aed2175d1bff"
+    },
+    {
+      "name": "tile-seamless-3x3-native.png",
+      "width": 336,
+      "height": 240,
+      "rgbaSHA256": "9bf81a4de553c416e7d6ba47c0b86d53dbdb38233ed16644d2f4dbc57e876e54",
+      "pngSHA256": "6e7e50cb10ed8f69dd4b01de156727dcb4e4c938aa42ddf4106b97ec5f9bec71"
+    },
+    {
+      "name": "animation-source-native.png",
+      "width": 224,
+      "height": 160,
+      "rgbaSHA256": "d60943b3879f8a54d012fa809630dfe70f4214e4ddb2100a459648cda97ed47f",
+      "pngSHA256": "8c6d6b502469b398b5b90f3489e8f80c88b1092ccd0970cf37f010212451fe2e"
+    },
+    {
+      "name": "animation-shared-native.png",
+      "width": 224,
+      "height": 160,
+      "rgbaSHA256": "a0f176de6b13c461a710d098952b179e44cdf73f60984e0d0011e4b141275162",
+      "pngSHA256": "bbc00a8e1a206c7e4a46fcca4825c126c13d1a2f2543a4125213f38a46feacc6"
+    },
+    {
+      "name": "animation-cel-0-native.png",
+      "width": 112,
+      "height": 80,
+      "rgbaSHA256": "7f68639d598f3e86d7671e6d89ef6238a026c33f8ff2982bc7f9f168c599256b",
+      "pngSHA256": "b9a45a158ba4b0f36dc095f69dff5b36c37a44dc17af609ed78d1a226e3b5d2e"
+    },
+    {
+      "name": "animation-cel-1-native.png",
+      "width": 112,
+      "height": 80,
+      "rgbaSHA256": "7c482467587871525ddfba54b84bac05f645a00b8eb4fab7d6b1050bace30276",
+      "pngSHA256": "9ad420bf9dc82ead71f78d1545ba97f43bcdc4b76652f62db0f93caa139d2e8f"
+    },
+    {
+      "name": "animation-cel-2-native.png",
+      "width": 112,
+      "height": 80,
+      "rgbaSHA256": "eceb8a0527a6950021dff1f370fd6efc6128383dea54c5e678ef787027fb9d46",
+      "pngSHA256": "796a60bf079add242c9f408fd2868e3677a695b981612166d98d0bf2a101b9fd"
+    },
+    {
+      "name": "animation-cel-3-native.png",
+      "width": 112,
+      "height": 80,
+      "rgbaSHA256": "e17f3d200bd944490ceecfdae198480581708788059fbefe87dcda1cdb4c554f",
+      "pngSHA256": "ae5e081c69aa616cdae08458390af4ac053b04a7ee47dc8c14a962bb6e2a0132"
+    },
+    {
+      "name": "comparison-native.png",
+      "width": 520,
+      "height": 815,
+      "rgbaSHA256": "fca3bcf37e08a718f891c1c6a871210928ff935b4c3a68e708343aae89b3ee13",
+      "pngSHA256": "4fc4861233dc198f764dcc68cac4baaf71cb176088979b4249593eb28adb1b1c"
+    },
+    {
+      "name": "comparison-3x.png",
+      "width": 1416,
+      "height": 1898,
+      "rgbaSHA256": "112d0cd51bc7dc10ccd80a3e795289aef537736c1a080ceb193da91c1ed6d992",
+      "pngSHA256": "7e9a9c124bdcedf73b67347966232d4dca49b4c76c9a763d8a7d3de398aac5c3"
+    }
+  ]
+}

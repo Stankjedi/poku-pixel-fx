@@ -17,6 +17,9 @@ export interface PixelSurfaceLightingOptions2D {
   shadowDistance?: number;
   /** Small native-height offset that avoids self-occlusion on nearly equal heights. Default: .02. */
   bias?: number;
+  /** Treat the complete height/mask raster as a repeating tile. Default false leaves the
+   * canvas exterior empty. Wrapped searches still respect the requested finite distances. */
+  wrap?: boolean;
 }
 
 export interface PixelSurfaceLighting2D {
@@ -134,6 +137,8 @@ export function bakePixelSurfaceLighting2D(w: number, h: number, height: ArrayLi
   const strength = bounded(options.castShadow ?? 1, 0, 1, 'Cast shadow');
   const distance = bounded(options.shadowDistance ?? 32, 1, 128, 'Shadow distance', true);
   const bias = bounded(options.bias ?? .02, 0, 16, 'Surface visibility bias');
+  const wrap = options.wrap ?? false;
+  if (typeof wrap !== 'boolean') throw new RangeError('Surface visibility wrap must be boolean');
   const light = options.light ?? [-.6, -.7, 1];
   if (light.length !== 3 || !light.every(Number.isFinite) || !(Math.hypot(...light) > 0) || !Number.isFinite(Math.hypot(...light)))
     throw new RangeError('Surface light must be a finite nonzero 3-vector');
@@ -147,16 +152,19 @@ export function bakePixelSurfaceLighting2D(w: number, h: number, height: ArrayLi
   const needGradient = ao > 0 || shadowCells.length > 0;
   // Differences of two finite float32 heights can exceed float32 range.
   const gradientX = needGradient ? new Float64Array(n) : undefined, gradientY = needGradient ? new Float64Array(n) : undefined;
+  const index = (x: number, y: number): number => wrap
+    ? ((y % h + h) % h) * w + (x % w + w) % w : y * w + x;
   if (gradientX && gradientY) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = y * w + x;
     if (mask && !mask[i]) continue;
     const center = height[i];
-    const left = x > 0 && (!mask || mask[i - 1]), right = x + 1 < w && (!mask || mask[i + 1]);
-    const up = y > 0 && (!mask || mask[i - w]), down = y + 1 < h && (!mask || mask[i + w]);
-    gradientX[i] = left && right ? limitedSlope(center - height[i - 1], height[i + 1] - center)
-      : right ? height[i + 1] - center : left ? center - height[i - 1] : 0;
-    gradientY[i] = up && down ? limitedSlope(center - height[i - w], height[i + w] - center)
-      : down ? height[i + w] - center : up ? center - height[i - w] : 0;
+    const li = index(x - 1, y), ri = index(x + 1, y), ui = index(x, y - 1), di = index(x, y + 1);
+    const left = (wrap || x > 0) && (!mask || mask[li]), right = (wrap || x + 1 < w) && (!mask || mask[ri]);
+    const up = (wrap || y > 0) && (!mask || mask[ui]), down = (wrap || y + 1 < h) && (!mask || mask[di]);
+    gradientX[i] = left && right ? limitedSlope(center - height[li], height[ri] - center)
+      : right ? height[ri] - center : left ? center - height[li] : 0;
+    gradientY[i] = up && down ? limitedSlope(center - height[ui], height[di] - center)
+      : down ? height[di] - center : up ? center - height[ui] : 0;
   }
   const rayX = planar ? light[0] / planar : 0, rayY = planar ? light[1] / planar : 0;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -170,8 +178,8 @@ export function bakePixelSurfaceLighting2D(w: number, h: number, height: ArrayLi
         let horizon = 0;
         for (const offset of ray) {
           const sx = x + offset.x, sy = y + offset.y;
-          if (sx < 0 || sy < 0 || sx >= w || sy >= h) break;
-          const j = sy * w + sx;
+          if (!wrap && (sx < 0 || sy < 0 || sx >= w || sy >= h)) break;
+          const j = index(sx, sy);
           if (mask && !mask[j]) continue;
           const elevation = height[j] - center - bias, tangent = gx * offset.x + gy * offset.y;
           const rise = elevation - tangent;
@@ -191,8 +199,8 @@ export function bakePixelSurfaceLighting2D(w: number, h: number, height: ArrayLi
       let blocked = slope === -Infinity;
       if (!blocked) for (const cell of shadowCells) {
         const sx = x + cell.x, sy = y + cell.y;
-        if (sx < 0 || sy < 0 || sx >= w || sy >= h) break;
-        const j = sy * w + sx;
+        if (!wrap && (sx < 0 || sy < 0 || sx >= w || sy >= h)) break;
+        const j = index(sx, sy);
         if (mask && !mask[j]) continue;
         // Reconstruct the local surface within a traversed cell. A smooth slope must not
         // cast staircase shadows merely because its heights were sampled on a pixel grid.
