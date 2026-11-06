@@ -440,9 +440,21 @@ try {
     await change('palette-count', 3); await click('extract-animation-palette'); await ready();
     const paletteValues = await evaluate(() => [...document.querySelectorAll('#workbench-palette input')].map(input => input.value));
     const paletteRGB = new Set(paletteValues.map(value => { const n = Number.parseInt(value.slice(1), 16); return color(n >>> 16, n >>> 8 & 255, n & 255) & 0xffffff; }));
-    assert(paletteValues.length === 3 && isDeepStrictEqual((await exportProject()), animationSaved)
+    const extractedProject = await exportProject();
+    // Working swatches now persist as metadata. All actual source pixels, edit layers,
+    // timings, masks and other animation fields must still remain exactly unchanged.
+    const withoutWorkingSwatches = value => {
+      const copy = structuredClone(value); delete copy.workingPalette;
+      for (const frame of copy.frames) delete frame.document.workingPalette;
+      return copy;
+    };
+    assert(paletteValues.length === 3 && isDeepStrictEqual(withoutWorkingSwatches(extractedProject), withoutWorkingSwatches(animationSaved))
       && await evaluate("document.getElementById('palette-note').textContent.includes('3개 프레임')"),
     'Common-palette extraction considers every frame and leaves the animation artwork unchanged until application');
+    assert(extractedProject.workingPalette.length === 3
+      && extractedProject.workingPalette.every(c => paletteRGB.has(c & 0xffffff))
+      && isDeepStrictEqual(extractedProject.frames.find(frame => frame.id === extractedProject.activeFrameId).document.workingPalette, extractedProject.workingPalette),
+    'Extracted shared swatches persist in the animation and active cel as metadata before a color adjustment is applied');
     await change('palette-dither', 'none'); await click('apply-animation-palette'); await ready();
     const commonSaved = await exportProject();
     assert(commonSaved.frames.every(frame => frame.document.layers.at(-1).kind === 'palette')

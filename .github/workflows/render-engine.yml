@@ -119,56 +119,67 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - id: browser_assets
+        run: npm run build
       - name: Locate the runner browser without changing its sandbox
+        id: browser_executable
         run: echo "GPU_BROWSER_PATH=$(command -v google-chrome || command -v chromium || command -v chromium-browser)" >> "$GITHUB_ENV"
       - name: Exercise actual Studio UI, worker export, and explicit CPU fallback
+        if: ${{ !cancelled() && steps.browser_assets.outcome == 'success' && steps.browser_executable.outcome == 'success' }}
         env:
           STUDIO_REQUIRED: "1"
           STUDIO_REPORT_PATH: studio-browser-result.json
           STUDIO_SCREENSHOT_PATH: studio-browser.png
         run: node tools/studio-browser-harness.mjs
       - name: Exercise sequence authoring, palette patterns and optimized atlas export
+        if: ${{ !cancelled() && steps.browser_assets.outcome == 'success' && steps.browser_executable.outcome == 'success' }}
         env:
           PRODUCTION_REQUIRED: "1"
           PRODUCTION_REPORT_PATH: production-browser-result.json
           PRODUCTION_SCREENSHOT_PATH: production-browser.png
         run: node tools/production-browser-harness.mjs
       - name: Probe actual browser WebGPU capability and shaders
+        if: ${{ !cancelled() && steps.browser_assets.outcome == 'success' && steps.browser_executable.outcome == 'success' }}
         env:
           GPU_REPORT_PATH: gpu-browser-result.json
         run: node tools/gpu-browser-harness.mjs
       - name: Exercise material authoring, selected edits and native PNG/project round trips
+        if: ${{ !cancelled() && steps.browser_assets.outcome == 'success' && steps.browser_executable.outcome == 'success' }}
         env:
           PIXEL_ART_REQUIRED: "1"
           PIXEL_ART_REPORT_PATH: pixel-art-browser-result.json
           PIXEL_ART_SCREENSHOT_PATH: pixel-art-browser.png
         run: node tools/pixel-art-browser-harness.mjs
       - name: Exercise native painting, editable layers, palettes and surface-map export
+        if: ${{ !cancelled() && steps.browser_assets.outcome == 'success' && steps.browser_executable.outcome == 'success' }}
         env:
           PIXEL_WORKBENCH_REQUIRED: "1"
           PIXEL_WORKBENCH_REPORT_PATH: pixel-workbench-browser-result.json
           PIXEL_WORKBENCH_SCREENSHOT_PATH: pixel-workbench-browser.png
         run: node tools/pixel-workbench-browser-harness.mjs
       - name: Exercise exact selections, animation cels, shared palettes and timed exports
+        if: ${{ !cancelled() && steps.browser_assets.outcome == 'success' && steps.browser_executable.outcome == 'success' }}
         env:
           PIXEL_ART_PRO_REQUIRED: "1"
           PIXEL_ART_PRO_REPORT_PATH: pixel-art-pro-browser-result.json
           PIXEL_ART_PRO_SCREENSHOT_PATH: pixel-art-pro-browser.png
         run: node tools/pixel-art-pro-browser-harness.mjs
       - name: Exercise sculpted height, editable curves and adjustment reediting
+        if: ${{ !cancelled() && steps.browser_assets.outcome == 'success' && steps.browser_executable.outcome == 'success' }}
         env:
           PIXEL_ART_CRAFT_REQUIRED: "1"
           PIXEL_ART_CRAFT_REPORT_PATH: pixel-art-craft-browser-result.json
           PIXEL_ART_CRAFT_SCREENSHOT_PATH: pixel-art-craft-browser.png
         run: node tools/pixel-art-craft-browser-harness.mjs
       - name: Exercise captured pixel clusters, clone snapshots and direct tile painting
+        if: ${{ !cancelled() && steps.browser_assets.outcome == 'success' && steps.browser_executable.outcome == 'success' }}
         env:
           PIXEL_ART_BRUSHES_REQUIRED: "1"
           PIXEL_ART_BRUSHES_REPORT_PATH: pixel-art-brushes-browser-result.json
           PIXEL_ART_BRUSHES_SCREENSHOT_PATH: pixel-art-brushes-browser.png
         run: node tools/pixel-art-brushes-browser-harness.mjs
       - name: Exercise durable workspace recovery and shared palette persistence
+        if: ${{ !cancelled() && steps.browser_assets.outcome == 'success' && steps.browser_executable.outcome == 'success' }}
         env:
           PIXEL_ART_RECOVERY_REQUIRED: "1"
           PIXEL_ART_RECOVERY_REPORT_PATH: pixel-art-recovery-browser-result.json
