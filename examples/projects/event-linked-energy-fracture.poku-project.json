@@ -1,0 +1,76 @@
+{
+  "schema": "poku.project/v1",
+  "id": "arcane/event-linked-energy-fracture",
+  "name": "Event-linked energy and crystal",
+  "kind": "sequence",
+  "seed": 17,
+  "options": {
+    "seed": 17
+  },
+  "fps": 40,
+  "bg": "dark",
+  "actor": false,
+  "target": false,
+  "layers": {},
+  "edits": [],
+  "notes": "Explicit eventAnchor keeps the relationship after source edits. With eventAnchor, cue at/x/y are offsets, not absolute placement. Energy arrival and crystal shatter share one event time/point. Wide pulse silhouette overlaps earlier; not automatic contact detection.",
+  "cameraMotion": 0,
+  "sequence": {
+    "schema": "poku.sequence/v1",
+    "loop": false,
+    "cues": [
+      {
+        "id": "pulse",
+        "source": {
+          "kind": "generation",
+          "intent": {
+            "material": "energy",
+            "action": "dash",
+            "distance": 88,
+            "travel": 1.1
+          },
+          "renderOptions": {
+            "composition": "material-volumes"
+          }
+        },
+        "at": 0.35,
+        "x": -28,
+        "y": -4,
+        "angle": -0.18,
+        "flip": true
+      },
+      {
+        "id": "crystal",
+        "source": {
+          "kind": "generation",
+          "intent": {
+            "material": "ice",
+            "action": "shatter"
+          },
+          "renderOptions": {
+            "iceSurface": "crystal"
+          }
+        },
+        "at": 0,
+        "x": 0,
+        "y": 0,
+        "angle": 0.14,
+        "flip": true,
+        "eventAnchor": {
+          "cue": "pulse",
+          "event": "arrival",
+          "targetEvent": "shatter"
+        }
+      }
+    ],
+    "size": [
+      384,
+      256
+    ],
+    "origin": [
+      192,
+      180
+    ]
+  },
+  "intentRef": "../../authoring/arcane/event-linked-energy-fracture.intent.json"
+}

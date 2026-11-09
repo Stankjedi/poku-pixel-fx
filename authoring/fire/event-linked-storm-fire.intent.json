@@ -1,0 +1,77 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "fire/event-linked-storm-fire",
+  "intent": {
+    "oneSentence": "A branched electrical strike reaches a point, where a rooted fire prepares, rises and burns out.",
+    "firstRead": "A brief electrical event followed by a longer rooted fire.",
+    "mustNotReadAs": "A continuous lightning hose, a recolored water flow or an immediate universal explosion.",
+    "useContext": "A native-size opt-in authoring example on a dark background; tests demonstrate source connectivity, not automatic art quality."
+  },
+  "readability": {
+    "primaryShape": "One branched electrical channel followed by a rooted rising flame.",
+    "focalPoint": "The explicitly aligned receiving point.",
+    "depthAndOverlap": "Use existing back/front material passes; the action and response overlap only during their authored causal transition.",
+    "contrast": "Material colors remain distinct; no added exposure or glow budget.",
+    "intendedBackgrounds": [
+      "dark"
+    ],
+    "secondaryDetailBudget": "Original generator counts and lifetimes are unchanged; the fire example hides its spark layer so its volumes remain the secondary response."
+  },
+  "mechanics": {
+    "model": "magic-with-rules",
+    "source": "The existing material-specific generation sources.",
+    "driver": "Explicit eventAnchor keeps the relationship after source edits. With eventAnchor, cue at/x/y are offsets, not absolute placement. Fire release deliberately follows lightning strike by 0.28 seconds; source preparation is preserved. No ignition physics or new artwork.",
+    "direction": "The translated, rotated and flipped lightning strikes (42,-8) at .78 s. Fire preparation starts there at .78 s; fire release follows at 1.06 s with its own rotation and flip.",
+    "weightAndMaterial": "Retain the existing generator behavior for each material. No new fluid, heat-transfer or collision simulation is introduced.",
+    "causalChain": "A branched electrical strike reaches a point, where a rooted fire prepares, rises and burns out.",
+    "endingRule": "Both finite sources retain their natural durations; sequence ends at 3.71 seconds.",
+    "exaggerationAndLimits": "This is an authored multi-material composition and a reusable data connection, not automatic choreography, artistic certification or Niagara simulation."
+  },
+  "timeline": {
+    "durationSeconds": 3.71,
+    "loop": false,
+    "phases": [
+      {
+        "name": "preparation",
+        "from": 0,
+        "to": 0.61,
+        "action": "Wait for the delayed source cue and its preparation.",
+        "cause": "Lightning starts at .55 s.",
+        "visibleCue": "Existing channel preparation."
+      },
+      {
+        "name": "action",
+        "from": 0.61,
+        "to": 0.78,
+        "action": "Lightning reaches its authored strike endpoint.",
+        "cause": "Finite lightning generator.",
+        "visibleCue": "Branched electric channel."
+      },
+      {
+        "name": "response",
+        "from": 0.78,
+        "to": 2.36,
+        "action": "Fire prepares at the strike point, releases at 1.06 s and emits through 2.36 s.",
+        "cause": "Stored strike-to-release relation with .28 s explicit delay.",
+        "visibleCue": "Rooted fire at the electrical endpoint."
+      },
+      {
+        "name": "ending",
+        "from": 2.36,
+        "to": 3.71,
+        "action": "Original fire particles cool and expire.",
+        "cause": "Original finite lifetime.",
+        "visibleCue": "No frozen pose."
+      }
+    ],
+    "omittedPhases": {}
+  },
+  "references": [
+    {
+      "source": "examples/projects/event-linked-storm-fire.poku-project.json",
+      "observed": "An explicit stored relation aligns known generation-local markers through sequence transforms.",
+      "application": "Reuse the unchanged generated renderers and Sequence scheduler.",
+      "limits": "Event centers only; no earliest silhouette contact, simulation or full-speed viewing claim."
+    }
+  ]
+}

@@ -12,6 +12,10 @@ from his code; read the three references written to that bar first: `src/fx/mele
 
 ## Shared quality baseline
 
+For new-generation composition and reusable surface-bound particles, read [GENERATION_QUALITY.md](GENERATION_QUALITY.md).
+`new.mjs` now starts with distinct primary form, ribbons, sparks, embers and local light; `--minimal`
+keeps the small learning scaffold. Design the requested subject before detailing this scaffold.
+
 Read [QUALITY.md](QUALITY.md) before drafting. `shadow/spatial-severance` is the clean-curve and refined-particle
 reference: adaptive pointed ribbons, controlled trails, a short focal flash, and restrained glow. Use
 `pointedRibbon`, `motionTrail`, `drawTrail`, and `Painter.glowPath` rather than reimplementing dotted curves

@@ -1,0 +1,79 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "fire/auric-phoenix",
+  "intent": {
+    "oneSentence": "A living fire phoenix flies toward the viewer, spreads its burning wings, draws their energy into its chest and releases a suspended solar explosion.",
+    "firstRead": "A luminous flying phoenix made of articulated fire feathers and moving embers.",
+    "mustNotReadAs": "A static bird logo, fan of straight rods, noodle ribbons, flat polygon sticker or unrelated fireball.",
+    "useContext": "A native 480×360 pixel effect on a dark cinematic background, exported at integer 2× scale."
+  },
+  "readability": {
+    "primaryShape": "Unequal evolving fire-feather fronts form two broad wings around a crowned bird head, narrow chest and flowing tail; no permanently repeated fixed-size feather gradient.",
+    "focalPoint": "The head and chest remain distinct from the wings until a brief chest-centered release.",
+    "depthAndOverlap": "Red rear feather planes are below golden primary feathers. Particle trails originate on past wing poses. Foreground embers cross the silhouette selectively.",
+    "contrast": "White is reserved for localized thermal ridges and the release. Fire contours use discrete orange and gold ramps, with soft light confined to the light buffer.",
+    "intendedBackgrounds": [
+      "dark navy",
+      "black",
+      "transparent export"
+    ],
+    "secondaryDetailBudget": "Several hundred live wing embers but few large accents. Trails must reinforce flight rather than drown the avian silhouette."
+  },
+  "mechanics": {
+    "model": "magic-with-rules",
+    "source": "A central chest core feeds both wings; feather tips release material along their movement.",
+    "driver": "Articulated wing strokes and a rising forward flight path. Charge retracts wing energy into the central source.",
+    "direction": "Wing flow travels outward and then sheds rearward/upward; the final chest release expands outward.",
+    "weightAndMaterial": "Low-mass luminous plasma and sparks, with brighter tightly clustered material at the moving feather roots and dimmer cooling wakes.",
+    "causalChain": "The chest feeds short-lived wing fronts that grow, change width, carry hot material outward, fork and lose their roots while replacement fronts ignite. The established wing sparks and final chest release remain unchanged.",
+    "endingRule": "The main body is consumed by the release. Outward material continues moving as it cools; the effect ends fully empty at 5.6 seconds.",
+    "exaggerationAndLimits": "Original stylized 2D POKU effect with projected depth cues and analytically authored fire lifecycles. Not Unreal/Niagara output or fluid simulation. Changing geometry is observable but automated tests do not certify convincing fire or user approval."
+  },
+  "timeline": {
+    "durationSeconds": 5.6,
+    "loop": false,
+    "phases": [
+      {
+        "name": "preparation",
+        "from": 0,
+        "to": 0.72,
+        "action": "The chest ignites and the wings unfurl.",
+        "cause": "Growing chest energy.",
+        "visibleCue": "A small gold source broadens into a complete bird silhouette."
+      },
+      {
+        "name": "action",
+        "from": 0.55,
+        "to": 3.28,
+        "action": "The phoenix flies with two deliberate wing strokes, then draws energy inward.",
+        "cause": "Wing articulation and increasing central charge.",
+        "visibleCue": "Wings change lift and camber, tails lag, wing sparks detach from their birth positions, chest intensifies near release."
+      },
+      {
+        "name": "response",
+        "from": 3.28,
+        "to": 4.5,
+        "action": "The chest source releases an expanding fire shell and many outward streaks.",
+        "cause": "The charged core releases its stored energy.",
+        "visibleCue": "Brief white-gold flash, broken curved fire front and accelerating outward fragments."
+      },
+      {
+        "name": "ending",
+        "from": 4.15,
+        "to": 5.6,
+        "action": "Fire fragments become sparse orange embers and vanish.",
+        "cause": "No further energy or particles are emitted.",
+        "visibleCue": "Particles continue moving outward while cooling and fading, leaving the background empty."
+      }
+    ],
+    "omittedPhases": {}
+  },
+  "references": [
+    {
+      "source": "firebird_refs/pinterest_phoenix.jpg and firebird_refs/layau.jpg, visually inspected local references",
+      "observed": "Legible flame feathers, narrow avian body and differentiated flowing tail, with explicit hot inner structures.",
+      "application": "Original frontal silhouette and fire material hierarchy, with wholly new articulated geometry and choreography.",
+      "limits": "No pixels, old phoenix source or animation assets are copied. References do not certify the new effect."
+    }
+  ]
+}

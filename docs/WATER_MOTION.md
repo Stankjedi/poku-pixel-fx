@@ -67,3 +67,15 @@ Render with `npm run render -- water/water-jet water/capillary-crown --gif --she
 transparent sprite sheets live in `records/` and are not committed. Artistic quality remains subjective;
 verify timing, scale and readability in the target game. The original `water/splash` still has its
 pre-existing 3-pixel falling-stone tail overflow above its declared canvas; this change does not alter it.
+
+## First-generation water recipe
+
+The structured authoring generator now supports `water/pour` (also `물` / `붓기`). Plain
+`new water/name` selects this finite, non-emissive example instead of the generic luminous comet.
+It uses the existing analytic liquid helpers for a continuous falling stream, retained source-time
+velocity variation, detached droplets and delayed surface contact. Source cutoff travels down the
+flow; the receiving pool spreads and thins afterward. Existing catalog water effects are unchanged.
+
+The only supported water action here is `pour`; other actions and loops are not substituted.
+`--cinematic` still explicitly selects the old generic study. See GENERATION_QUALITY.md for the
+scoped visual findings, palette/layer contracts and remaining narrow/angular-stream limitations.

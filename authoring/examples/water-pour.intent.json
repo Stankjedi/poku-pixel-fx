@@ -1,0 +1,73 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "examples/water-pour",
+  "intent": {
+    "oneSentence": "A finite flow of water pours from an elevated lip, steepens under gravity, lands in a shallow spreading pool and leaves small falling drops and ripples as it drains.",
+    "firstRead": "Falling liquid feeding a wet spreading surface.",
+    "mustNotReadAs": "A blue glowing comet, energy beam, identical noodles, solid blue hose, or unexplained exploding circle.",
+    "useContext": "Native pixel effect over dark, light and patterned game backgrounds."
+  },
+  "readability": {
+    "primaryShape": "One connected descending stream with transported unequal bulges, narrowing under acceleration, ending at a broad low pool.",
+    "focalPoint": "Small white reflected glints at the wet contact and lit stream edges, not an emissive core.",
+    "depthAndOverlap": "Low pool behind falling stream; rear and near droplets remain separate.",
+    "contrast": "Transmitting midtones, shaded underside and short bright reflection fragments.",
+    "intendedBackgrounds": [
+      "dark",
+      "light",
+      "patterned ground"
+    ],
+    "secondaryDetailBudget": "Sparse short-tailed drops detach from the stream and smaller splash drops begin at actual contact."
+  },
+  "mechanics": {
+    "model": "stylized-physical",
+    "source": "A fixed elevated wet lip supplies a finite amount of water.",
+    "driver": "Downward initial velocity and gravity accelerate parcels; retained sideways momentum bends the stream.",
+    "direction": "Mostly down with modest rightward travel, then lateral spreading on the receiving plane.",
+    "weightAndMaterial": "Non-emissive translucent liquid, with reflected highlights and round detached drops.",
+    "causalChain": "Source start and cutoff travel with the falling parcels. The matching ballistic landing time starts surface spreading and local secondary splashes.",
+    "endingRule": "The last source parcel lands, droplets finish falling and low waves widen and thin into the receiving surface.",
+    "exaggerationAndLimits": "Analytic stylized water flow, not Navier-Stokes, optical refraction, collision with arbitrary scenes, or an Unreal/Niagara implementation."
+  },
+  "timeline": {
+    "durationSeconds": 3.1,
+    "loop": false,
+    "phases": [
+      {
+        "name": "action",
+        "from": 0.18,
+        "to": 1.35,
+        "action": "The elevated source opens, with the leading liquid traveling down.",
+        "cause": "Finite source supply and gravity.",
+        "visibleCue": "A growing continuous fall and delayed first contact."
+      },
+      {
+        "name": "response",
+        "from": 0.72,
+        "to": 2.3,
+        "action": "Incoming water spreads and emits falling splash droplets.",
+        "cause": "Liquid contacts the receiving plane.",
+        "visibleCue": "Low pool, outward waves and small ballistic beads."
+      },
+      {
+        "name": "ending",
+        "from": 1.35,
+        "to": 3.1,
+        "action": "The cutoff travels down, all drops land, and low remaining water thins.",
+        "cause": "Source supply stops.",
+        "visibleCue": "The source clears first, then the lower flow and final surface traces."
+      }
+    ],
+    "omittedPhases": {
+      "preparation": "No charge-up or external actor is assumed; the source opening is the first visible event."
+    }
+  },
+  "references": [
+    {
+      "source": "src/core/liquid.ts; src/fx/water/water-jet.ts; src/fx/water/capillary-crown.ts",
+      "observed": "Seekable ballistic drops, matching impact times, translucent flow and contact-led surface response already exist.",
+      "application": "Reuse motion and impact primitives, narrow color-buffer reflections and curved wet surfaces without existing emissive rings.",
+      "limits": "New renderer remains provisional until actual native output is inspected; no full-speed viewing or user approval is recorded."
+    }
+  ]
+}

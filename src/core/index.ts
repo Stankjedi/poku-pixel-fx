@@ -23,6 +23,8 @@ export type { PathOptions } from "./painter.js";
 export type { AlphaMode } from "../render/coverage.js";
 export { FONTS, textWidth } from "./font.js";
 export { createFrame, clearFrame, createFx, composite, painterFor, resolveOptions, sceneCameraOffset, FX_TICK_RATE, FX_TICK_SECONDS } from "./fx.js";
+export { createCrystalSurface2D } from './crystal-surface.js';
+export type { CrystalSurfaceOptions2D, CrystalSurfaceState2D } from './crystal-surface.js';
 export { stockActor, drawActor, actorAlphaOf, withActorPixels, HERO, HERO2, HERO_PAL, DUMMY_PAL } from "./actor.js";
 export { backdrop, BACKDROPS } from "./scene.js";
 export { createAct, actBounds, actSpan, actTiming, poseAt, lerpPose, Target, STAND, SKINS, posed } from "./act.js";
@@ -58,6 +60,8 @@ export type { PointLight2D, PointLightSample2D, LightVector2D } from './point-li
 export * from './canvas-bounds.js';
 
 export * from "./detail-particles.js";
+export * from "./cinematic-particles.js";
+export * from "./kinetic-body.js";
 
 export * from "./sprite-edit.js";
 
@@ -68,6 +72,7 @@ export * from "./material-ramp.js";
 export type { PixelActor2D } from "./actor.js";
 
 export * from "./sprite-clip.js";
+export * from "./sprite-socket-birth.js";
 
 export * from './actor-adapter.js';
 export { resolveEffectExport, exportLayout2D, frameDurationMs, edgeFade, separateFrameLayers, atlasMetadata } from '../render/export.js';
@@ -102,3 +107,17 @@ export * from './character-animation.js';
 export * from './character-identity.js';
 export * from './creature-asset.js';
 export * from './character-asset.js';
+export {createThermalRibbon2D} from './thermal-ribbon.js';
+export type {ThermalRibbonOptions2D,ThermalRibbonSample2D,ThermalRibbonSource2D} from './thermal-ribbon.js';
+
+export * from "./dissipation-pose.js";
+
+export * from './ignition-pose.js';
+
+export * from './fracture2d.js';
+
+export * from './curl-flow.js';
+
+export * from './particle-volume.js';
+
+export * from "./charge-volume.js";

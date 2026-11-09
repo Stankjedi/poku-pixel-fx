@@ -14,10 +14,11 @@ Pixel art effects as code. Each effect is one file, `src/fx/<category>/<name>.ts
 **color** (pixels: opaque, dithered or truly translucent) and **light** (additive glow). No images, so an effect
 can be played live, recolored, mirrored, reseeded and rendered to a sprite sheet for any engine.
 
-The method is Hugo Duprez's ([How to make (good) pixel art effects with
-Claude](https://www.spritefusion.com/blog/how-to-make-good-pixel-art-effects-with-claude)): code is clay, trust
-your eyes, feed your references. One-shot prompts make mediocre effects. Drafts you render, look at and refine
-make good ones.
+The method builds on Hugo Duprez's ([How to make (good) pixel art effects with
+Claude](https://www.spritefusion.com/blog/how-to-make-good-pixel-art-effects-with-claude)): trust your eyes and
+use references. Aim for a strong first complete generation by choosing subject, motion, scale and layer
+hierarchy before detail work. Do not make the user repeatedly refine an old effect that misses their visual
+direction. Inspect the result and fix material defects internally; tests do not certify artistic quality.
 
 ## Before anything
 
@@ -91,6 +92,21 @@ up, when to freeze, how the target reacts. Use it whichever way the game is buil
 
 Read `docs/AUTHORING.md` first: it is the contract (meta, `draw(p, t, o)` for pure effects or `create(o)` for
 simulated ones, local coordinates, seamless loops, ending empty), the toolkit, the painter API and the quality bar.
+Read `docs/GENERATION_QUALITY.md` for the first-generation layer plan and `createCinematicParticles2D`.
+For supported fire/energy dash, burst or plume requests, prefer `new.mjs --material <fire|energy>
+--action <dash|burst|plume> [--response <burst|dissipate>]` (exact Korean aliases are documented).
+For a finite falling water flow and spreading pool, use `new.mjs --material water --action pour`
+(or `물` / `붓기`). It is non-emissive, uses ballistic contact and rejects other water actions/loops.
+For rigid ice breakup, use `new.mjs --material ice --action shatter` (or `얼음` / `파쇄`); this
+creates a solid crystal divided into persistent rotating/falling cells, without recoloring fire or
+adding glow. Other ice actions are rejected. See the fracture API and limits in GENERATION_QUALITY.md.
+This generates a causal plan whose primary source, arrival, emitted trails and terminal response share
+timing and position. Do not silently keyword-match negation, substitute a supported preset for an
+unsupported creature, or present this finite vocabulary as a general text-to-effect system.
+For particle-rich cinematic requests, compose the primary silhouette, source-bound flowing ribbons, detached
+sparks, cooling embers and light separately from the start. Match the requested visual language; do not assume
+that a sparse pixel icon, a generic burst or extra glow is a substitute for an articulated flying creature.
+Unreal/Niagara-like means a visual reference, not that this CPU renderer is that engine or its fluid simulator.
 Read `docs/QUALITY.md` and `docs/EFFECT_INTENT.md` too. Write a concrete intent brief before adding detail: what happened, the intended first impression and likely wrong read, dominant silhouette, source of force, direction, weight/material, cause and effect, and preparation/action/response/ending. Use a physical, stylized-physical, magic-with-rules or symbolic-ui model with explicit limits. Omit inapplicable phases with reasons rather than imposing the same impact, gravity or glow on every effect. Treat `shadow/spatial-severance` as the clean-curve, refined-particle reference,
 not a style to impose on all effects. New effects should use the shared ribbon, trajectory trail, envelope,
 and path-lighting helpers where appropriate. Keep the pixel palette and inspect native-size silhouettes,
@@ -108,7 +124,7 @@ Then:
 2. **Find references** in the library: `node build-tools/tools/list.mjs <words>`, then read the two or three closest effect
    files and borrow their techniques (`Particles` and `Bits` in `src/core/sim.ts` for sparks, smoke and debris,
    `p.disc` for translucent volumes, `cycle` for seamless particles, `tileFbm` scrolls for flames and water). Use the local library references as the quality bar; external references are optional and require network access.
-3. **Draft.** `node build-tools/tools/new.mjs <category>/<name>` (add `--loop` for a loop) gives a working file and blank `authoring/<category>/<name>.intent.json`. Fill that brief, including actual `meta.duration` and `meta.loop`, and run `node tools/effect-intent.mjs validate <id>`. For an existing effect, create the brief with `node tools/effect-intent.mjs init <id>`. When the
+3. **Generate.** `node build-tools/tools/new.mjs <category>/<name>` gives a declared one-shot example for `fire` (plume), `ice` (shatter), `scifi` (energy dash), or `water` (pour), with its generation plan and blank `authoring/<category>/<name>.intent.json`. These examples do not interpret the name or replace an unsupported creature/action. Explicit `--material` / `--action` wins. `--cinematic` selects the generic palette-based luminous study; use `--cinematic --loop` deliberately for a generic loop in these four categories. Mapped material loops reject before writing because they are not supported. Other categories retain the generic starter. `--minimal` explicitly selects the old small learning scaffold. Replace the primary form with the requested subject before the first complete render. Fill that brief, including actual `meta.duration` and `meta.loop`, and run `node tools/effect-intent.mjs validate <id>`. For an existing effect, create the brief with `node tools/effect-intent.mjs init <id>`. When the
    direction is open, write 3 to 5 genuinely different drafts (`<name>-a.ts` .. `-e.ts`), render them all
    (`node build-tools/tools/render.mjs "<category>/<name>-*"`) and look at every contact sheet before choosing. Show the user
    the strongest two or three if they're around (`--gif` makes animations to share). Rebuild after changing source files before rendering.

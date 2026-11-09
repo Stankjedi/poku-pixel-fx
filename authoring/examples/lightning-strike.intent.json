@@ -1,0 +1,85 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "examples/lightning-strike",
+  "intent": {
+    "oneSentence": "A faint branching leader connects downward, a brief bright discharge lights its main channel, a weaker pulse reuses that channel, and fixed residual light fades.",
+    "firstRead": "A sudden forked lightning strike, not a traveling energy projectile.",
+    "mustNotReadAs": "A blue comet, evenly spaced flat zigzag ornament, identical white noodle branches, or a slowly wiggling neon wire.",
+    "useContext": "Native pixel VFX over dark, light and patterned ground backgrounds."
+  },
+  "readability": {
+    "primaryShape": "One dominant crooked channel with asymmetric unequal rooted branches and fine secondary dead-end forks.",
+    "focalPoint": "The brief white main return channel, not detached particle confetti.",
+    "depthAndOverlap": "Thin side branches remain subordinate to the main connected path.",
+    "contrast": "Small high-current core and localized atmospheric glow; no full-screen white frame.",
+    "intendedBackgrounds": [
+      "dark",
+      "light",
+      "patterned ground"
+    ],
+    "secondaryDetailBudget": "No invented burning ground, smoke or falling debris. Side forks shorten and fade earlier than the main channel."
+  },
+  "mechanics": {
+    "model": "stylized-physical",
+    "source": "A descending ionized leader between a fixed elevated source and receiving point.",
+    "driver": "Connection enables an upward return-current front; a second pulse reuses the established main path.",
+    "direction": "Leader reveal downward, return current upward, afterglow stationary.",
+    "weightAndMaterial": "Brief luminous plasma, not chunks of material under gravity.",
+    "causalChain": "Faint connected leaders reach their parent junctions before growing branches. Connection precedes the first return pulse. A weaker less-branched repeat uses the same trunk; residual emission fades without moving the topology.",
+    "endingRule": "All current ceases and residual channel light cools to an empty frame.",
+    "exaggerationAndLimits": "Leader/stroke times are deliberately extended for readable pixel animation. This is not real-time atmospheric physics, an electromagnetic simulation, or Unreal/Niagara rendering."
+  },
+  "timeline": {
+    "durationSeconds": 0.95,
+    "loop": false,
+    "phases": [
+      {
+        "name": "preparation",
+        "from": 0.06,
+        "to": 0.23,
+        "action": "Faint branching leader approaches the receiving point.",
+        "cause": "Stylized growing ionization.",
+        "visibleCue": "Dim unequal rooted branches grow downward."
+      },
+      {
+        "name": "action",
+        "from": 0.23,
+        "to": 0.315,
+        "action": "A bright return front lights the connected main channel.",
+        "cause": "Leader reaches the receiving point.",
+        "visibleCue": "Short high-contrast trunk and weaker branches."
+      },
+      {
+        "name": "response",
+        "from": 0.41,
+        "to": 0.48,
+        "action": "A weaker repeat reuses the trunk.",
+        "cause": "Remaining discharge follows the established channel.",
+        "visibleCue": "Same crooked primary path with fewer visible side forks."
+      },
+      {
+        "name": "ending",
+        "from": 0.48,
+        "to": 0.95,
+        "action": "Stationary residual light disappears.",
+        "cause": "Current stops and the channel cools.",
+        "visibleCue": "Thin dim traces fade to empty without flying off."
+      }
+    ],
+    "omittedPhases": {}
+  },
+  "references": [
+    {
+      "source": "https://www.nssl.noaa.gov/education/svrwx101/lightning/types/ ; https://www.weather.gov/safety/lightning-science-dart-leaders ; https://www.weather.gov/safety/lightning-science-slow-motion-flashes",
+      "observed": "Official text describes branching negative cloud-to-ground leaders, rapid upward return strokes and repeats reusing the main channel with fewer branches.",
+      "application": "Separate persistent branched geometry from leader extent, connected current pulses and fading stationary residual.",
+      "limits": "Official source text verified; external photo/high-speed-video pixels unavailable from the connected tools. Actual atmospheric timing is much faster. No direct external visual inspection or full-speed local playback is claimed."
+    },
+    {
+      "source": "src/3d/discharge.ts and src/fx/lightning/_lib.ts",
+      "observed": "Persistent unequal fork topology and connected path illumination already exist in separate renderers.",
+      "application": "Use the same design principles with existing 2D Painter path/glow helpers without importing or changing the 3D engine or old effects.",
+      "limits": "No full-speed viewing or user approval is recorded."
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "fire/turning-torch-socket-sparks",
+  "intent": {
+    "oneSentence": "A carried torch turns as short bright sparks detach from its authored flame.",
+    "firstRead": "Moving torch with independent brief sparks.",
+    "mustNotReadAs": "A phoenix, automatic anatomy tracking, or sparks dragged by the later pose.",
+    "useContext": "96 by 64 native CPU preview against dark background."
+  },
+  "readability": {
+    "primaryShape": "Narrow handle and changing warm flame tip.",
+    "focalPoint": "Flame edge at the chosen pose socket.",
+    "depthAndOverlap": "Small sparks detach in front of the moving torch.",
+    "contrast": "Warm body, small pale bright sparks.",
+    "intendedBackgrounds": [
+      "dark"
+    ],
+    "secondaryDetailBudget": "18 scheduled short sparks; no extra contact layer."
+  },
+  "mechanics": {
+    "model": "stylized-physical",
+    "source": "Explicit per-pose torch tip, authored edge fallback when hidden.",
+    "driver": "Authored ejection velocity, captured once at each event.",
+    "direction": "Tip basis turns local ejection upward; fallback uses its own angle.",
+    "weightAndMaterial": "Tiny luminous cooling fragments with brief linear motion.",
+    "causalChain": "Moving pose and root sampled at birth, then fragments move independently.",
+    "endingRule": "Sparks extinguish by life; clip ends at 550 ms; blank at 800 ms.",
+    "exaggerationAndLimits": "Linear short-flight recipe, no fluid solver, anatomy inference, collision or artistic certification."
+  },
+  "timeline": {
+    "durationSeconds": 0.8,
+    "loop": false,
+    "phases": [
+      {
+        "name": "action",
+        "from": 0,
+        "to": 0.55,
+        "action": "Carry torch across three authored poses and release sparks.",
+        "cause": "Explicit clip time and root path.",
+        "visibleCue": "Pose tips change while detached sparks retain independent motion."
+      },
+      {
+        "name": "ending",
+        "from": 0.55,
+        "to": 0.8,
+        "action": "Last fragments cool and scene becomes empty.",
+        "cause": "Finite clip and finite spark lifetimes.",
+        "visibleCue": "No continuing trails or residual point."
+      }
+    ],
+    "omittedPhases": {
+      "preparation": "Already carrying a lit torch at scene start.",
+      "response": "No target contact is part of this example."
+    }
+  },
+  "references": []
+}

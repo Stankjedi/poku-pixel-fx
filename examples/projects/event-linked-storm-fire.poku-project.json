@@ -1,0 +1,76 @@
+{
+  "schema": "poku.project/v1",
+  "id": "fire/event-linked-storm-fire",
+  "name": "Event-linked lightning and fire",
+  "kind": "sequence",
+  "seed": 17,
+  "options": {
+    "seed": 17
+  },
+  "fps": 40,
+  "bg": "dark",
+  "actor": false,
+  "target": false,
+  "layers": {},
+  "edits": [],
+  "notes": "Explicit eventAnchor keeps the relationship after source edits. With eventAnchor, cue at/x/y are offsets, not absolute placement. Fire release deliberately follows lightning strike by 0.28 seconds; source preparation is preserved. No ignition physics or new artwork.",
+  "cameraMotion": 0,
+  "sequence": {
+    "schema": "poku.sequence/v1",
+    "loop": false,
+    "cues": [
+      {
+        "id": "strike",
+        "source": {
+          "kind": "generation",
+          "intent": {
+            "material": "lightning",
+            "action": "strike"
+          }
+        },
+        "at": 0.55,
+        "x": 42,
+        "y": -8,
+        "angle": 0.18,
+        "flip": true
+      },
+      {
+        "id": "fire",
+        "source": {
+          "kind": "generation",
+          "intent": {
+            "material": "fire",
+            "action": "plume"
+          },
+          "renderOptions": {
+            "composition": "material-volumes"
+          }
+        },
+        "at": 0.28,
+        "x": 0,
+        "y": 0,
+        "options": {
+          "layers": {
+            "sparks": false
+          }
+        },
+        "angle": -0.12,
+        "flip": true,
+        "eventAnchor": {
+          "cue": "strike",
+          "event": "strike",
+          "targetEvent": "release"
+        }
+      }
+    ],
+    "size": [
+      384,
+      256
+    ],
+    "origin": [
+      192,
+      180
+    ]
+  },
+  "intentRef": "../../authoring/fire/event-linked-storm-fire.intent.json"
+}

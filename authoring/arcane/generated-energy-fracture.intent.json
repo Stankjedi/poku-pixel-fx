@@ -1,0 +1,77 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "arcane/generated-energy-fracture",
+  "intent": {
+    "oneSentence": "A directed energy pulse arrives at an appearing crystal; the crystal breaks into rigid pieces at the same place and time.",
+    "firstRead": "A magically prepared crystal breaking when the energy pulse reaches it.",
+    "mustNotReadAs": "Unrelated simultaneous effects, an automatically detected collision, or energy particles turning into water.",
+    "useContext": "A native-size opt-in authoring example on a dark background; tests demonstrate source connectivity, not automatic art quality."
+  },
+  "readability": {
+    "primaryShape": "A directional energy pulse and rigid crystal.",
+    "focalPoint": "The explicitly aligned receiving point.",
+    "depthAndOverlap": "Use existing back/front material passes; the action and response overlap only during their authored causal transition.",
+    "contrast": "Material colors remain distinct; no added exposure or glow budget.",
+    "intendedBackgrounds": [
+      "dark"
+    ],
+    "secondaryDetailBudget": "Original generator counts and lifetimes are unchanged; the fire example hides its spark layer so its volumes remain the secondary response."
+  },
+  "mechanics": {
+    "model": "magic-with-rules",
+    "source": "The existing material-specific generation sources.",
+    "driver": "The pulse and target remain distinct materials. The pulse arrives at 0.28 + 0.74 = 1.02 s. The crystal starts at 1.02 - 0.36 = 0.66 s and its local center (0,-16) is translated to (64,-16). These numbers are authored, not live event bindings.",
+    "direction": "Energy travels right from (-64,-16) to (64,-16); a crystal prepares at the destination, breaks at 1.02 seconds, then its pieces fall.",
+    "weightAndMaterial": "Retain the existing generator behavior for each material. No new fluid, heat-transfer or collision simulation is introduced.",
+    "causalChain": "A directed energy pulse arrives at an appearing crystal; the crystal breaks into rigid pieces at the same place and time.",
+    "endingRule": "Both sources run to their natural endings; the sequence is empty at 2.17 seconds.",
+    "exaggerationAndLimits": "This is an authored multi-material composition and a reusable data connection, not automatic choreography, artistic certification or Niagara simulation."
+  },
+  "timeline": {
+    "durationSeconds": 2.17,
+    "loop": false,
+    "phases": [
+      {
+        "name": "preparation",
+        "from": 0,
+        "to": 0.28,
+        "action": "The energy source prepares at the left launch point.",
+        "cause": "The source stores energy.",
+        "visibleCue": "Small local ignition before travel."
+      },
+      {
+        "name": "action",
+        "from": 0.28,
+        "to": 1.02,
+        "action": "The pulse travels right; the crystal appears and starts cracking from 0.66 s.",
+        "cause": "A magical target forms before energy arrives.",
+        "visibleCue": "Separated moving pulse and stationary solid."
+      },
+      {
+        "name": "response",
+        "from": 1.02,
+        "to": 1.6,
+        "action": "The pulse dissipates and the crystal breaks into falling cells.",
+        "cause": "Both authored events meet at (64,-16).",
+        "visibleCue": "Rigid pieces separate without an extra explosion."
+      },
+      {
+        "name": "ending",
+        "from": 1.6,
+        "to": 2.17,
+        "action": "Detached matter fades and the final frame is empty.",
+        "cause": "Both finite source lifetimes expire.",
+        "visibleCue": "No frozen end pose or ongoing emission."
+      }
+    ],
+    "omittedPhases": {}
+  },
+  "references": [
+    {
+      "source": "examples/projects/generated-energy-fracture.poku-project.json",
+      "observed": "The JSON stores material intent, source placement, timing and layer selection.",
+      "application": "Use existing generated renderers through the existing Sequence scheduler.",
+      "limits": "Intended meaning only; native still review and full-speed playback observations must be recorded separately."
+    }
+  ]
+}

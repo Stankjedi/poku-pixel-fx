@@ -1,0 +1,77 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "arcane/event-linked-energy-fracture",
+  "intent": {
+    "oneSentence": "A directed energy pulse arrives at an appearing crystal; the crystal breaks into rigid pieces at the same place and time.",
+    "firstRead": "A magically prepared crystal breaking when the energy pulse reaches it.",
+    "mustNotReadAs": "Unrelated simultaneous effects, an automatically detected collision, or energy particles turning into water.",
+    "useContext": "A native-size opt-in authoring example on a dark background; tests demonstrate source connectivity, not automatic art quality."
+  },
+  "readability": {
+    "primaryShape": "A directional energy pulse and rigid crystal.",
+    "focalPoint": "The explicitly aligned receiving point.",
+    "depthAndOverlap": "Use existing back/front material passes; the action and response overlap only during their authored causal transition.",
+    "contrast": "Material colors remain distinct; no added exposure or glow budget.",
+    "intendedBackgrounds": [
+      "dark"
+    ],
+    "secondaryDetailBudget": "Original generator counts and lifetimes are unchanged; the fire example hides its spark layer so its volumes remain the secondary response."
+  },
+  "mechanics": {
+    "model": "magic-with-rules",
+    "source": "The existing material-specific generation sources.",
+    "driver": "Explicit eventAnchor keeps the relationship after source edits. With eventAnchor, cue at/x/y are offsets, not absolute placement. Energy arrival and crystal shatter share one event time/point. Wide pulse silhouette overlaps earlier; not automatic contact detection.",
+    "direction": "Rotated and flipped pulse travels left; the transformed crystal is placed at its event endpoint (-74.1536,-11.8642). Source starts at .35 seconds, target preparation at 1.37 seconds, both arrival/shatter events at 1.73 seconds.",
+    "weightAndMaterial": "Retain the existing generator behavior for each material. No new fluid, heat-transfer or collision simulation is introduced.",
+    "causalChain": "A directed energy pulse arrives at an appearing crystal; the crystal breaks into rigid pieces at the same place and time.",
+    "endingRule": "Both finite sources retain their natural durations; sequence ends at 2.88 seconds.",
+    "exaggerationAndLimits": "This is an authored multi-material composition and a reusable data connection, not automatic choreography, artistic certification or Niagara simulation."
+  },
+  "timeline": {
+    "durationSeconds": 2.88,
+    "loop": false,
+    "phases": [
+      {
+        "name": "preparation",
+        "from": 0,
+        "to": 0.63,
+        "action": "The delayed source prepares.",
+        "cause": "Authored source cue starts at .35 s.",
+        "visibleCue": "Existing source ignition."
+      },
+      {
+        "name": "action",
+        "from": 0.63,
+        "to": 1.73,
+        "action": "Energy travels left while the target prepares from 1.37 s.",
+        "cause": "Stored arrival-to-shatter relationship.",
+        "visibleCue": "Directional pulse approaching the crystal."
+      },
+      {
+        "name": "response",
+        "from": 1.73,
+        "to": 2.3,
+        "action": "Crystal parts separate at the pulse event center.",
+        "cause": "Aligned authored event markers, not detected contact.",
+        "visibleCue": "Rigid crystal pieces."
+      },
+      {
+        "name": "ending",
+        "from": 2.3,
+        "to": 2.88,
+        "action": "Finite particles fade.",
+        "cause": "Original source lifetimes.",
+        "visibleCue": "Empty final frame."
+      }
+    ],
+    "omittedPhases": {}
+  },
+  "references": [
+    {
+      "source": "examples/projects/event-linked-energy-fracture.poku-project.json",
+      "observed": "An explicit stored relation aligns known generation-local markers through sequence transforms.",
+      "application": "Reuse the unchanged generated renderers and Sequence scheduler.",
+      "limits": "Event centers only; no earliest silhouette contact, simulation or full-speed viewing claim."
+    }
+  ]
+}

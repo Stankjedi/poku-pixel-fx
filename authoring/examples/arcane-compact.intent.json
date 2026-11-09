@@ -1,0 +1,78 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "examples/arcane-compact",
+  "intent": {
+    "oneSentence": "A moving luminous magic-source sheds short finite motes behind a dominant head, then all matter fades.",
+    "firstRead": "Directed luminous matter with compact detached pieces, not parallel noodles.",
+    "mustNotReadAs": "Long repeated strands, a dense particle cloud, unrelated orbiting magic, or fire.",
+    "useContext": "New plain arcane one-shot source studies at native scale on dark and light backgrounds."
+  },
+  "readability": {
+    "primaryShape": "The unchanged changing head remains dominant; secondary matter occupies short unequal pieces.",
+    "focalPoint": "Existing luminous head, not new glints or an added glow mass.",
+    "depthAndOverlap": "Subordinate finite motes separated by open gaps.",
+    "contrast": "Original palette, source light and per-particle light retained.",
+    "intendedBackgrounds": [
+      "dark",
+      "light"
+    ],
+    "secondaryDetailBudget": "Same 80 main particles, 100 sparks and 32 embers; no count increase."
+  },
+  "mechanics": {
+    "model": "magic-with-rules",
+    "source": "Existing moving luminous source and rear surface.",
+    "driver": "Existing inherited source velocity and analytic particle motion.",
+    "direction": "Unchanged directed source path and shed trajectories.",
+    "weightAndMaterial": "Stylized finite luminous matter using the existing energy-profile particle volume.",
+    "causalChain": "The source emits particles once at birth; each follows its old trajectory but paints finite local matter rather than its whole recent history.",
+    "endingRule": "Existing source fade, particle lifetimes and empty ending retained.",
+    "exaggerationAndLimits": "A generic energy-comet study, not arbitrary spell interpretation, physical particles, true depth or Niagara-quality certification."
+  },
+  "timeline": {
+    "durationSeconds": 2.4,
+    "loop": false,
+    "phases": [
+      {
+        "name": "preparation",
+        "from": 0,
+        "to": 0.28,
+        "action": "Existing head appears.",
+        "cause": "Existing source envelope.",
+        "visibleCue": "Growing primary."
+      },
+      {
+        "name": "action",
+        "from": 0.28,
+        "to": 1.32,
+        "action": "Head moves and sheds short motes.",
+        "cause": "Unchanged source path and birth window.",
+        "visibleCue": "Finite matter behind the head."
+      },
+      {
+        "name": "response",
+        "from": 1.32,
+        "to": 1.65,
+        "action": "Source fades while particles continue.",
+        "cause": "Emission stops.",
+        "visibleCue": "Remaining local pieces separate."
+      },
+      {
+        "name": "ending",
+        "from": 1.65,
+        "to": 2.4,
+        "action": "Remaining particles expire.",
+        "cause": "Existing finite lives.",
+        "visibleCue": "Empty original ending."
+      }
+    ],
+    "omittedPhases": {}
+  },
+  "references": [
+    {
+      "source": "src/core/particle-volume.ts and controlled original/short-history/volume native comparisons",
+      "observed": "The volume candidate retains readable multi-pixel shed matter without the original long paired strips or the shortened control\u2019s sparse specks.",
+      "application": "Reuse unchanged energy-profile volume only in new plain arcane one-shots; preserve old modes and original head lighting.",
+      "limits": "Three seeds and native/adjacent frames support a modest anti-ribbon gain. Short paired slivers and shard-like late fragments remain; full-speed playback is unreviewed."
+    }
+  ]
+}

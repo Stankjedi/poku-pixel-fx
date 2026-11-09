@@ -4,11 +4,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const commands = {
-  list: 'list', render: 'render', act: 'act', check: 'check', review: 'review', share: 'share',
+  'preview-generation': 'preview-generation', list: 'list', render: 'render', act: 'act', check: 'check', review: 'review', share: 'share',
   'render-3d': 'render-3d', 'render-3d-gif': 'render-3d-gif', aseprite: 'aseprite', gallery: 'serve', catalog: 'export-catalog',
 };
 const help = `POKU Pixel FX
   poku-fx list [category]
+  poku-fx preview-generation --material fire --action plume --seeds 0,17 --out NEW_DIRECTORY
   poku-fx render category/effect --sheet --bundle [--out DIRECTORY]
   poku-fx render --project project.json --bundle --trim --deduplicate
   poku-fx act category/effect --bundle [--seconds N]

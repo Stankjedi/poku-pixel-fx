@@ -1,0 +1,149 @@
+{
+  "base": "07347ed156a513ff0d822158ad92cdec8c54dfe2",
+  "cases": [
+    {
+      "name": "generated-energy-fracture",
+      "time": 0,
+      "color": "183facbc37f3a18e7fbdd26d4963c44885692139b16d1da7a41da17e5770f9e1",
+      "light": "183facbc37f3a18e7fbdd26d4963c44885692139b16d1da7a41da17e5770f9e1",
+      "hdrLight": "9794838a8913f06045b1b48909d103d4208f6a8050845b796cdcc20e5600452f",
+      "rgba": "d272b34b5a4817f60e49043178c738cbb96401106939b8caf3f098372e04afa6"
+    },
+    {
+      "name": "generated-energy-fracture",
+      "time": 0.24,
+      "color": "30aad6169be4d7969807d33f954f7a0a038cbf6cdf2ff2f86c546bf2a74ce3f5",
+      "light": "f1037fdace77aff4fd2614067aa3b5723c98a0f7c3376f229b90d217c5483a30",
+      "hdrLight": "2a29e1aa1ea70c30a1fad1d479a1cfd84dfc803dd55ac173fd528c92d8f12f1c",
+      "rgba": "7ca73bd33aca2329e840270672caa77ec4a64122bb2d43f54b90b59148408120"
+    },
+    {
+      "name": "generated-energy-fracture",
+      "time": 0.72,
+      "color": "1a29cddad2a27bcc8436b2ad7fddad62664827713fbf31a4fd1a49c09ee61763",
+      "light": "9f98af1a7db7c289b5b2046ce5108ab38f40e5f8c04df3dffe7ba82d2e02c8c0",
+      "hdrLight": "3e1aa52a16f89c5ea0fff5fc1b064aa4c8c0abbab5c047abdebbbeace4985d3f",
+      "rgba": "24d8a6ef07edc7258c0d86f159be04c32704459c9b77e0d4fef4fb4256e8fc34"
+    },
+    {
+      "name": "generated-energy-fracture",
+      "time": 0.88,
+      "color": "a7000233cc2f1e050df6efeed36f82bcd24602df3ba0a5896009e00a7fc7f495",
+      "light": "7c21771ebd05a38f235c1173dd5ec04565acbcf2a41cff3d7d76a28b20b5d5bf",
+      "hdrLight": "1cb597aae08229265dc723e8188951fe033259130577ef7f64e45bb06213cf1b",
+      "rgba": "659b173c10378e6759482d636cb81c85db5c7964740c438df7af8e08430b26e6"
+    },
+    {
+      "name": "generated-energy-fracture",
+      "time": 1.02,
+      "color": "8abf8c3cbf094fc8552664e5227a3156d0bb20dd6f50d2d69e58c30c0dd1a566",
+      "light": "3b59cb75640778c757d128c69e70418f9fdf41b1ae9e2b8f644471f8f9e1fc00",
+      "hdrLight": "a2b488a074a0cc58f528449684276a8dab44e2f3d2e04675cce1a043569768f6",
+      "rgba": "950dabe0802fe8a9ac3d8181f57b4469ab44e6961e3a0921722da82fab6d8d0e"
+    },
+    {
+      "name": "generated-energy-fracture",
+      "time": 1.12,
+      "color": "ae204a3a04f48d1c9b08dfd38ce372ba8c2f2f4db4f12082759010fffafe4eb1",
+      "light": "f3a233cc6784bea786b7a0dc3aaddaea7d18e21f2cfab2443a871fe4d99364eb",
+      "hdrLight": "cad29ba7fe93532c94a54455195924b0dd1addaca8340e71fd57614b91ba0316",
+      "rgba": "666b2d1ac6411909ff5e82afdf47480aad3aa80f91af19c2d21f0f7162eb00f0"
+    },
+    {
+      "name": "generated-energy-fracture",
+      "time": 1.4,
+      "color": "59e862d42658b7ba20c5aabcd642efa292d6d62486a39aed5700d94a4066cb57",
+      "light": "183facbc37f3a18e7fbdd26d4963c44885692139b16d1da7a41da17e5770f9e1",
+      "hdrLight": "9794838a8913f06045b1b48909d103d4208f6a8050845b796cdcc20e5600452f",
+      "rgba": "9d815656a1d4d806c95825a1538efa593308df60dc322cf585f19fd1b06be20d"
+    },
+    {
+      "name": "generated-energy-fracture",
+      "time": 1.9,
+      "color": "72e5122bbda540db2560c971e2769ab2c357d2c1db3ab549184209c32aca508d",
+      "light": "183facbc37f3a18e7fbdd26d4963c44885692139b16d1da7a41da17e5770f9e1",
+      "hdrLight": "9794838a8913f06045b1b48909d103d4208f6a8050845b796cdcc20e5600452f",
+      "rgba": "5fecc572f148cd85e833638780d3c9684927bc58bcd210d2b7b21ff5fec430e4"
+    },
+    {
+      "name": "generated-energy-fracture",
+      "time": 2.17,
+      "color": "183facbc37f3a18e7fbdd26d4963c44885692139b16d1da7a41da17e5770f9e1",
+      "light": "183facbc37f3a18e7fbdd26d4963c44885692139b16d1da7a41da17e5770f9e1",
+      "hdrLight": "9794838a8913f06045b1b48909d103d4208f6a8050845b796cdcc20e5600452f",
+      "rgba": "d272b34b5a4817f60e49043178c738cbb96401106939b8caf3f098372e04afa6"
+    },
+    {
+      "name": "generated-storm-fire",
+      "time": 0,
+      "color": "cb7e856cc6969ade9909248bdfc7ab7b8648d2f313330e2333fbdd85ddc3b107",
+      "light": "cb7e856cc6969ade9909248bdfc7ab7b8648d2f313330e2333fbdd85ddc3b107",
+      "hdrLight": "5b8311c798dc3abf1062f3a4d0e08aabbde4fc8935403cc35e4c70d718e8d279",
+      "rgba": "255e314fd5701a8e63e9c7d232872541a863bb54b173af1c544aeb4035cb8fca"
+    },
+    {
+      "name": "generated-storm-fire",
+      "time": 0.2,
+      "color": "e5c1ae853aa60a21ec546068f39b72f75bb749ee899d9ae778d8fefb68ad8ce5",
+      "light": "cb7e856cc6969ade9909248bdfc7ab7b8648d2f313330e2333fbdd85ddc3b107",
+      "hdrLight": "5b8311c798dc3abf1062f3a4d0e08aabbde4fc8935403cc35e4c70d718e8d279",
+      "rgba": "cde46b1cd9507823f14a1606510ad55e44627c059e4c9ad5276c3868118c9485"
+    },
+    {
+      "name": "generated-storm-fire",
+      "time": 0.24,
+      "color": "1bcc4356db2972fb3d5490e13a5a64b1b6d38f91fdf965212edbebd391784f36",
+      "light": "964522f96fafc4761632743cb804a8c6df9d10ef06c5ad9e1aef01c2e8442e65",
+      "hdrLight": "88d0357332f55405e9f6dbac7befbc4d3a4ccb1ed603c57f282f6cea3f03ca06",
+      "rgba": "646153836d0f13dd1fcd2da7d31723b54e4e2bb8422196cd557888dc5404ce31"
+    },
+    {
+      "name": "generated-storm-fire",
+      "time": 0.42,
+      "color": "5a306d8e2d5e1d6046e3f8c12c4ea17a3eff9da07d589ba0b003f9a7f0fc3430",
+      "light": "944804434df9625d6895968937c4a52a89909a7dfeb404a97139c95ccb847850",
+      "hdrLight": "b4ad2f3f56558af4d393ff6808bcfddceb8bd3899e8074e4c0778fb5694920ce",
+      "rgba": "bc09f217098832a511c60d06abb319270b7b50631f481af5b9fd6af4f305e122"
+    },
+    {
+      "name": "generated-storm-fire",
+      "time": 0.65,
+      "color": "4b2c3870e272a5fff05bb2ccf4eec7d8e1079826adc91dc937dfdb9811624b4f",
+      "light": "4ca1157d96fa90b601ab0b90b123de1b1270ef48cf30a863c92b61e81e4f1a2a",
+      "hdrLight": "3d933ab2c787d9c4ad0c50730180a0b190b14172fb80f33bb673dd7f4c3231e9",
+      "rgba": "68832fca66b0f0316f782c333582d2dd42a7c4da42e48cde0bd5be722f43fb85"
+    },
+    {
+      "name": "generated-storm-fire",
+      "time": 1.1,
+      "color": "b0641e335b03f573799ca4207e7d5837b5a6c7e2a8870477719eb6e1e5e64f90",
+      "light": "3d936c4743202117f7a6d3441e325abc8ec6656ca9095ff05d32a7b4c0d1a434",
+      "hdrLight": "1b6404d401be4f3c1a83adedd694f4a9a973a85db508ed9eb103734ead91ef2b",
+      "rgba": "8fb83fb6563751ade65fe3ac1538d30aa5d693e7e646dba3332acadb192fb6ac"
+    },
+    {
+      "name": "generated-storm-fire",
+      "time": 1.8,
+      "color": "1041d5a9e56d5c0c0e59df18a03dfc9d5205ed77745a775226d0cea944ea1d60",
+      "light": "00afb1efedb4a31d5e2fc1e7857d1077ee30f8b95c336310ac543619a8c6a027",
+      "hdrLight": "45e5ac5ea568e7d6bb383a4d8e841f00d03ed4892730d8fc9d607923461b1676",
+      "rgba": "372da3c8624c33159b5f150ace946dad92bd6127b4474e507d44a56d9c86463b"
+    },
+    {
+      "name": "generated-storm-fire",
+      "time": 2.4,
+      "color": "b5a6647480b46aec764f8581b1d2a749aec8b21d7208f20e67cdf1089b459cc1",
+      "light": "e4eb9b8b7f713d759ad8e4d31ed510b55788cf0e7fac7ded5b663afe67d73fba",
+      "hdrLight": "ace1ccf679d0f18db1f8e13e32667a812201e58a6ccc288a7bb3f0b097e802e9",
+      "rgba": "f3cdde61e457ea32a34300830d69f7935aad196f637901c3c11f56ed95e17ae8"
+    },
+    {
+      "name": "generated-storm-fire",
+      "time": 3.16,
+      "color": "cb7e856cc6969ade9909248bdfc7ab7b8648d2f313330e2333fbdd85ddc3b107",
+      "light": "cb7e856cc6969ade9909248bdfc7ab7b8648d2f313330e2333fbdd85ddc3b107",
+      "hdrLight": "5b8311c798dc3abf1062f3a4d0e08aabbde4fc8935403cc35e4c70d718e8d279",
+      "rgba": "255e314fd5701a8e63e9c7d232872541a863bb54b173af1c544aeb4035cb8fca"
+    }
+  ]
+}
