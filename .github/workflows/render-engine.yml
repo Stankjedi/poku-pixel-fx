@@ -45,6 +45,7 @@ jobs:
           fi
       - run: npm run test:3d
       - run: npm run test:quality
+      - run: npm run test:generation
       - run: npm run test:export
       - run: npm run test:review
       - run: npm run test:gpu
@@ -82,6 +83,7 @@ jobs:
       - run: npm run test:studio
       - run: npm run test:export-studio
       - run: npm run test:install
+      - run: npm run test:generation
       - run: npm run test:production
       - run: npm run test:pixel-art
 

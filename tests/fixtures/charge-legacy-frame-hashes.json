@@ -1,0 +1,389 @@
+{
+  "baseline": "7724181b01c7985f7cee698a59e279ee2688423e",
+  "frames": [
+    {
+      "material": "fire",
+      "action": "dash",
+      "composition": "body",
+      "seed": 1,
+      "time": 0.15,
+      "sha256": "e17a27e673f231c32d940416b0d90ed3a68bc92ae4806a37835e444c1c8bc216"
+    },
+    {
+      "material": "fire",
+      "action": "dash",
+      "composition": "body",
+      "seed": 1,
+      "time": 0.9,
+      "sha256": "22a1ace05d1c35ba269ea8abbe147c508d832143704f9607974f5fd9b07274fd"
+    },
+    {
+      "material": "fire",
+      "action": "dash",
+      "composition": "body",
+      "seed": 1,
+      "time": 1.3,
+      "sha256": "8b6113842ccb262c1e7872ffb55cf44668e7a954330805193856916e785464d7"
+    },
+    {
+      "material": "fire",
+      "action": "dash",
+      "composition": "body",
+      "seed": 4294967295,
+      "time": 0.15,
+      "sha256": "0dd5b4d6e4678206252ef476068c72f4dc38d230cebb6daac1b06131c024989c"
+    },
+    {
+      "material": "fire",
+      "action": "dash",
+      "composition": "body",
+      "seed": 4294967295,
+      "time": 0.9,
+      "sha256": "1c645e5238e3e0ff7e830b0a01259f1eb2e83f1e54cd0a6bf3437396d35d4eca"
+    },
+    {
+      "material": "fire",
+      "action": "dash",
+      "composition": "body",
+      "seed": 4294967295,
+      "time": 1.3,
+      "sha256": "1678021534276146da3c20965132bab5341175320352b299ebba84085f45671e"
+    },
+    {
+      "material": "fire",
+      "action": "dash",
+      "composition": "volumes",
+      "seed": 1,
+      "time": 0.15,
+      "sha256": "e17a27e673f231c32d940416b0d90ed3a68bc92ae4806a37835e444c1c8bc216"
+    },
+    {
+      "material": "fire",
+      "action": "dash",
+      "composition": "volumes",
+      "seed": 1,
+      "time": 0.9,
+      "sha256": "82fcc6146e7675da35f21a005d42344d1242469930bee0f41f2c22ec49343a0e"
+    },
+    {
+      "material": "fire",
+      "action": "dash",
+      "composition": "volumes",
+      "seed": 1,
+      "time": 1.3,
+      "sha256": "4853884518f96fedc6a5ce4b1ad6ffbc26775ec80d548dad5ac776b96faa2df6"
+    },
+    {
+      "material": "fire",
+      "action": "dash",
+      "composition": "volumes",
+      "seed": 4294967295,
+      "time": 0.15,
+      "sha256": "0dd5b4d6e4678206252ef476068c72f4dc38d230cebb6daac1b06131c024989c"
+    },
+    {
+      "material": "fire",
+      "action": "dash",
+      "composition": "volumes",
+      "seed": 4294967295,
+      "time": 0.9,
+      "sha256": "3257b5c497d6dccf261906a33e820d742813de177f134d595c9346d2519d819b"
+    },
+    {
+      "material": "fire",
+      "action": "dash",
+      "composition": "volumes",
+      "seed": 4294967295,
+      "time": 1.3,
+      "sha256": "74df555e71a67ad6d9a92ca6c1cedbb5e2dc3f9de3351f98a875f7cfb1e1ba72"
+    },
+    {
+      "material": "fire",
+      "action": "plume",
+      "composition": "body",
+      "seed": 1,
+      "time": 0.15,
+      "sha256": "14809abfcd2bc146d403054774baee976275046394b878ddf82bac36000bca62"
+    },
+    {
+      "material": "fire",
+      "action": "plume",
+      "composition": "body",
+      "seed": 1,
+      "time": 0.9,
+      "sha256": "23522652578e5717e625bf4e361a0cf69d2c3d0bf390bc3d2c8f4d1d98cb895e"
+    },
+    {
+      "material": "fire",
+      "action": "plume",
+      "composition": "body",
+      "seed": 1,
+      "time": 1.3,
+      "sha256": "ddb5844844cb80bc3c1ce6902cd5474ee6f9bf97c076f3f3c453cac7edc00671"
+    },
+    {
+      "material": "fire",
+      "action": "plume",
+      "composition": "body",
+      "seed": 4294967295,
+      "time": 0.15,
+      "sha256": "fe33a2a9add1f082503dc23efcc3f7f1c473dd6333d1dc3040a6da19a3519aa2"
+    },
+    {
+      "material": "fire",
+      "action": "plume",
+      "composition": "body",
+      "seed": 4294967295,
+      "time": 0.9,
+      "sha256": "d2d7b8db8fc21bfd9e31ad465d4f1a82021f6a980a9672ee1abadd46191789ba"
+    },
+    {
+      "material": "fire",
+      "action": "plume",
+      "composition": "body",
+      "seed": 4294967295,
+      "time": 1.3,
+      "sha256": "76865eee5bb2b8ed94570881a5e5a3baa2719fee043511e85e1d42cc18675bc3"
+    },
+    {
+      "material": "fire",
+      "action": "plume",
+      "composition": "volumes",
+      "seed": 1,
+      "time": 0.15,
+      "sha256": "14809abfcd2bc146d403054774baee976275046394b878ddf82bac36000bca62"
+    },
+    {
+      "material": "fire",
+      "action": "plume",
+      "composition": "volumes",
+      "seed": 1,
+      "time": 0.9,
+      "sha256": "c649e7cc4f90ba427829c7c3228aa4bb97a4412a2337bbcfa814263c31797a2b"
+    },
+    {
+      "material": "fire",
+      "action": "plume",
+      "composition": "volumes",
+      "seed": 1,
+      "time": 1.3,
+      "sha256": "231ceeefa2a202b70e942657712dadab9109dae68ae44dbef8c0ba231ab7a32d"
+    },
+    {
+      "material": "fire",
+      "action": "plume",
+      "composition": "volumes",
+      "seed": 4294967295,
+      "time": 0.15,
+      "sha256": "fe33a2a9add1f082503dc23efcc3f7f1c473dd6333d1dc3040a6da19a3519aa2"
+    },
+    {
+      "material": "fire",
+      "action": "plume",
+      "composition": "volumes",
+      "seed": 4294967295,
+      "time": 0.9,
+      "sha256": "98bbe4995864ad0802784a40d82075fd0a76f78461632770cf20bdef989c4dfd"
+    },
+    {
+      "material": "fire",
+      "action": "plume",
+      "composition": "volumes",
+      "seed": 4294967295,
+      "time": 1.3,
+      "sha256": "3730ce621325640c67ca0581ed90f6c75ef0dc16f65e5ce354ca9480b569ada6"
+    },
+    {
+      "material": "energy",
+      "action": "dash",
+      "composition": "body",
+      "seed": 1,
+      "time": 0.15,
+      "sha256": "6d39866d9e678a52d42dade237433fa9b6568c4a4a4b3b643a939e76daf39f50"
+    },
+    {
+      "material": "energy",
+      "action": "dash",
+      "composition": "body",
+      "seed": 1,
+      "time": 0.9,
+      "sha256": "f8b4ac24a3a009b8bd88e3d0314b7d03cfadf4cf37a3eb527d7dc7fcb3f4a080"
+    },
+    {
+      "material": "energy",
+      "action": "dash",
+      "composition": "body",
+      "seed": 1,
+      "time": 1.3,
+      "sha256": "62cbff4c315385396b8bd8299d220aede12347e647ff31edd1cc44af77a0ebe0"
+    },
+    {
+      "material": "energy",
+      "action": "dash",
+      "composition": "body",
+      "seed": 4294967295,
+      "time": 0.15,
+      "sha256": "7b404a82cff7cf2f388c26911ee8b329fe347908b5307576e1df00bba46addcf"
+    },
+    {
+      "material": "energy",
+      "action": "dash",
+      "composition": "body",
+      "seed": 4294967295,
+      "time": 0.9,
+      "sha256": "9e5f501ba8ca211c37169c345742c2c6213d36764d5e8365dac92b552d6c14f5"
+    },
+    {
+      "material": "energy",
+      "action": "dash",
+      "composition": "body",
+      "seed": 4294967295,
+      "time": 1.3,
+      "sha256": "99917e91223321cee65fc707c1643bf8a3f62f7e8f70664025593d0cae0b311c"
+    },
+    {
+      "material": "energy",
+      "action": "dash",
+      "composition": "volumes",
+      "seed": 1,
+      "time": 0.15,
+      "sha256": "6d39866d9e678a52d42dade237433fa9b6568c4a4a4b3b643a939e76daf39f50"
+    },
+    {
+      "material": "energy",
+      "action": "dash",
+      "composition": "volumes",
+      "seed": 1,
+      "time": 0.9,
+      "sha256": "d42991203a61effc5e76b858cea4ee9c5b38db27c1ec249661b78bbacf352d80"
+    },
+    {
+      "material": "energy",
+      "action": "dash",
+      "composition": "volumes",
+      "seed": 1,
+      "time": 1.3,
+      "sha256": "828e41b6219f4822fab05dc037c1df41e11ab2ddbf3c43b93131017d3f3931db"
+    },
+    {
+      "material": "energy",
+      "action": "dash",
+      "composition": "volumes",
+      "seed": 4294967295,
+      "time": 0.15,
+      "sha256": "7b404a82cff7cf2f388c26911ee8b329fe347908b5307576e1df00bba46addcf"
+    },
+    {
+      "material": "energy",
+      "action": "dash",
+      "composition": "volumes",
+      "seed": 4294967295,
+      "time": 0.9,
+      "sha256": "9c4196d531281785ce51154dc14801f10c43912bcf9127c5a1de8a399f170887"
+    },
+    {
+      "material": "energy",
+      "action": "dash",
+      "composition": "volumes",
+      "seed": 4294967295,
+      "time": 1.3,
+      "sha256": "60497cce6f5f8c992eb1c37b6589837ba7c2bc7c49ba819a01f5dbb10e3e514f"
+    },
+    {
+      "material": "energy",
+      "action": "plume",
+      "composition": "body",
+      "seed": 1,
+      "time": 0.15,
+      "sha256": "886d6686efb37b01482218d235a5abdf6927a3bb7fb4ae0e6e00dcb6935e10e0"
+    },
+    {
+      "material": "energy",
+      "action": "plume",
+      "composition": "body",
+      "seed": 1,
+      "time": 0.9,
+      "sha256": "cffa6829a6a15c297feebbe165443722fcaee1739f78c53acf558d421270c61d"
+    },
+    {
+      "material": "energy",
+      "action": "plume",
+      "composition": "body",
+      "seed": 1,
+      "time": 1.3,
+      "sha256": "8cf11f5f90fe54c5f8b0b88ad6409955c1e8557b3253ed5a586b9d023030eddd"
+    },
+    {
+      "material": "energy",
+      "action": "plume",
+      "composition": "body",
+      "seed": 4294967295,
+      "time": 0.15,
+      "sha256": "6643257cfd5979afb172f78f4a0a62b5c652537595639d610a1760bc27871c04"
+    },
+    {
+      "material": "energy",
+      "action": "plume",
+      "composition": "body",
+      "seed": 4294967295,
+      "time": 0.9,
+      "sha256": "bd024ac0c02cdbab612bbe0f86d7cd7cf110257697dade73c8a63d58721aedf6"
+    },
+    {
+      "material": "energy",
+      "action": "plume",
+      "composition": "body",
+      "seed": 4294967295,
+      "time": 1.3,
+      "sha256": "3e2835ac30dc0187d846be3f25b049891612ba46884064d987525e0cf7a0a7d1"
+    },
+    {
+      "material": "energy",
+      "action": "plume",
+      "composition": "volumes",
+      "seed": 1,
+      "time": 0.15,
+      "sha256": "886d6686efb37b01482218d235a5abdf6927a3bb7fb4ae0e6e00dcb6935e10e0"
+    },
+    {
+      "material": "energy",
+      "action": "plume",
+      "composition": "volumes",
+      "seed": 1,
+      "time": 0.9,
+      "sha256": "c972119b078ff812912ddabb5958322e1b443e1d6ab587e31ac5457359cf83f4"
+    },
+    {
+      "material": "energy",
+      "action": "plume",
+      "composition": "volumes",
+      "seed": 1,
+      "time": 1.3,
+      "sha256": "dedf6c7c837e9f8690a498f704e2130468e0d9284886caecaa42345941499d82"
+    },
+    {
+      "material": "energy",
+      "action": "plume",
+      "composition": "volumes",
+      "seed": 4294967295,
+      "time": 0.15,
+      "sha256": "6643257cfd5979afb172f78f4a0a62b5c652537595639d610a1760bc27871c04"
+    },
+    {
+      "material": "energy",
+      "action": "plume",
+      "composition": "volumes",
+      "seed": 4294967295,
+      "time": 0.9,
+      "sha256": "9cd61d4c70d5cd7130113bb5eabf98aa8e05a7636c7f4235132f12dc8a5ce4b8"
+    },
+    {
+      "material": "energy",
+      "action": "plume",
+      "composition": "volumes",
+      "seed": 4294967295,
+      "time": 1.3,
+      "sha256": "3856d37bedcd2301264f42d84ad7f30910ff0b7020b151106ba2feecaae72808"
+    }
+  ]
+}

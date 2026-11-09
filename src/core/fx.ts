@@ -97,12 +97,16 @@ const isRamp = (v: unknown): v is (number | string)[] => Array.isArray(v) && v.l
 /**
  * An effect's options: its defaults with the caller's on top. Any color ramp (palette, or another ramp option
  * like dust or smoke) of a different length than its default is resampled to the default's length, so effects
- * can index steps by number whatever a caller passes.
+ * can index steps by number whatever a caller passes. Packed nonopaque colors retain their alpha.
  */
 export function resolveOptions(meta: EffectMeta, o: EffectOptions = {}): EffectOptions {
   const opts = { ...(meta.options ?? {}), ...o };
   for (const [k, def] of Object.entries(meta.options ?? {}))
-    if (isRamp(def) && isRamp(o[k]) && o[k].length !== def.length) opts[k] = fit(o[k], def.length).map(toHex);
+    if (isRamp(def) && isRamp(o[k]) && o[k].length !== def.length) {
+      // Hex strings cannot carry packed source alpha. Preserve nonopaque RGBA while
+      // retaining the existing string representation for ordinary opaque ramps.
+      opts[k] = fit(o[k], def.length).map(c => (c >>> 24) === 255 ? toHex(c) : c);
+    }
   if (meta.actor && !opts.actor) opts.actor = stockActor(meta.actor === 2 ? 2 : 1);
   return opts;
 }

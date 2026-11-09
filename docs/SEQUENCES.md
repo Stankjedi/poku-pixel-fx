@@ -72,7 +72,7 @@ runtime.dispose();
 | 필드 | 기본값과 의미 |
 | --- | --- |
 | `id` | 필수, 중복 없는 식별자. 영문자로 시작하며 영문·숫자·`_`·`-`, 최대 64자 |
-| `source` | 카탈로그 / 인라인 레시피 / 인라인 캐릭터 |
+| `source` | 카탈로그 / 인라인 레시피 / 인라인 생성 의도 / 인라인 캐릭터 |
 | `at` | 0, 전체 시퀀스에서 시작할 초 |
 | `duration` | 생략하면 원본 한 주기. 루프 원본은 지정한 구간만큼 계속 재생하며, one-shot 원본의 수명은 늘리지 않음 |
 | `x`, `y` | 0, 부모 pivot 기준의 native 픽셀 위치 |
@@ -86,7 +86,7 @@ runtime.dispose();
 
 `options`에 들어온 `x/y/angle/flip/seed`는 프로젝트를 가져오는 편의를 위해 한 번 정규화하여 큐의 독립 필드로 옮깁니다. 독립 필드가 함께 있으면 그 값이 우선합니다. 저장 결과에는 서로 충돌하는 두 위치가 남지 않습니다.
 
-## 세 종류의 원본
+## 네 종류의 원본
 
 카탈로그 참조는 등록된 2D 모듈을 읽습니다. 프로젝트에는 이름만 저장하므로 다른 엔진 버전에서도 완전히 같은 원본이 필요한 경우 `sourceRevision`과 배포된 패키지 버전을 함께 고정해야 합니다.
 
@@ -106,7 +106,141 @@ runtime.dispose();
 { kind: 'character', character: characterAsset, clip: 'sword' }
 ```
 
+지원되는 재질/동작을 새로 만들 때 생성 의도를 직접 넣을 수 있습니다. 기존 생성기의
+규칙과 원화를 사용하며 별도 TypeScript 모듈이나 카탈로그 등록은 필요하지 않습니다.
+
+```ts
+{
+  kind: 'generation',
+  intent: { material: 'energy', action: 'dash', distance: 128, travel: .74 },
+  renderOptions: { composition: 'material-volumes' },
+}
+```
+
+`intent`는 `GenerationIntent2D`에서 `seed`만 제외한 데이터입니다. `seed`는 기존 큐의
+`seed`에 한 번만 작성합니다. 생략하면 부모 프로젝트 seed와 큐 id로 결정되며, 생성
+의도 안에 `seed`를 넣으면 거부합니다. 재질/동작/응답과 dash 거리·시간의 검증은 기존
+`createGenerationPlan2D`를 그대로 사용합니다. 생성 원본의 알 수 없는 필드도 거부합니다.
+
+`renderOptions`는 기존 `GenerationCompositionOptions2D`입니다. **생략하면 기존 API의
+`body` 원화**를 사용합니다. `new.mjs`의 최신 fire/energy 시작 예제와 같은 선택을
+원할 때는 지원되는 dash/plume dissipation에 `composition: 'material-volumes'`를 명시합니다.
+얼음에는 `iceSurface: 'crystal'`을 명시할 수 있습니다. 지원하지 않는 조합은 거부하며,
+프로젝트를 열면서 다른 재질이나 원화로 자동 대체하지 않습니다.
+
+새 조합 예제 두 개는 아래 명령으로 실제 CLI에서 렌더할 수 있습니다.
+
+```sh
+node build-tools/tools/render.mjs --project examples/projects/generated-energy-fracture.poku-project.json --sheet
+node build-tools/tools/render.mjs --project examples/projects/generated-storm-fire.poku-project.json --sheet
+```
+
+- Energy fracture: energy 도착 `0.28 + 0.74 = 1.02`초와 ice 파쇄 `0.66 + 0.36 = 1.02`초를 맞춥니다.
+  Ice 큐의 `x: 64`가 energy 종점 `(64,-16)`과 crystal 중심을 맞춥니다. 자연 종료는 2.17초입니다.
+  이는 사건 표식의 정렬입니다. 폭이 있는 pulse 실루엣은 1.02초보다 먼저 온전한 crystal과
+  겹치므로, 최초 시각 접촉이나 물리 충돌 시점까지 자동 정렬한 것은 아닙니다.
+- Storm fire: lightning 도착 0.23초에 fire **준비**를 시작합니다. Fire 방출은 그 다음 0.28초 뒤인
+  0.51초입니다. `y: -12`로 fire의 로컬 근원 `(0,12)`를 strike 접점 `(0,0)`에 맞춥니다.
+  Fire 큐의 `options.layers.sparks: false`가 작은 장식을 줄이고 기존 부피 입자를 남깁니다.
+  자연 종료는 3.16초입니다.
+
+위 두 기존 예제의 시간과 위치는 **작성자가 맞춘 숫자**입니다. 거리·시간을 바꾸면
+관련 큐의 `at/x/y`도 다시 작성해야 합니다. 아래의 명시적 eventAnchor 예제는 그 관계를
+저장하는 별도 opt-in입니다. 자동 충돌, 자동 choreography나 자동 고품질 생성은 아닙니다. 시퀀스의 `duration`은 전체 길이 crop/연장이지 생성 재질의 재타이밍이 아닙니다.
+
+생성 사건의 `payload.x/y`는 원본 로컬 좌표를 그대로 보존합니다. 시퀀스가 바꾸는 것은
+기존 계약대로 사건 id와 `sourceTime/at`이며, payload를 scene/world 좌표라고 해석하면
+안 됩니다. 큐의 반전·회전·위치 변환은 그릴 때 적용됩니다.
+
+생성 원본을 넣으면 기존 `at/x/y/angle/flip`, fade, `project.layers[cue.id]`,
+`cue.options.layers`를 사용할 수 있습니다. 내부 layer 이름/의미는 재질별 생성기 문서를
+따르며, 모든 이름이 모든 재질에서 같은 파티클 역할을 갖는 것은 아닙니다. fade는 기존
+`chain()`이 색과 조명을 함께 감쇠합니다. 새 밝기/밀도/입자 수 조정기는 추가하지 않습니다.
+
+이 경로는 JSON / authoring API / 실제 `render --project` 경로입니다. `new.mjs`에 새 옵션을
+추가하지 않았고, Studio에 생성 편집 UI를 추가하거나 브라우저 동작을 검증한 것은 아닙니다.
+두 예제는 사용 가능한 연결과 조합 방법을 보여 주며 미술적 우월성이나 최종 승인이 아닙니다.
+
 원본 객체에는 실행 가능한 코드나 임의 URL을 넣지 않습니다. 재귀 시퀀스, 3D 장면, ACT의 캐릭터·히트스톱 전체 시간표는 이 스키마의 원본 유형에 포함하지 않습니다. ACT가 있는 카탈로그 항목을 사용하면 그 모듈의 **이펙트 부분**을 재생합니다. 배우가 필요하면 캐릭터 큐를 별도로 추가합니다.
+
+## Explicit generation event anchors (JSON/API/CLI)
+
+An optional `eventAnchor` on a **generation** cue keeps one authored relationship when
+source timing, distance or either endpoint's transform changes. Existing independent cues
+and the two original `generated-*` examples retain their absolute numeric placements.
+This is not a new scheduler, collision detector, automatic choreography or artwork preset.
+
+```ts
+{
+  id: 'crystal',
+  source: { kind: 'generation', intent: { material: 'ice', action: 'shatter' },
+    renderOptions: { iceSurface: 'crystal' } },
+  eventAnchor: { cue: 'pulse', event: 'arrival', targetEvent: 'shatter' },
+  at: 0, x: 0, y: 0,
+  angle: .14, flip: true,
+}
+```
+
+**Ownership is conditional and explicit:** without `eventAnchor`, `at/x/y` are the existing
+absolute start and pivot-relative position. With it, those same saved fields are **offsets**:
+`at` is a signed number of seconds after event alignment; `x/y` are native-pixel offsets in
+sequence axes, not rotated source/target axes. Omitted offsets are zero. `angle/flip` always
+remain the target's own transform, never inherited. Remove an anchor only after manually
+baking its absolute placement if the current placement should stay unchanged.
+
+The compiler computes:
+
+- target start = source start + source event time − target event time + target `at` offset;
+- target origin = transformed source event point − rotated/flipped target event point + (`x`,`y`) offsets.
+
+Both endpoints flip local X before rotation, using the existing pixel transform functions.
+The saved project and returned module's `sequence` retain the **unresolved** relationship and
+offsets. They are never overwritten with compiled coordinates. Reloading and recompiling after
+an intent edit recomputes placement. For anchored cues, `options.x/y` are rejected so imported
+absolute placement cannot silently become a second offset owner. Existing seed ownership,
+source options, fades, two-pass array drawing order and material/light budgets stay unchanged.
+
+The source cue may appear before or after the dependent cue in the array. Dependencies resolve
+first, but draw order is never topologically reordered. Hidden/disabled upstream cues still
+provide their authored event facts: this is a layout relationship, not a runtime visibility
+trigger. Hiding a cue removes only that cue's visuals and exported markers, as before. Seeds
+and random particle variation do not affect the known generation markers.
+
+Only uniquely named events from `createGenerationPlan2D` can provide points. Catalog, recipe,
+character and arbitrary event payloads cannot be anchor endpoints. Missing names/references,
+cycles, unsupported source kinds, coordinates outside ±65536, starts outside 0..3600 seconds,
+and selected events outside cue/sequence windows reject during compilation. Shape, identifier,
+input offset and target-kind errors reject during normalization. Repeated runtime event
+occurrences are not supported as anchors. Exported event payloads keep their original local
+coordinates; anchoring does not change metadata conventions or add world-coordinate fields.
+
+A negative computed start rejects with an instruction to delay the upstream cue or change the
+explicit offset. Preparation is never silently trimmed and no preroll system is introduced.
+Only negative cancellation noise within
+`2 * Number.EPSILON * (abs(sourceStart) + abs(sourceEventTime) + abs(targetEventTime) + abs(offset))`
+is normalized to zero. This is an arithmetic error bound, not a frame-sized tolerance.
+
+Cue `duration` and sequence `duration` crops must still include both selected events, following
+the existing exclusive cropped endpoints and loop-boundary rules. **`project.seconds` remains
+an outer export crop** and can intentionally truncate an otherwise valid sequence/link. It is
+not a relationship validation guarantee or source retiming control.
+
+```sh
+node build-tools/tools/render.mjs --project examples/projects/event-linked-energy-fracture.poku-project.json --sheet
+node build-tools/tools/render.mjs --project examples/projects/event-linked-storm-fire.poku-project.json --sheet
+```
+
+The energy example aligns arrival with shatter while retaining the target's complete .36 s
+preparation. The storm example aligns strike with fire release using `at: .28`, deliberately
+starting fire preparation at strike and releasing .28 s later. Zero time offset there would
+make preparation begin before the strike, and may require delaying the upstream cue to avoid
+a negative sequence start. These are author choices, not automatic material semantics.
+
+Event-center alignment is **not earliest silhouette contact**: the finite energy pulse can
+overlap the crystal before its center arrives. Anchors coordinate the unchanged particle/light
+sources; they do not improve individual material art, create a physical ignition model, detect
+collisions or provide Niagara simulation. This change is supported through portable JSON,
+authoring API and `render --project`; no new Studio editing UI or browser verification is claimed.
 
 ## 재생과 레이어 계약
 

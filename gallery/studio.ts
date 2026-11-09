@@ -1,3 +1,4 @@
+import { createStudioFastFireDashBurst, createStudioFireGeneration, supportsFireSparkControls, fireSparkChoice, withFireSparkChoice, withFireSparkNumber, supportsDashMotionControls, withDashMotionNumber, type FireSparkChoice } from '../src/authoring/generation-controls.js';
 import { createProject, createRecipePack, parseProject, serializeProject, cloneJSON, type ResolvedProject } from '../src/authoring/project.js';
 import { createProjectRuntime, type ProjectFrameSample } from '../src/authoring/runtime.js';
 import { createRecipeSpec, resolveRecipe, recipeParameters, retimeRecipeSpec, RECIPE_KINDS, RECIPE_LAYERS, type RecipeKind, type RecipeLayer } from '../src/authoring/recipes.js';
@@ -235,15 +236,36 @@ function renderSequence(){
   const auto=text('button','마지막 효과까지 길이 자동 맞춤') as HTMLButtonElement;auto.onclick=()=>attempt(()=>mutate(p=>{delete p.sequence!.duration;delete p.seconds;}));container.append(auto);
   for(const [i,cue] of spec.cues.entries()){
     const details=document.createElement('details');details.className='sequence-cue';details.open=true;
-    const title=cue.source.kind==='catalog'?cue.source.id:cue.source.kind==='recipe'?cue.source.recipe.kind:cue.source.character.name;
+    const title=cue.source.kind==='catalog'?cue.source.id:cue.source.kind==='recipe'?cue.source.recipe.kind:cue.source.kind==='generation'?`${cue.source.intent.material} · ${cue.source.intent.action} · ${cue.source.intent.response??'dissipate'}`:cue.source.character.name;
     details.append(text('summary',`${i+1}. ${title}`));container.append(details);
     const change=(edit:(c:any)=>void)=>attempt(()=>mutate(p=>{edit(p.sequence!.cues[i]);}));
+    if(cue.source.kind==='generation'){
+      if(supportsDashMotionControls(cue.source)){
+        for(const [key,label,min,max,placeholder] of [['travel','돌진 이동 시간 (초)',.25,3,'기본 0.74'],['distance','돌진 이동 거리 (픽셀)',24,160,'기본 128']] as const){
+          const n=document.createElement('input');Object.assign(n,{type:'number',min:String(min),max:String(max),step:'any',placeholder,value:cue.source.intent[key]===undefined?'':String(cue.source.intent[key])});
+          n.onchange=()=>{if(n.checkValidity())change(c=>{c.source=withDashMotionNumber(c.source,key,n.value===''?undefined:Number(n.value));});else n.reportValidity();};labelControl(details,label,n);
+        }
+        details.append(text('p','이동 시간이 짧을수록 빠르게 도착합니다. 빈칸은 원본 기본값을 사용합니다. 표시 시간·시퀀스·프로젝트 길이는 유지되므로 이동이나 잔광이 잘릴 수 있습니다.'));
+      }
+      if(supportsFireSparkControls(cue.source)){
+        const sparks=choice(details,'불티',['legacy','short-exposure','scintillation'],fireSparkChoice(cue.source),value=>change(c=>{c.source=withFireSparkChoice(c.source,value as FireSparkChoice);}));
+        ['기존 불티 (기본)','짧은 불티','짧은 불티 + 반짝임'].forEach((label,index)=>sparks.options[index].textContent=label);
+        details.append(text('p','기존 불티로 돌아가면 개수·발광 설정도 해제됩니다. 실행 취소로 복원할 수 있습니다.'));
+        if(fireSparkChoice(cue.source)!=='legacy')for(const [key,label,max,step] of [['fireSparkCount','불티 개수',720,1],['fireSparkLight','불티 발광',2,'any']] as const){
+          const n=document.createElement('input');Object.assign(n,{type:'number',min:'0',max:String(max),step:String(step),placeholder:key==='fireSparkCount'?(cue.source.intent.action==='plume'?'기본 360':cue.source.intent.action==='burst'?'기본 170':cue.source.intent.response==='burst'?'기본 410 (이동 240 + 폭발 170)':'기본 240'):'기본 1',value:cue.source.renderOptions?.[key]===undefined?'':String(cue.source.renderOptions[key])});
+          n.onchange=()=>{if(n.checkValidity())change(c=>{c.source=withFireSparkNumber(c.source,key,n.value===''?undefined:Number(n.value));});else n.reportValidity();};labelControl(details,label,n);
+        }
+      }else details.append(text('p','불티 설정은 화염 폭발·분출 또는 돌진에서만 지원됩니다.'));
+    }
     const active=document.createElement('input');active.type='checkbox';active.checked=cue.enabled;active.onchange=()=>change(c=>{c.enabled=active.checked;});labelControl(details,'표시',active);
-    for(const [key,label,min,max] of [['at','시작 (초)',0,3600],['x','X (픽셀)',-4096,4096],['y','Y (픽셀)',-4096,4096],['fadeIn','나타남 (초)',0,60],['fadeOut','사라짐 (초)',0,60]] as const){
+    const anchored=cue.eventAnchor!==undefined;
+    if(cue.eventAnchor)details.append(text('p',`이벤트 연결: ${cue.eventAnchor.cue}/${cue.eventAnchor.event} → ${cue.eventAnchor.targetEvent}. 음수 시간은 기준 이벤트보다 앞당기고, 양수는 늦춥니다. X·Y는 시퀀스 좌표축의 상대 오프셋입니다.`));
+    for(const [key,label,min,max] of [['at',anchored?'이벤트 시간 오프셋 (초)':'시작 (초)',anchored?-3600:0,3600],['x',anchored?'이벤트 X 오프셋 (픽셀)':'X (픽셀)',-4096,4096],['y',anchored?'이벤트 Y 오프셋 (픽셀)':'Y (픽셀)',-4096,4096],['fadeIn','나타남 (초)',0,60],['fadeOut','사라짐 (초)',0,60]] as const){
       const n=numberControl(details,label,cue[key],min,max,value=>change(c=>{c[key]=value;}));n.step=key==='x'||key==='y'?'1':'.01';
     }
     const duration=document.createElement('input');Object.assign(duration,{type:'number',min:'.01',max:'3600',step:'.01',placeholder:'원본 길이',value:cue.duration===undefined?'':String(cue.duration)});
     duration.onchange=()=>{if(duration.checkValidity())change(c=>{if(duration.value==='')delete c.duration;else c.duration=Number(duration.value);});else duration.reportValidity();};labelControl(details,'표시 시간 (초)',duration);
+    details.append(text('p','표시 시간은 효과를 자르는 길이이며 재생 속도를 바꾸지 않습니다.'));
     const angle=numberControl(details,'회전 (도)',cue.angle*180/Math.PI,-3600,3600,value=>change(c=>{c.angle=value*Math.PI/180;}));angle.step='1';
     const flip=document.createElement('input');flip.type='checkbox';flip.checked=cue.flip;flip.onchange=()=>change(c=>{c.flip=flip.checked;});labelControl(details,'좌우 반전',flip);
     for(const [label,offset] of [['뒤로',-1],['앞으로',1]] as const){const move=text('button',label) as HTMLButtonElement;move.disabled=i+offset<0||i+offset>=spec.cues.length;move.onclick=()=>attempt(()=>mutate(p=>{const a=p.sequence!.cues;[a[i],a[i+offset]]=[a[i+offset],a[i]];}));details.append(move);}
@@ -375,6 +397,8 @@ function renderMarkers(){
 
 for(const kind of RECIPE_KINDS){const b=document.createElement('button');b.append(text('b',labels[kind][0]),text('span',labels[kind][1]));b.onclick=()=>attempt(()=>setProject(recipeProject(kind),'commit',false));$('recipes').append(b);}
 button('new-character').onclick=()=>attempt(()=>setProject(createProject({id:'characters/wayfarer',name:'Wayfarer',kind:'character',character:createStudioCharacter2D({height:Number(select('new-character-height').value)}),options:{clip:'idle'},bg:'dark',fps:24,actor:false,target:false}),'commit',false));
+for(const action of ['plume','dash'] as const)button(`new-fire-${action}`).onclick=()=>attempt(()=>setProject(createStudioFireGeneration(action),'commit',false));
+button('new-fire-fast-dash-burst').onclick=()=>attempt(()=>setProject(createStudioFastFireDashBurst(),'commit',false));
 button('new-sequence').onclick=()=>attempt(async()=>{
   if(project.kind==='sequence')return;const issue=sequenceConversionIssue();if(issue)throw new Error(issue);
   const source:any=project.kind==='recipe'?{kind:'recipe',recipe:project.recipe}:project.kind==='character'?{kind:'character',character:project.character,clip:project.options.clip??project.character!.defaultClip}:{kind:'catalog',id:project.id};

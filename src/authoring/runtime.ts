@@ -70,7 +70,8 @@ export async function createProjectRuntime(input: unknown, suppliedModule?: any)
   const cache=new BudgetCache<{color:Uint32Array;light:Uint32Array;hdr:Float32Array;rgba:Uint8ClampedArray;time:number;masks:Record<string,Uint8Array>;metadata:Metadata}>(16*1024*1024);
   function render(time:number, frameIndex=Math.max(0,Math.floor(time*project.fps+1e-6)), useCache=true, finish=true, purpose:'preview'|'asset'='preview'):ProjectFrameSample {
     if (!Number.isFinite(time)||time<0)throw new RangeError('Presentation time must be non-negative');
-    const key=`${frameIndex}:${time.toFixed(8)}:${finish}:${purpose}`, previous=useCache?cache.get(key):undefined;
+    // Number stringification preserves distinct finite presentation times, including event neighbours.
+    const key=`${frameIndex}:${time}:${finish}:${purpose}`, previous=useCache?cache.get(key):undefined;
     if(previous){frame.color.set(previous.color);frame.light.set(previous.light);frame.hdrLight!.set(previous.hdr);rgba.set(previous.rgba);frame.semanticMasks=Object.fromEntries(Object.entries(previous.masks).map(([n,m])=>[n,m.slice()]));return{frame,rgba,time:previous.time,frameIndex,drawMs:0,cached:true,...previous.metadata};}
     const start=performance.now();
     if(time<last){

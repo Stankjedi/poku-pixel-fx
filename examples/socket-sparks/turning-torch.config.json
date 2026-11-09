@@ -1,0 +1,672 @@
+{
+  "version": 1,
+  "name": "Turning torch socket sparks",
+  "size": [
+    96,
+    64
+  ],
+  "origin": [
+    0,
+    0
+  ],
+  "durationMs": 800,
+  "clipClockOffsetMs": -50,
+  "clip": {
+    "version": 1,
+    "width": 16,
+    "height": 20,
+    "pivot": [
+      8,
+      18
+    ],
+    "frames": [
+      {
+        "durationMs": 160,
+        "runs": [
+          54,
+          0,
+          1,
+          4279988991,
+          1,
+          4289526015,
+          1,
+          4279988991,
+          13,
+          0,
+          1,
+          4279988991,
+          1,
+          4280008191,
+          1,
+          4279988991,
+          12,
+          0,
+          2,
+          4279988991,
+          1,
+          4280008191,
+          2,
+          4279988991,
+          11,
+          0,
+          2,
+          4279988991,
+          1,
+          4280008191,
+          2,
+          4279988991,
+          11,
+          0,
+          2,
+          4279988991,
+          1,
+          4280008191,
+          2,
+          4279988991,
+          1,
+          4289372312,
+          10,
+          0,
+          6,
+          4289372312,
+          10,
+          0,
+          6,
+          4289372312,
+          10,
+          0,
+          6,
+          4289372312,
+          12,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          23,
+          0
+        ],
+        "sockets": {
+          "tip": {
+            "x": 7,
+            "y": 3,
+            "angle": -1.5707963267948966,
+            "visible": true
+          },
+          "edge": {
+            "x": 9,
+            "y": 5,
+            "angle": -0.7
+          }
+        }
+      },
+      {
+        "durationMs": 120,
+        "runs": [
+          72,
+          0,
+          1,
+          4279988991,
+          1,
+          4289526015,
+          1,
+          4279988991,
+          12,
+          0,
+          2,
+          4279988991,
+          1,
+          4280008191,
+          2,
+          4279988991,
+          11,
+          0,
+          2,
+          4279988991,
+          1,
+          4280008191,
+          2,
+          4279988991,
+          9,
+          0,
+          2,
+          4289372312,
+          2,
+          4279988991,
+          1,
+          4280008191,
+          2,
+          4279988991,
+          9,
+          0,
+          6,
+          4289372312,
+          10,
+          0,
+          6,
+          4289372312,
+          10,
+          0,
+          6,
+          4289372312,
+          12,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          23,
+          0
+        ],
+        "sockets": {
+          "tip": {
+            "x": 9,
+            "y": 4,
+            "angle": -1.5707963267948966,
+            "visible": false
+          },
+          "edge": {
+            "x": 11,
+            "y": 6,
+            "angle": -0.7
+          }
+        }
+      },
+      {
+        "durationMs": 220,
+        "runs": [
+          36,
+          0,
+          1,
+          4279988991,
+          1,
+          4289526015,
+          1,
+          4279988991,
+          13,
+          0,
+          1,
+          4279988991,
+          1,
+          4280008191,
+          1,
+          4279988991,
+          13,
+          0,
+          1,
+          4279988991,
+          1,
+          4280008191,
+          1,
+          4279988991,
+          12,
+          0,
+          2,
+          4279988991,
+          1,
+          4280008191,
+          2,
+          4279988991,
+          11,
+          0,
+          2,
+          4279988991,
+          1,
+          4280008191,
+          2,
+          4279988991,
+          11,
+          0,
+          2,
+          4279988991,
+          1,
+          4280008191,
+          2,
+          4279988991,
+          3,
+          4289372312,
+          10,
+          0,
+          6,
+          4289372312,
+          10,
+          0,
+          6,
+          4289372312,
+          10,
+          0,
+          6,
+          4289372312,
+          12,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          14,
+          0,
+          2,
+          4281355379,
+          23,
+          0
+        ],
+        "sockets": {
+          "tip": {
+            "x": 5,
+            "y": 2,
+            "angle": -1.5707963267948966,
+            "visible": true
+          },
+          "edge": {
+            "x": 7,
+            "y": 4,
+            "angle": -0.7
+          }
+        }
+      }
+    ],
+    "tags": [
+      {
+        "name": "turn",
+        "from": 0,
+        "to": 2,
+        "direction": "forward"
+      }
+    ],
+    "source": {
+      "author": "local synthetic torch fixture",
+      "note": "Coordinates deliberately authored per pose; no image inference."
+    }
+  },
+  "clipOptions": {
+    "tag": "turn",
+    "loop": false
+  },
+  "roots": [
+    {
+      "atMs": 0,
+      "position": [
+        20,
+        45
+      ]
+    },
+    {
+      "atMs": 300,
+      "position": [
+        43,
+        39
+      ]
+    },
+    {
+      "atMs": 800,
+      "position": [
+        74,
+        46
+      ]
+    }
+  ],
+  "events": [
+    {
+      "id": "spark-0",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 70,
+      "lifeMs": 110,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        48,
+        -15
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 0
+    },
+    {
+      "id": "spark-1",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 96,
+      "lifeMs": 130,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        57,
+        0
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 1
+    },
+    {
+      "id": "spark-2",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 122,
+      "lifeMs": 150,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        66,
+        15
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 2
+    },
+    {
+      "id": "spark-3",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 148,
+      "lifeMs": 110,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        75,
+        -15
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 0
+    },
+    {
+      "id": "spark-4",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 174,
+      "lifeMs": 130,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        84,
+        0
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 1
+    },
+    {
+      "id": "spark-5",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 200,
+      "lifeMs": 150,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        48,
+        15
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 2
+    },
+    {
+      "id": "spark-6",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 226,
+      "lifeMs": 110,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        57,
+        -15
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 0
+    },
+    {
+      "id": "spark-7",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 252,
+      "lifeMs": 130,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        66,
+        0
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 1
+    },
+    {
+      "id": "spark-8",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 278,
+      "lifeMs": 150,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        75,
+        15
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 2
+    },
+    {
+      "id": "spark-9",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 304,
+      "lifeMs": 110,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        84,
+        -15
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 0
+    },
+    {
+      "id": "spark-10",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 330,
+      "lifeMs": 130,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        48,
+        0
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 1
+    },
+    {
+      "id": "spark-11",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 356,
+      "lifeMs": 150,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        57,
+        15
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 2
+    },
+    {
+      "id": "spark-12",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 382,
+      "lifeMs": 110,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        66,
+        -15
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 0
+    },
+    {
+      "id": "spark-13",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 408,
+      "lifeMs": 130,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        75,
+        0
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 1
+    },
+    {
+      "id": "spark-14",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 434,
+      "lifeMs": 150,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        84,
+        15
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 2
+    },
+    {
+      "id": "spark-15",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 460,
+      "lifeMs": 110,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        48,
+        -15
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 0
+    },
+    {
+      "id": "spark-16",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 486,
+      "lifeMs": 130,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        57,
+        0
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 1
+    },
+    {
+      "id": "spark-17",
+      "sourceRole": "authored-torch-flame",
+      "birthMs": 512,
+      "lifeMs": 150,
+      "socket": "tip",
+      "fallbackSocket": "edge",
+      "unavailable": "throw",
+      "velocity": [
+        66,
+        15
+      ],
+      "color": 4288147711,
+      "light": 0.18,
+      "variant": 2
+    }
+  ]
+}

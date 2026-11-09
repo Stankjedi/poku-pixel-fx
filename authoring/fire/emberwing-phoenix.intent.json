@@ -1,0 +1,84 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "fire/emberwing-phoenix",
+  "intent": {
+    "oneSentence": "A front-facing phoenix forms from fine fire streams, spreads its wings, folds into a rightward dash and releases its heat at the dash endpoint.",
+    "firstRead": "A frontal phoenix made from changing irregular flame masses, shorter tongues and rising sparks, with no continuous narrow guide lines.",
+    "mustNotReadAs": "Long noodles, glowing wire anatomy, fixed parallel tracks, random particle confetti, or broad solid orange wing slabs.",
+    "useContext": "Native 480 by 360 dark-background cinematic particle study."
+  },
+  "readability": {
+    "primaryShape": "Locally connected irregular fire packets form shoulder masses and wing feathers; their widths and placement vary across an anatomical emission volume while the armpits and feather gaps remain dark.",
+    "focalPoint": "A small white-gold face and chest with lower-value red-orange feather streams.",
+    "depthAndOverlap": "Unequal lifetime and phase on both wings; low-value rear streams; sparse foreground sparks.",
+    "contrast": "Small hot filament cores remain sharp; light is subordinate and broad opaque fire shapes are absent.",
+    "intendedBackgrounds": [
+      "black",
+      "dark navy"
+    ],
+    "secondaryDetailBudget": "The primary material is finite, wider flame packets with varied aspect ratio, direction, lifetime and birthplace. Fine detached sparks remain subordinate; no permanent centerline is painted."
+  },
+  "mechanics": {
+    "model": "magic-with-rules",
+    "source": "Fire is emitted along the moving phoenix anatomy, with body energy feeding outward feather paths.",
+    "driver": "Articulated wing poses and a timed dash move the sources. Emitted particles retain birth positions and source velocity then advect upward.",
+    "direction": "Attached feather flow travels outward. Detached flames have upward launch and buoyancy; a short rightward dash ends at one defined release point.",
+    "weightAndMaterial": "Low-mass luminous fire fronts and fine hot sparks; no dense opaque object beneath the flames.",
+    "causalChain": "Only emission volumes follow the animated anatomy. Short-lived asymmetric flame packets inherit source movement and leave those volumes, while shared airflow and buoyancy carry them upward. They fold into the same dash and release at the same endpoint.",
+    "endingRule": "Every emitter stops, detached matter continues moving and cooling, and the final frame is empty.",
+    "exaggerationAndLimits": "Original CPU-rendered POKU 2D particle study. Niagara is a visual reference only; no Unreal renderer, GPU performance or fluid-simulation claim."
+  },
+  "timeline": {
+    "durationSeconds": 5.8,
+    "loop": false,
+    "phases": [
+      {
+        "name": "preparation",
+        "from": 0,
+        "to": 0.75,
+        "action": "Chest ignition and wing unfurl.",
+        "cause": "Growing internal fire source.",
+        "visibleCue": "A small core becomes paired burning wings."
+      },
+      {
+        "name": "action",
+        "from": 0.55,
+        "to": 3.5,
+        "action": "Spread wings breathe then fold into a rightward dash.",
+        "cause": "Articulated bird pose and deliberate acceleration.",
+        "visibleCue": "Changing feather arcs, world-space rising wake and a compact rightward body."
+      },
+      {
+        "name": "response",
+        "from": 3.5,
+        "to": 4.6,
+        "action": "At arrival the bird releases outward flame fragments.",
+        "cause": "The dash reaches its single release point.",
+        "visibleCue": "Small hot flash followed by separated curved fronts and streaks."
+      },
+      {
+        "name": "ending",
+        "from": 4.2,
+        "to": 5.8,
+        "action": "Flames are consumed and sparse embers continue drifting.",
+        "cause": "Fuel and all emission cease.",
+        "visibleCue": "Shrinking particles cool to orange and leave an empty frame."
+      }
+    ],
+    "omittedPhases": {}
+  },
+  "references": [
+    {
+      "source": "User direction in parent conversation, 2026-11-07",
+      "observed": "Prior phoenix was too blobby and lacked Niagara-like particle character.",
+      "application": "New geometry with sharp flowing cores, open gaps, independently phased flame tongues and detached upward particles.",
+      "limits": "User has not approved this version; automated checks do not certify visual style."
+    },
+    {
+      "source": "User feedback in parent conversation, 2026-11-07",
+      "observed": "The Emberwing candidate looked like noodles following the same lines.",
+      "application": "Remove all persistent long guide rendering and replace narrow travelling fragments with locally volumetric, irregular short-lived flame packets.",
+      "limits": "This requested correction does not establish approval of a new version."
+    }
+  ]
+}

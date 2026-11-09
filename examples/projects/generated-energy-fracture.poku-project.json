@@ -1,0 +1,55 @@
+{
+  "schema": "poku.project/v1",
+  "kind": "sequence",
+  "seed": 17,
+  "fps": 40,
+  "bg": "dark",
+  "actor": false,
+  "target": false,
+  "cameraMotion": 0,
+  "options": {},
+  "layers": {},
+  "edits": [],
+  "id": "arcane/generated-energy-fracture",
+  "name": "Energy arrival and crystal breakup",
+  "sequence": {
+    "schema": "poku.sequence/v1",
+    "loop": false,
+    "cues": [
+      {
+        "id": "pulse",
+        "source": {
+          "kind": "generation",
+          "intent": {
+            "material": "energy",
+            "action": "dash",
+            "distance": 128,
+            "travel": 0.74
+          },
+          "renderOptions": {
+            "composition": "material-volumes"
+          }
+        },
+        "at": 0
+      },
+      {
+        "id": "crystal",
+        "source": {
+          "kind": "generation",
+          "intent": {
+            "material": "ice",
+            "action": "shatter"
+          },
+          "renderOptions": {
+            "iceSurface": "crystal"
+          }
+        },
+        "at": 0.66,
+        "x": 64,
+        "y": 0
+      }
+    ]
+  },
+  "notes": "The pulse and target remain distinct materials. The pulse arrives at 0.28 + 0.74 = 1.02 s. The crystal starts at 1.02 - 0.36 = 0.66 s and its local center (0,-16) is translated to (64,-16). These numbers are authored, not live event bindings. Functional composition example; native/full-speed art review is not implied.",
+  "intentRef": "../../authoring/arcane/generated-energy-fracture.intent.json"
+}

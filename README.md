@@ -299,7 +299,11 @@ The `poku-pixel-fx` skill teaches Claude Code to find, use, export and make effe
 ## make your own.
 
 ```bash
-node build-tools/tools/new.mjs arcane/my-spell       # a working starting point (add --loop for a loop)
+node build-tools/tools/new.mjs arcane/my-spell       # generic study (add --loop for a loop)
+node build-tools/tools/new.mjs fire/my-plume         # declared material starter: rising fire
+node build-tools/tools/new.mjs ice/my-break          # declared material starter: rigid ice breakup
+node build-tools/tools/new.mjs scifi/my-pulse        # declared material starter: directed energy
+node build-tools/tools/new.mjs ice/palette-study --cinematic --loop # explicitly generic, not ice physics
 npm run build                                # compile the newly created source
 node build-tools/tools/render.mjs arcane/my-spell    # records/arcane/my-spell/contact.png: look at it
 node build-tools/tools/check.mjs arcane/my-spell     # spills, seams, unseeded randomness, slow frames

@@ -1,8 +1,10 @@
 import {
+  createGeneratedEffect2D,
+  createGenerationPlan2D,
   createProjectRuntime,
   createSequenceSpec,
   projectCinematicOptions
-} from "./chunks/chunk-NG2BE6QA.js";
+} from "./chunks/chunk-3ACCLUDT.js";
 import {
   RECIPE_KINDS,
   RECIPE_LAYERS,
@@ -14,7 +16,7 @@ import {
   catalogEntries,
   loadCatalogEffect,
   searchEffects
-} from "./chunks/chunk-OVDOKNBB.js";
+} from "./chunks/chunk-56CIQRK2.js";
 import "./chunks/chunk-BTOTHK6M.js";
 import {
   cloneJSON,
@@ -44,7 +46,7 @@ import {
   resolveAtlasExportSettings,
   sampleCharacterSocketTrack2D,
   setCharacterSocketKey2D
-} from "./chunks/chunk-VBA4AN6M.js";
+} from "./chunks/chunk-NPBZD3DI.js";
 import {
   createTimingCurve
 } from "./chunks/chunk-LCIPQSGQ.js";
@@ -65,6 +67,94 @@ import {
   transformPixelPoint2D
 } from "./chunks/chunk-G6VBW32E.js";
 import "./chunks/chunk-WSFCRVEQ.js";
+
+// src/authoring/generation-controls.ts
+function supportsFireSparkControls(source) {
+  const { material, action, response } = createGenerationPlan2D(source.intent).intent;
+  return material === "fire" && (action === "plume" || action === "dash" || action === "burst") && (response === "dissipate" || action === "dash");
+}
+function fireSparkChoice(source) {
+  return source.renderOptions?.fireSparkFinish === "scintillation" ? "scintillation" : source.renderOptions?.fireSparks === "short-exposure" ? "short-exposure" : "legacy";
+}
+function withFireSparkChoice(source, choice2) {
+  if (!["legacy", "short-exposure", "scintillation"].includes(choice2)) throw new RangeError("Unknown spark choice");
+  if (!supportsFireSparkControls(source)) throw new RangeError("\uBD88\uD2F0 \uC124\uC815\uC740 \uD654\uC5FC \uD3ED\uBC1C\xB7\uBD84\uCD9C \uB610\uB294 \uB3CC\uC9C4\uC5D0\uC11C\uB9CC \uC9C0\uC6D0\uB429\uB2C8\uB2E4.");
+  createGeneratedEffect2D(createGenerationPlan2D(source.intent), source.renderOptions);
+  if (fireSparkChoice(source) === choice2) return source;
+  const options = { ...source.renderOptions };
+  if (choice2 === "legacy") {
+    delete options.fireSparks;
+    delete options.fireSparkFinish;
+    delete options.fireSparkCount;
+    delete options.fireSparkLight;
+  } else {
+    options.fireSparks = "short-exposure";
+    if (choice2 === "scintillation") options.fireSparkFinish = "scintillation";
+    else delete options.fireSparkFinish;
+  }
+  createGeneratedEffect2D(createGenerationPlan2D(source.intent), options);
+  const { renderOptions: _, ...rest } = source;
+  return Object.keys(options).length ? { ...rest, renderOptions: options } : rest;
+}
+function withFireSparkNumber(source, key, value) {
+  if (key !== "fireSparkCount" && key !== "fireSparkLight") throw new RangeError("Unknown spark control");
+  if (!supportsFireSparkControls(source) || fireSparkChoice(source) === "legacy") throw new RangeError("\uC9E7\uC740 \uBD88\uD2F0\uB97C \uBA3C\uC800 \uC120\uD0DD\uD558\uC138\uC694.");
+  const options = { ...source.renderOptions };
+  if (value === void 0) delete options[key];
+  else options[key] = value;
+  createGeneratedEffect2D(createGenerationPlan2D(source.intent), options);
+  return { ...source, renderOptions: options };
+}
+function supportsDashMotionControls(source) {
+  const { material, action } = createGenerationPlan2D(source.intent).intent;
+  return (material === "fire" || material === "energy") && action === "dash";
+}
+function withDashMotionNumber(source, key, value) {
+  if (key !== "travel" && key !== "distance") throw new RangeError("Unknown dash motion control");
+  if (!supportsDashMotionControls(source)) throw new RangeError("\uC774\uB3D9 \uC2DC\uAC04\xB7\uAC70\uB9AC\uB294 \uD654\uC5FC \uB610\uB294 \uC5D0\uB108\uC9C0 \uB3CC\uC9C4\uC5D0\uC11C\uB9CC \uC9C0\uC6D0\uB429\uB2C8\uB2E4.");
+  const intent = { ...source.intent };
+  if (value === void 0) delete intent[key];
+  else intent[key] = value;
+  createGenerationPlan2D(intent);
+  return { ...source, intent };
+}
+function createStudioFireGeneration(action) {
+  if (action !== "plume" && action !== "dash") throw new RangeError("Unsupported fire starter");
+  return createProject({
+    id: `sequences/fire-${action}`,
+    name: action === "plume" ? "\uD654\uC5FC \uBD84\uCD9C" : "\uD654\uC5FC \uB3CC\uC9C4 \xB7 \uC18C\uBA78",
+    kind: "sequence",
+    seed: 1,
+    fps: 30,
+    bg: "dark",
+    actor: false,
+    target: false,
+    sequence: createSequenceSpec({ cues: [{ id: "fire", source: {
+      kind: "generation",
+      intent: { material: "fire", action, response: "dissipate" },
+      renderOptions: { composition: "material-volumes" }
+    } }] })
+  });
+}
+function createStudioFastFireDashBurst() {
+  return createProject({
+    id: "sequences/fire-fast-dash-burst",
+    name: "\uBE60\uB978 \uD654\uC5FC \uB3CC\uC9C4 \xB7 \uD3ED\uBC1C",
+    kind: "sequence",
+    seed: 1,
+    fps: 30,
+    bg: "dark",
+    actor: false,
+    target: false,
+    intentRef: "authoring/sequences/fire-fast-dash-burst.intent.json",
+    notes: "140px / 0.25\uCD08 \uC774\uB3D9 \xB7 \uC9E7\uC740 \uBD88\uD2F0 + \uBC18\uC9DD\uC784. \uAE30\uC874 \uD654\uC5FC \uBCF8\uCCB4\uB97C \uC0AC\uC6A9\uD558\uB294 \uD3B8\uC9D1 \uC2DC\uC791\uC810\uC785\uB2C8\uB2E4.",
+    sequence: createSequenceSpec({ cues: [{ id: "fire", source: {
+      kind: "generation",
+      intent: { material: "fire", action: "dash", response: "burst", distance: 140, travel: 0.25 },
+      renderOptions: { composition: "body", fireSparks: "short-exposure", fireSparkFinish: "scintillation" }
+    } }] })
+  });
+}
 
 // src/authoring/history.ts
 var EditHistory = class {
@@ -942,12 +1032,46 @@ function renderSequence() {
     const details = document.createElement("details");
     details.className = "sequence-cue";
     details.open = true;
-    const title = cue.source.kind === "catalog" ? cue.source.id : cue.source.kind === "recipe" ? cue.source.recipe.kind : cue.source.character.name;
+    const title = cue.source.kind === "catalog" ? cue.source.id : cue.source.kind === "recipe" ? cue.source.recipe.kind : cue.source.kind === "generation" ? `${cue.source.intent.material} \xB7 ${cue.source.intent.action} \xB7 ${cue.source.intent.response ?? "dissipate"}` : cue.source.character.name;
     details.append(text("summary", `${i + 1}. ${title}`));
     container.append(details);
     const change = (edit) => attempt(() => mutate((p) => {
       edit(p.sequence.cues[i]);
     }));
+    if (cue.source.kind === "generation") {
+      if (supportsDashMotionControls(cue.source)) {
+        for (const [key, label, min, max, placeholder] of [["travel", "\uB3CC\uC9C4 \uC774\uB3D9 \uC2DC\uAC04 (\uCD08)", 0.25, 3, "\uAE30\uBCF8 0.74"], ["distance", "\uB3CC\uC9C4 \uC774\uB3D9 \uAC70\uB9AC (\uD53D\uC140)", 24, 160, "\uAE30\uBCF8 128"]]) {
+          const n = document.createElement("input");
+          Object.assign(n, { type: "number", min: String(min), max: String(max), step: "any", placeholder, value: cue.source.intent[key] === void 0 ? "" : String(cue.source.intent[key]) });
+          n.onchange = () => {
+            if (n.checkValidity()) change((c) => {
+              c.source = withDashMotionNumber(c.source, key, n.value === "" ? void 0 : Number(n.value));
+            });
+            else n.reportValidity();
+          };
+          labelControl(details, label, n);
+        }
+        details.append(text("p", "\uC774\uB3D9 \uC2DC\uAC04\uC774 \uC9E7\uC744\uC218\uB85D \uBE60\uB974\uAC8C \uB3C4\uCC29\uD569\uB2C8\uB2E4. \uBE48\uCE78\uC740 \uC6D0\uBCF8 \uAE30\uBCF8\uAC12\uC744 \uC0AC\uC6A9\uD569\uB2C8\uB2E4. \uD45C\uC2DC \uC2DC\uAC04\xB7\uC2DC\uD000\uC2A4\xB7\uD504\uB85C\uC81D\uD2B8 \uAE38\uC774\uB294 \uC720\uC9C0\uB418\uBBC0\uB85C \uC774\uB3D9\uC774\uB098 \uC794\uAD11\uC774 \uC798\uB9B4 \uC218 \uC788\uC2B5\uB2C8\uB2E4."));
+      }
+      if (supportsFireSparkControls(cue.source)) {
+        const sparks = choice(details, "\uBD88\uD2F0", ["legacy", "short-exposure", "scintillation"], fireSparkChoice(cue.source), (value) => change((c) => {
+          c.source = withFireSparkChoice(c.source, value);
+        }));
+        ["\uAE30\uC874 \uBD88\uD2F0 (\uAE30\uBCF8)", "\uC9E7\uC740 \uBD88\uD2F0", "\uC9E7\uC740 \uBD88\uD2F0 + \uBC18\uC9DD\uC784"].forEach((label, index) => sparks.options[index].textContent = label);
+        details.append(text("p", "\uAE30\uC874 \uBD88\uD2F0\uB85C \uB3CC\uC544\uAC00\uBA74 \uAC1C\uC218\xB7\uBC1C\uAD11 \uC124\uC815\uB3C4 \uD574\uC81C\uB429\uB2C8\uB2E4. \uC2E4\uD589 \uCDE8\uC18C\uB85C \uBCF5\uC6D0\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4."));
+        if (fireSparkChoice(cue.source) !== "legacy") for (const [key, label, max, step] of [["fireSparkCount", "\uBD88\uD2F0 \uAC1C\uC218", 720, 1], ["fireSparkLight", "\uBD88\uD2F0 \uBC1C\uAD11", 2, "any"]]) {
+          const n = document.createElement("input");
+          Object.assign(n, { type: "number", min: "0", max: String(max), step: String(step), placeholder: key === "fireSparkCount" ? cue.source.intent.action === "plume" ? "\uAE30\uBCF8 360" : cue.source.intent.action === "burst" ? "\uAE30\uBCF8 170" : cue.source.intent.response === "burst" ? "\uAE30\uBCF8 410 (\uC774\uB3D9 240 + \uD3ED\uBC1C 170)" : "\uAE30\uBCF8 240" : "\uAE30\uBCF8 1", value: cue.source.renderOptions?.[key] === void 0 ? "" : String(cue.source.renderOptions[key]) });
+          n.onchange = () => {
+            if (n.checkValidity()) change((c) => {
+              c.source = withFireSparkNumber(c.source, key, n.value === "" ? void 0 : Number(n.value));
+            });
+            else n.reportValidity();
+          };
+          labelControl(details, label, n);
+        }
+      } else details.append(text("p", "\uBD88\uD2F0 \uC124\uC815\uC740 \uD654\uC5FC \uD3ED\uBC1C\xB7\uBD84\uCD9C \uB610\uB294 \uB3CC\uC9C4\uC5D0\uC11C\uB9CC \uC9C0\uC6D0\uB429\uB2C8\uB2E4."));
+    }
     const active = document.createElement("input");
     active.type = "checkbox";
     active.checked = cue.enabled;
@@ -955,7 +1079,9 @@ function renderSequence() {
       c.enabled = active.checked;
     });
     labelControl(details, "\uD45C\uC2DC", active);
-    for (const [key, label, min, max] of [["at", "\uC2DC\uC791 (\uCD08)", 0, 3600], ["x", "X (\uD53D\uC140)", -4096, 4096], ["y", "Y (\uD53D\uC140)", -4096, 4096], ["fadeIn", "\uB098\uD0C0\uB0A8 (\uCD08)", 0, 60], ["fadeOut", "\uC0AC\uB77C\uC9D0 (\uCD08)", 0, 60]]) {
+    const anchored = cue.eventAnchor !== void 0;
+    if (cue.eventAnchor) details.append(text("p", `\uC774\uBCA4\uD2B8 \uC5F0\uACB0: ${cue.eventAnchor.cue}/${cue.eventAnchor.event} \u2192 ${cue.eventAnchor.targetEvent}. \uC74C\uC218 \uC2DC\uAC04\uC740 \uAE30\uC900 \uC774\uBCA4\uD2B8\uBCF4\uB2E4 \uC55E\uB2F9\uAE30\uACE0, \uC591\uC218\uB294 \uB2A6\uCDA5\uB2C8\uB2E4. X\xB7Y\uB294 \uC2DC\uD000\uC2A4 \uC88C\uD45C\uCD95\uC758 \uC0C1\uB300 \uC624\uD504\uC14B\uC785\uB2C8\uB2E4.`));
+    for (const [key, label, min, max] of [["at", anchored ? "\uC774\uBCA4\uD2B8 \uC2DC\uAC04 \uC624\uD504\uC14B (\uCD08)" : "\uC2DC\uC791 (\uCD08)", anchored ? -3600 : 0, 3600], ["x", anchored ? "\uC774\uBCA4\uD2B8 X \uC624\uD504\uC14B (\uD53D\uC140)" : "X (\uD53D\uC140)", -4096, 4096], ["y", anchored ? "\uC774\uBCA4\uD2B8 Y \uC624\uD504\uC14B (\uD53D\uC140)" : "Y (\uD53D\uC140)", -4096, 4096], ["fadeIn", "\uB098\uD0C0\uB0A8 (\uCD08)", 0, 60], ["fadeOut", "\uC0AC\uB77C\uC9D0 (\uCD08)", 0, 60]]) {
       const n = numberControl(details, label, cue[key], min, max, (value) => change((c) => {
         c[key] = value;
       }));
@@ -971,6 +1097,7 @@ function renderSequence() {
       else duration.reportValidity();
     };
     labelControl(details, "\uD45C\uC2DC \uC2DC\uAC04 (\uCD08)", duration);
+    details.append(text("p", "\uD45C\uC2DC \uC2DC\uAC04\uC740 \uD6A8\uACFC\uB97C \uC790\uB974\uB294 \uAE38\uC774\uC774\uBA70 \uC7AC\uC0DD \uC18D\uB3C4\uB97C \uBC14\uAFB8\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4."));
     const angle = numberControl(details, "\uD68C\uC804 (\uB3C4)", cue.angle * 180 / Math.PI, -3600, 3600, (value) => change((c) => {
       c.angle = value * Math.PI / 180;
     }));
@@ -1367,6 +1494,8 @@ for (const kind of RECIPE_KINDS) {
   $("recipes").append(b);
 }
 button("new-character").onclick = () => attempt(() => setProject(createProject({ id: "characters/wayfarer", name: "Wayfarer", kind: "character", character: createStudioCharacter2D({ height: Number(select("new-character-height").value) }), options: { clip: "idle" }, bg: "dark", fps: 24, actor: false, target: false }), "commit", false));
+for (const action of ["plume", "dash"]) button(`new-fire-${action}`).onclick = () => attempt(() => setProject(createStudioFireGeneration(action), "commit", false));
+button("new-fire-fast-dash-burst").onclick = () => attempt(() => setProject(createStudioFastFireDashBurst(), "commit", false));
 button("new-sequence").onclick = () => attempt(async () => {
   if (project.kind === "sequence") return;
   const issue = sequenceConversionIssue();

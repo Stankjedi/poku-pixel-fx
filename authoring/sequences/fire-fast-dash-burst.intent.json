@@ -1,0 +1,77 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "sequences/fire-fast-dash-burst",
+  "intent": {
+    "oneSentence": "A compact fire charge releases, travels right across 140 pixels in 0.25 seconds, and bursts at its arrival point with short scintillating sparks.",
+    "firstRead": "Fast directional fire dash followed by one local arrival burst.",
+    "mustNotReadAs": "An articulated phoenix, a newly improved flame body, or an automatically approved finished attack.",
+    "useContext": "Opt-in Studio creation starter at native 384×256, dark background, 30 fps; an editable example of existing generation capability."
+  },
+  "readability": {
+    "primaryShape": "Existing single directional fire body and its trailing ribbon, followed by the existing terminal burst.",
+    "focalPoint": "The moving head, then the fixed destination at local x=70,y=-16.",
+    "depthAndOverlap": "Source-bound orange body with detached short sparks; no new depth renderer.",
+    "contrast": "Existing orange body, warm-white brief sparks and unchanged core lighting on dark background.",
+    "intendedBackgrounds": [
+      "dark"
+    ],
+    "secondaryDetailBudget": "Existing default total 410 spark births: flight 240 and response 170, sharing 24 lit births. No density or light increase."
+  },
+  "mechanics": {
+    "model": "magic-with-rules",
+    "source": "A local charge at x=-70,y=-16.",
+    "driver": "The existing generated dash trajectory drives the moving source.",
+    "direction": "Rightward from -70 to +70 pixels.",
+    "weightAndMaterial": "Stylized fire, not rigid mass, a fluid simulation or a creature.",
+    "causalChain": "Release at 0.28 seconds, arrival and burst at 0.53 seconds, no response before arrival, then sparks cool and disappear.",
+    "endingRule": "Existing finite response clears by 1.78 seconds; no loop or hidden duration crop.",
+    "exaggerationAndLimits": "This starter only exposes an existing short-spark recipe. The long orange ribbon and lumpy terminal form remain; native still review does not certify full-speed motion."
+  },
+  "timeline": {
+    "durationSeconds": 1.78,
+    "loop": false,
+    "phases": [
+      {
+        "name": "preparation",
+        "from": 0,
+        "to": 0.28,
+        "action": "Gather at the departure point.",
+        "cause": "Prepare the finite source before release.",
+        "visibleCue": "Existing charge becomes visible at the left source."
+      },
+      {
+        "name": "action",
+        "from": 0.28,
+        "to": 0.53,
+        "action": "Cross 140 pixels rightward in 0.25 seconds.",
+        "cause": "The stored dash travel plan moves the source.",
+        "visibleCue": "The existing head and trailing body advance right with detached short sparks."
+      },
+      {
+        "name": "response",
+        "from": 0.53,
+        "to": 0.61,
+        "action": "Emit one local burst and response sparks.",
+        "cause": "The source reaches the shared arrival point.",
+        "visibleCue": "Existing burst begins at the destination, not before arrival."
+      },
+      {
+        "name": "ending",
+        "from": 0.61,
+        "to": 1.78,
+        "action": "Dissipate the existing response and sparks.",
+        "cause": "Source emission has ended.",
+        "visibleCue": "Remaining particles cool and fade to an empty final frame."
+      }
+    ],
+    "omittedPhases": {}
+  },
+  "references": [
+    {
+      "source": "src/authoring/generation.ts and tests/generation-dash-burst-sparks.test.mjs",
+      "observed": "Existing tested dash→burst short-spark renderer and default 410/24 shared budget.",
+      "application": "Expose this fixed recipe through one additional Studio button.",
+      "limits": "No renderer changes, new body quality claim, full-speed playback judgment or user approval."
+    }
+  ]
+}

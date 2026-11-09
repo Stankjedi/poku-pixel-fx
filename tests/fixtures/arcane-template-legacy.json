@@ -1,0 +1,72 @@
+[
+  {
+    "category": "arcane",
+    "loop": false,
+    "sha256": "5dbd0d0c6f4c754eae0563b5123cad2c851e6edb7753e46570dfd860188ae138"
+  },
+  {
+    "category": "arcane",
+    "loop": true,
+    "sha256": "787fd445256ce9be156eddb2e1e05f99c60b0ea7ecef701613a02a740890b6e1"
+  },
+  {
+    "category": "fire",
+    "loop": false,
+    "sha256": "d20710bb256d42cbf1556fe4a19f6564906397184a1095444d4933032b331165"
+  },
+  {
+    "category": "fire",
+    "loop": true,
+    "sha256": "d4bf5a555ac7d77560c21bdee4fa7c85506ad59507a1297f62f75464e4d4013c"
+  },
+  {
+    "category": "ice",
+    "loop": false,
+    "sha256": "f7949718a27d1b4d6e11b47d448d87f44d624f36a6ac9a8bb586b8968f6a248a"
+  },
+  {
+    "category": "ice",
+    "loop": true,
+    "sha256": "7f0fc0e8328855e712a92b9af3d14a4be897734e3e0f06b5e12efd4a6a9f870b"
+  },
+  {
+    "category": "water",
+    "loop": false,
+    "sha256": "a04eafd0752975f39ab638e10e93fc7e14aa91171837f349dec0c8667f864367"
+  },
+  {
+    "category": "water",
+    "loop": true,
+    "sha256": "975f4df7041e323f4c0780e5ab968925fe038140e06b000061dbb4984b8db3fe"
+  },
+  {
+    "category": "scifi",
+    "loop": false,
+    "sha256": "9835e8117ef2906f01df71ff6a384169a349196b8fc34d4327ef41c8031a5579"
+  },
+  {
+    "category": "scifi",
+    "loop": true,
+    "sha256": "bea4a5ec313151c6783f28d5264114db78360f29dbd40897d5955fda23354600"
+  },
+  {
+    "category": "lightning",
+    "loop": false,
+    "sha256": "02220959b10bfe9e63aaf59cb1a96b43dcdb9431cc5d4b21e9e0e4b9e7025a5f"
+  },
+  {
+    "category": "lightning",
+    "loop": true,
+    "sha256": "4e150b6fa7abb39e0b1dbe7de38aaed5561e2f2ca47c41c8a5cf981cf2950342"
+  },
+  {
+    "category": "holy",
+    "loop": false,
+    "sha256": "5efe49e3df1493aa968d97351f1dadd503e1186814a02d9638f11d8ed9076a91"
+  },
+  {
+    "category": "holy",
+    "loop": true,
+    "sha256": "f9e2ec86866f5f61162193f4b9aa849cf1b45c2ab2b49a08b4569c0667469e70"
+  }
+]

@@ -1,0 +1,77 @@
+{
+  "schema": "poku-effect-intent/v1",
+  "id": "fire/generated-storm-fire",
+  "intent": {
+    "oneSentence": "A branched electrical strike reaches a point, where a rooted fire prepares, rises and burns out.",
+    "firstRead": "A brief electrical event followed by a longer rooted fire.",
+    "mustNotReadAs": "A continuous lightning hose, a recolored water flow or an immediate universal explosion.",
+    "useContext": "A native-size opt-in authoring example on a dark background; tests demonstrate source connectivity, not automatic art quality."
+  },
+  "readability": {
+    "primaryShape": "One branched electrical channel followed by a rooted rising flame.",
+    "focalPoint": "The explicitly aligned receiving point.",
+    "depthAndOverlap": "Use existing back/front material passes; the action and response overlap only during their authored causal transition.",
+    "contrast": "Material colors remain distinct; no added exposure or glow budget.",
+    "intendedBackgrounds": [
+      "dark"
+    ],
+    "secondaryDetailBudget": "Original generator counts and lifetimes are unchanged; the fire example hides its spark layer so its volumes remain the secondary response."
+  },
+  "mechanics": {
+    "model": "magic-with-rules",
+    "source": "The existing material-specific generation sources.",
+    "driver": "The lightning arrival is 0.23 s, so fire preparation starts at 0.23 s. Fire release follows its own 0.28 s preparation, at 0.51 s. The fire source (0,12) is translated by y=-12 to the strike point (0,0). Sparks are hidden in the fire cue so lightning branches and fire volumes retain separate roles; this is an existing diagnostic layer option, not a new particle budget.",
+    "direction": "Lightning descends to (0,0); fire begins its preparation there after arrival, rises against gravity and leaves cooling matter.",
+    "weightAndMaterial": "Retain the existing generator behavior for each material. No new fluid, heat-transfer or collision simulation is introduced.",
+    "causalChain": "A branched electrical strike reaches a point, where a rooted fire prepares, rises and burns out.",
+    "endingRule": "Both sources run to their natural endings; the sequence is empty at 3.16 seconds.",
+    "exaggerationAndLimits": "This is an authored multi-material composition and a reusable data connection, not automatic choreography, artistic certification or Niagara simulation."
+  },
+  "timeline": {
+    "durationSeconds": 3.16,
+    "loop": false,
+    "phases": [
+      {
+        "name": "preparation",
+        "from": 0,
+        "to": 0.06,
+        "action": "The discharge is not yet released.",
+        "cause": "An electrical source precedes the return current.",
+        "visibleCue": "Empty scene before the leader."
+      },
+      {
+        "name": "action",
+        "from": 0.06,
+        "to": 0.23,
+        "action": "A branched leader establishes a path to the contact point.",
+        "cause": "The generator follows its existing strike timing.",
+        "visibleCue": "One trunk with thinner branches."
+      },
+      {
+        "name": "response",
+        "from": 0.23,
+        "to": 1.81,
+        "action": "Fire preparation starts at arrival; rising emission begins at 0.51 s and ends at 1.81 s.",
+        "cause": "Authored delayed material response at the same source point.",
+        "visibleCue": "Electrical repeat fades while rooted flame becomes dominant."
+      },
+      {
+        "name": "ending",
+        "from": 1.81,
+        "to": 3.16,
+        "action": "The fire stops feeding, remaining volumes cool and the final frame is empty.",
+        "cause": "Both independent finite effects have ended.",
+        "visibleCue": "No light-only residue at the endpoint."
+      }
+    ],
+    "omittedPhases": {}
+  },
+  "references": [
+    {
+      "source": "examples/projects/generated-storm-fire.poku-project.json",
+      "observed": "The JSON stores material intent, source placement, timing and layer selection.",
+      "application": "Use existing generated renderers through the existing Sequence scheduler.",
+      "limits": "Intended meaning only; native still review and full-speed playback observations must be recorded separately."
+    }
+  ]
+}

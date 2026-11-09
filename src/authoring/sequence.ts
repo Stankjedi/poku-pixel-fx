@@ -1,25 +1,42 @@
 import { chain, type ChainCue } from '../core/chain.js';
 import { resolveOptions, type EffectModule, type EffectOptions } from '../core/fx.js';
 import { defineImpactContact2D, transformImpactContact2D, type ImpactContact2D } from '../core/impact-contact.js';
+import { pixelTransform2D, transformPixelPoint2D } from '../core/sprite-raster.js';
 import { characterClipTime2D } from '../core/character-animation.js';
 import { collectAssetEvents, exportLayout2D, transformExportSockets, type AssetSocket } from '../render/export.js';
 import { cloneJSON } from './project.js';
 import { createRecipeEffect, resolveRecipe, type RecipeSpec } from './recipes.js';
 import { createCharacterEffect } from './character-effect.js';
 import { loadCatalogEffect } from './registry.js';
+import { createGeneratedEffect2D, createGenerationPlan2D, type GenerationIntent2D, type GenerationCompositionOptions2D } from './generation.js';
+
+/** A cue has one seed owner: cue.seed, or the existing parent-seed/cue-id derivation. */
+export type SequenceGenerationIntent2D = Omit<GenerationIntent2D, 'seed'> & { seed?: never };
 
 export type SequenceSource =
   | { kind: 'catalog'; id: string }
   | { kind: 'recipe'; recipe: RecipeSpec }
+  | { kind: 'generation'; intent: SequenceGenerationIntent2D; renderOptions?: GenerationCompositionOptions2D }
   | { kind: 'character'; character: Record<string, any>; clip?: string };
+
+/** Explicitly align two known generation-local event points, never arbitrary metadata. */
+export interface SequenceEventAnchor {
+  cue: string;
+  event: string;
+  targetEvent: string;
+}
 
 /** Positions and angles are relative to the sequence pivot, in native pixels/radians. */
 export interface SequenceCue {
   id: string;
   source: SequenceSource;
+  /** Absolute start, or signed seconds after event alignment when eventAnchor is present. */
   at: number;
+  /** Opt-in generated-event relationship. at/x/y become offsets only while present. */
+  eventAnchor?: SequenceEventAnchor;
   /** Explicit visible window. One-shots still end at their natural source duration. */
   duration?: number;
+  /** Absolute origin normally; sequence-axis offsets when eventAnchor is present. */
   x: number; y: number; angle: number; flip: boolean;
   fadeIn: number; fadeOut: number;
   enabled: boolean;
@@ -75,19 +92,43 @@ export function createSequenceSpec(input: SequenceInput = {}): SequenceSpec {
       if (typeof raw.id !== 'string' || !/^[a-z0-9-]+\/[a-z0-9-]+$/.test(raw.id)) throw new RangeError('Sequence catalog id must be category/name');
       source = { kind: 'catalog', id: raw.id };
     } else if (raw.kind === 'recipe') source = { kind: 'recipe', recipe: resolveRecipe(raw.recipe) };
+    else if (raw.kind === 'generation') {
+      if (Object.keys(raw).some(key => !['kind', 'intent', 'renderOptions'].includes(key)))
+        throw new RangeError('Unknown generation sequence source field');
+      const intent = object(raw.intent, 'Generation cue intent');
+      if (Object.hasOwn(intent, 'seed')) throw new RangeError('Generation cue seed belongs on cue.seed, not source.intent.seed');
+      const plan = createGenerationPlan2D(intent as unknown as GenerationIntent2D);
+      // Reuse the generator's material/action and artwork validation. This constructs a
+      // module, not particles; all actual instances still belong to the existing chain.
+      createGeneratedEffect2D(plan, raw.renderOptions);
+      const { seed: _seed, ...meaning } = plan.intent;
+      source = { kind: 'generation', intent: meaning,
+        ...(raw.renderOptions === undefined ? {} : { renderOptions: { ...raw.renderOptions } }) };
+    }
     else if (raw.kind === 'character') {
       if (raw.clip !== undefined && (typeof raw.clip !== 'string' || !raw.clip)) throw new TypeError('Character cue clip must be text');
       source = { kind: 'character', character: object(raw.character, 'Character cue asset'), ...(raw.clip === undefined ? {} : { clip: raw.clip }) };
-    } else throw new RangeError('Sequence sources must be catalog, recipe or character assets');
+    } else throw new RangeError('Sequence sources must be catalog, recipe, generation or character assets');
+    let eventAnchor: SequenceEventAnchor | undefined;
+    if (c.eventAnchor !== undefined) {
+      const a = object(c.eventAnchor, 'Sequence event anchor');
+      if (source.kind !== 'generation') throw new RangeError('Event anchors require a generation target');
+      if (Object.keys(a).some(key => !['cue', 'event', 'targetEvent'].includes(key))
+        || ![a.cue, a.event, a.targetEvent].every(v => typeof v === 'string' && /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(v)))
+        throw new RangeError('Event anchor needs cue, event and targetEvent identifiers only');
+      eventAnchor = { cue: a.cue, event: a.event, targetEvent: a.targetEvent };
+    }
     const options = { ...object(c.options ?? {}, 'Sequence cue options') };
+    if (eventAnchor && ['x', 'y'].some(key => Object.hasOwn(options, key)))
+      throw new RangeError('Anchored cue x/y offsets belong on the cue, not options');
     // Canonical fields win. Accept imported project options without leaving two conflicting placements.
     const x = finite(c.x ?? options.x, 0, -65536, 65536, 'x'), y = finite(c.y ?? options.y, 0, -65536, 65536, 'y');
     const angle = finite(c.angle ?? options.angle, 0, -1e6, 1e6, 'angle');
     const flip = boolean(c.flip ?? options.flip, false, 'flip'), selectedSeed = seed(c.seed ?? options.seed);
     for (const key of ['x', 'y', 'angle', 'flip', 'seed']) delete options[key];
-    const at = finite(c.at, 0, 0, 3600, 'start');
+    const at = finite(c.at, 0, eventAnchor ? -3600 : 0, 3600, eventAnchor ? 'event time offset' : 'start');
     const duration = c.duration === undefined ? undefined : finite(c.duration, 1, 1e-6, 3600, 'cue duration');
-    return { id: c.id, source, at, ...(duration === undefined ? {} : { duration }), x, y, angle, flip,
+    return { id: c.id, source, at, ...(eventAnchor ? { eventAnchor } : {}), ...(duration === undefined ? {} : { duration }), x, y, angle, flip,
       fadeIn: finite(c.fadeIn, 0, 0, 3600, 'fade-in'), fadeOut: finite(c.fadeOut, 0, 0, 3600, 'fade-out'),
       enabled: boolean(c.enabled, true, 'visibility'), ...(selectedSeed === undefined ? {} : { seed: selectedSeed }), options };
   });
@@ -156,6 +197,67 @@ function sourceTimes(source: LoadedCue, at: number): number[] {
   return result;
 }
 
+/** Resolve placement only. Draw order, source artwork and the scheduler stay unchanged.
+ * The saved spec retains the relationship and offsets, never these derived placements. */
+function anchorCues(loaded: LoadedCue[]): void {
+  const byId = new Map(loaded.map(source => [source.cue.id, source]));
+  const state = new Map<string, 'visiting' | 'done'>();
+  const plans = new Map<string, ReturnType<typeof createGenerationPlan2D>>();
+  const eventFor = (source: LoadedCue, name: string) => {
+    if (source.cue.source.kind !== 'generation') throw new RangeError('Event anchors require generation sources and targets');
+    let plan = plans.get(source.cue.id);
+    if (!plan) { plan = createGenerationPlan2D(source.cue.source.intent); plans.set(source.cue.id, plan); }
+    const matches = plan.events.filter(event => event.id === name);
+    if (matches.length !== 1) throw new RangeError(`Event anchor ${source.cue.id}/${name} must identify exactly one generation event`);
+    const event = matches[0];
+    if (![event.at, event.payload.x, event.payload.y].every(Number.isFinite) || event.at < 0 || event.at > source.mod.meta.duration)
+      throw new RangeError(`Invalid generation event point ${source.cue.id}/${name}`);
+    return event;
+  };
+  const resolve = (source: LoadedCue): void => {
+    const { cue } = source;
+    if (state.get(cue.id) === 'done') return;
+    if (state.get(cue.id) === 'visiting') throw new RangeError(`Sequence event anchor cycle at ${cue.id}`);
+    state.set(cue.id, 'visiting');
+    if (cue.eventAnchor) {
+      const anchor = cue.eventAnchor, upstream = byId.get(anchor.cue);
+      if (!upstream) throw new RangeError(`Missing event anchor cue ${anchor.cue}`);
+      resolve(upstream);
+      const from = eventFor(upstream, anchor.event), to = eventFor(source, anchor.targetEvent);
+      const a = upstream.cue;
+      const [sx, sy] = transformPixelPoint2D(pixelTransform2D(a.x, a.y, a.angle, a.flip), [from.payload.x, from.payload.y]);
+      const [tx, ty] = transformPixelPoint2D(pixelTransform2D(0, 0, cue.angle, cue.flip), [to.payload.x, to.payload.y]);
+      const rawAt = a.at + from.at - to.at + cue.at;
+      // Three floating-point sums can cancel to a tiny negative at mathematical zero.
+      // Bound only their arithmetic error; this is not a frame tolerance or preroll.
+      const roundoff = 2 * Number.EPSILON * (Math.abs(a.at) + Math.abs(from.at) + Math.abs(to.at) + Math.abs(cue.at));
+      const at = rawAt < 0 && rawAt >= -roundoff ? 0 : rawAt;
+      if (at < 0) throw new RangeError(`Event anchor ${cue.id} starts before zero; delay the upstream cue or change the explicit offset to preserve preparation`);
+      source.cue = { ...cue, at: finite(at, 0, 0, 3600, 'resolved start'),
+        x: finite(sx - tx + cue.x, 0, -65536, 65536, 'resolved x'),
+        y: finite(sy - ty + cue.y, 0, -65536, 65536, 'resolved y') };
+      source.end = source.cue.at + (source.end - cue.at);
+    }
+    state.set(cue.id, 'done');
+  };
+  for (const source of loaded) resolve(source);
+}
+
+/** Selected event markers must remain inside their authored windows, including sequence crop. */
+function validateAnchorWindows(loaded: LoadedCue[], duration: number, loop: boolean): void {
+  const byId = new Map(loaded.map(source => [source.cue.id, source]));
+  for (const target of loaded) {
+    const anchor = target.cue.eventAnchor;
+    if (!anchor) continue;
+    for (const [source, name] of [[byId.get(anchor.cue)!, anchor.event], [target, anchor.targetEvent]] as const) {
+      // Only the typed generator above is allowed to supply these named local points.
+      const event = createGenerationPlan2D((source.cue.source as Extract<SequenceSource, { kind: 'generation' }>).intent).events.find(e => e.id === name)!;
+      const times = sourceTimes(source, event.at).filter(at => !loop || at < duration - 1e-9);
+      if (times.length !== 1) throw new RangeError(`Event anchor ${source.cue.id}/${name} is outside the cue or sequence window`);
+    }
+  }
+}
+
 /** Compile once, then reuse the same deterministic scheduler in Studio, CLI and atlas export. */
 export async function createSequenceEffect(input: unknown, loader: (id: string) => Promise<any> = loadCatalogEffect, fps = 30) {
   if (!Number.isFinite(fps) || fps < 1 || fps > 240) throw new RangeError('Sequence fps must be in [1, 240]');
@@ -163,6 +265,7 @@ export async function createSequenceEffect(input: unknown, loader: (id: string) 
   const loaded = await Promise.all(spec.cues.map(async cue => {
     const mod: SourceModule = cue.source.kind === 'catalog' ? await loader(cue.source.id)
       : cue.source.kind === 'recipe' ? createRecipeEffect(cue.source.recipe)
+      : cue.source.kind === 'generation' ? createGeneratedEffect2D(createGenerationPlan2D(cue.source.intent), cue.source.renderOptions)
       : createCharacterEffect(cue.source.character, cue.source.clip, fps);
     const meta = mod.meta;
     if (!meta || !Number.isFinite(meta.duration) || meta.duration <= 0 || meta.duration > 3600)
@@ -172,9 +275,11 @@ export async function createSequenceEffect(input: unknown, loader: (id: string) 
     const window = cue.duration ?? meta.duration, span = meta.loop ? window : Math.min(window, meta.duration);
     return { cue, mod, end: cue.at + span };
   }));
+  anchorCues(loaded);
   const duration = spec.duration ?? (loaded.length ? Math.max(...loaded.map(c => c.end)) : 1);
   if (!Number.isFinite(duration) || duration <= 0 || duration > 3600) throw new RangeError('Sequence duration must be in (0, 3600]');
   for (const source of loaded) source.end = Math.min(source.end, duration);
+  validateAnchorWindows(loaded, duration, spec.loop);
   let size: [number, number], origin: [number, number];
   if (spec.size && spec.origin) { size = [...spec.size]; origin = [...spec.origin]; }
   else if (!loaded.length) { size = [320, 180]; origin = [160, 144]; }
@@ -253,14 +358,35 @@ export async function createSequenceEffect(input: unknown, loader: (id: string) 
       return [x, y] as const;
     },
     create(options: EffectOptions) {
-      const cues: ChainCue[] = loaded.filter(c => visible(c.cue, options)).map(({ cue, mod, end }) => ({
-        ...cueOptions(cue, options), fx: mod, t: cue.at, until: Math.max(cue.at, end), fadeIn: cue.fadeIn, fadeOut: cue.fadeOut,
-      }));
+      let presentationTime = 0, cycle = 0;
+      const cues: ChainCue[] = loaded.filter(c => visible(c.cue, options)).map(({ cue, mod, end }) => {
+        // A delayed event's subtraction can land one ULP before its authored time.
+        // Preserve exact absolute parent-clock event instants for generated presentation,
+        // including a loop's cycle offset. Never subtract the cycle before matching,
+        // round nearby times, alter simulation ticks, or interpret catalog events.
+        const eventTimes = cue.source.kind === 'generation'
+          ? new Map(createGenerationPlan2D(cue.source.intent).events.map(event => [cue.at + event.at, event.at])) : undefined;
+        const drawTime = (fallback: number) => {
+          for (const [at, local] of eventTimes ?? [])
+            if (presentationTime === cycle * duration + at) return local;
+          return fallback;
+        };
+        const fx: EffectModule = eventTimes ? { ...mod, create(childOptions) {
+          const impl = mod.create!(childOptions);
+          return { ...impl,
+            draw: (p, time, o) => impl.draw(p, drawTime(time), o),
+            ...(impl.drawBack ? { drawBack: (p: Parameters<typeof impl.draw>[0], time: number, o: EffectOptions) =>
+              impl.drawBack!(p, drawTime(time), o) } : {}),
+          };
+        } } : mod;
+        return { ...cueOptions(cue, options), fx, t: cue.at, until: Math.max(cue.at, end), fadeIn: cue.fadeIn, fadeOut: cue.fadeOut };
+      });
       const factory = chain(cues);
-      let scheduler = factory(options), cycle = 0;
+      let scheduler = factory(options);
       return {
         advanceTime(time: number) {
           const { time: local, cycle: nextCycle } = clock(time);
+          presentationTime = time;
           if (nextCycle !== cycle) { scheduler = factory(options); cycle = nextCycle; }
           scheduler.advanceTime(local);
         },
